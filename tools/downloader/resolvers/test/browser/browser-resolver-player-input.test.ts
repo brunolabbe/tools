@@ -163,7 +163,10 @@ describe("a player that waits for the visitor's first input (dl-81)", () => {
     // 300 ms to 3 s it is not, so only the press itself can say a player was
     // started (gate 2, owner's decision 2026-10-07). At base all of these
     // returned the real stream; before the fix all but 0 ms navigated away.
-    test.each([0, 300, 1500, 3000])(
+    // 300 and 1500 ms were rows too, and took 3000's branch: the stream is not
+    // yet captured at the click in all three. 3000 stays, the row the owner chose
+    // at gate 2 (dl-134).
+    test.each([0, 3000])(
       "is skipped once a play control was pressed, whether the manifest is requested after %i ms or not",
       { timeout: TEST_TIMEOUT_MS },
       async (delay) => {

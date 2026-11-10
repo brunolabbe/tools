@@ -40,6 +40,7 @@ import { createSsrfGuard } from "../src/ssrf.ts";
 import { createTlsInterception } from "../src/tls-interception.ts";
 import type { TlsInterception } from "../src/tls-interception.ts";
 import { TlsRejectionLog } from "../src/tls-rejections.ts";
+import { AT_ONCE_WAITS } from "./helpers/at-once-waits.ts";
 import { createFixtureCertificate, startTlsOrigin } from "./helpers/tls-origin.ts";
 import type { FixtureCertificate, TlsOrigin } from "./helpers/tls-origin.ts";
 
@@ -185,7 +186,7 @@ describe("the manifest re-fetch behind the egress proxy (dl-97)", () => {
     resolver = new BrowserResolver({
       maxConcurrentBrowsers: 1,
       headless: true,
-      quietMs: 1200,
+      ...AT_ONCE_WAITS,
       logger: {
         warn: (message, fields) => {
           warnings.push({ message, ...(fields === undefined ? {} : { fields }) });
@@ -368,7 +369,7 @@ describe("the manifest re-fetch behind the proxy that terminates its TLS (dl-97)
     resolver = new BrowserResolver({
       maxConcurrentBrowsers: 1,
       headless: true,
-      quietMs: 1200,
+      ...AT_ONCE_WAITS,
       proxyRootSpkiSha256: intercept.rootSpkiSha256,
       proxyRootCaPem: intercept.rootCaPem,
     });
@@ -416,7 +417,7 @@ describe("the manifest re-fetch behind the proxy that terminates its TLS (dl-97)
       const mispinned = new BrowserResolver({
         maxConcurrentBrowsers: 1,
         headless: true,
-        quietMs: 1200,
+        ...AT_ONCE_WAITS,
         proxyRootSpkiSha256: createHash("sha256").update("not the proxy's root").digest("base64"),
       });
       const before = origin.requests.length;

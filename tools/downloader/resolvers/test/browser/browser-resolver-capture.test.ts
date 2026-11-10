@@ -193,7 +193,7 @@ describe("BrowserResolver", () => {
     "treats a manifest-level DRM verdict as terminal too",
     { timeout: TEST_TIMEOUT_MS },
     async () => {
-      const resolver = new BrowserResolver({ pool, hlsParser: drmHlsParser, quietMs: 1200 });
+      const resolver = new BrowserResolver({ pool, hlsParser: drmHlsParser, ...AT_ONCE_WAITS });
       const error = await probeError("/mse.html", resolver);
       expectCode(error, "DRM_PROTECTED");
       expect(error.details?.["systems"]).toEqual(["fairplay"]);

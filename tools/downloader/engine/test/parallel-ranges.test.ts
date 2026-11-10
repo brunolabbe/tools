@@ -50,7 +50,8 @@ describe("dl-98: a progressive source throttled per connection", () => {
       const singleCount = counted();
       resetCounts();
 
-      const split = await run(engineWith(), source);
+      const connections: (number | null)[] = [];
+      const split = await run(engineWith(), source, connections);
       const splitCount = counted();
       const timing = JSON.stringify({ singleMs: single.ms, splitMs: split.ms });
 
@@ -58,6 +59,16 @@ describe("dl-98: a progressive source throttled per connection", () => {
       expect(splitCount.fanOut).toBeGreaterThan(4);
       // Four connections at once, and never a fifth.
       expect(splitCount.maxOpen).toBe(4);
+      // dl-108: the progress says how many connections reach the origin. "Ever
+      // reached", not the value at an instant: a tick lands where it lands.
+      const most = Math.max(...connections.map((value) => value ?? 0));
+      expect(most, `dl-108 ${JSON.stringify(connections)}`).toBeGreaterThanOrEqual(2);
+      // Four connections is the most the settings allow.
+      expect(most, `dl-108 ${JSON.stringify(connections)}`).toBeLessThanOrEqual(4);
+      expect(
+        connections.every((value) => value !== null),
+        `dl-108 ${JSON.stringify(connections)}`,
+      ).toBe(true);
       // Every one of them replayed the captured context.
       for (const entry of seen) {
         expect(entry.referer).toBe(CONTEXT.headers["Referer"]);
@@ -103,9 +114,23 @@ describe("dl-98: a progressive source throttled per connection", () => {
     async () => {
       // 4 MB/s against about 690 KB/s of media: judged fast after the window, and kept.
       behaviour.perConnectionBps = 4_000_000;
-      await run(engineWith(), variant("faststart.mp4"));
+      const connections: (number | null)[] = [];
+      await run(engineWith(), variant("faststart.mp4"), connections);
       // The seek probe, then ffmpeg's one read through the relay.
       expect(counted()).toEqual({ fanOut: 0, maxOpen: 1, requests: 2 });
+      // dl-108: never more than one connection, and never null.
+      expect(connections.length, "dl-108").toBeGreaterThan(0);
+      for (const value of connections) {
+        expect(value, `dl-108 ${JSON.stringify(connections)}`).not.toBeNull();
+        expect(value, `dl-108 ${JSON.stringify(connections)}`).toBeLessThanOrEqual(1);
+      }
+      // Not "always 1": the closing tick comes after the relay has ended, which
+      // is a true 0. But the relay is counted while it reads: an engine that
+      // reported 0 throughout, or a feeder that did not count relays, fails here.
+      expect(
+        connections.some((value) => value === 1),
+        `dl-108 ${JSON.stringify(connections)}`,
+      ).toBe(true);
     },
     SLOW,
   );
@@ -150,8 +175,15 @@ describe("dl-98: a progressive source throttled per connection", () => {
     async () => {
       behaviour.perConnectionBps = SLOW_AGAINST_HALF_A_SECOND;
       const source = variant("faststart.mp4", { durationSec: 0.5 });
-      await run(engineWith({ singleConnectionHosts: ["127.0.0.1"] }), source);
+      const connections: (number | null)[] = [];
+      await run(engineWith({ singleConnectionHosts: ["127.0.0.1"] }), source, connections);
       expect(counted()).toEqual({ fanOut: 0, maxOpen: 1, requests: 2 });
+      // dl-108: no feeder, so the count is null throughout.
+      expect(connections.length, "dl-108").toBeGreaterThan(0);
+      expect(
+        connections.every((value) => value === null),
+        `dl-108 ${JSON.stringify(connections)}`,
+      ).toBe(true);
       expect(hostListed("cdn.example.com", ["example.com"])).toBe(true);
       expect(hostListed("CDN.Example.com", [" .example.com "])).toBe(true);
       expect(hostListed("notexample.com", ["example.com"])).toBe(false);
@@ -160,7 +192,9 @@ describe("dl-98: a progressive source throttled per connection", () => {
     SLOW,
   );
 
-  test.each(["faststart.mp4", "moov-end.mp4"])(
+  // Only the faststart row (dl-134): the moov-end source's split-vs-single digest
+  // equality is the first test of this file, with the same configuration.
+  test.each(["faststart.mp4"])(
     "the output of a split %s is identical in media to a single-connection run",
     async (name) => {
       const expected = await reference(name);

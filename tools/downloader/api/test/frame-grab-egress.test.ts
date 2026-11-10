@@ -263,6 +263,8 @@ describe("what the ffmpeg egress proxy stops", () => {
         ssrfAllowHosts: ["127.0.0.1"],
         enableBrowserResolver: false,
         enableYtdlpResolver: false,
+        // Off: nothing here reads the interception, and it costs two RSA keygens (dl-134).
+        ffmpegTlsIntercept: false,
         rateLimitProbePerMinute: 0,
       },
     });

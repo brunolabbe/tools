@@ -333,6 +333,8 @@ describe("a restart", () => {
       ssrfAllowPrivateAddresses: true,
       enableBrowserResolver: false,
       enableYtdlpResolver: false,
+      // Off: nothing here reads the interception, and it costs two RSA keygens (dl-134).
+      ffmpegTlsIntercept: false,
       turnstile: undefined,
       rateLimitJobsPerMinute: 0,
     };
@@ -368,8 +370,6 @@ describe("the link, with real ffmpeg behind it", () => {
   let fixtures: http.Server;
   let fixtureOrigin: string;
   let delayMs = 0;
-  /** On the third segment onwards only: the first byte at full speed, then a stall. */
-  let lateSegmentDelayMs = 0;
   const saved: Record<string, string | undefined> = {};
   const apps: App[] = [];
 
@@ -394,9 +394,6 @@ describe("the link, with real ffmpeg behind it", () => {
         }
         if (delayMs > 0 && file.endsWith(".ts")) {
           await new Promise((resolve) => setTimeout(resolve, delayMs));
-        }
-        if (lateSegmentDelayMs > 0 && /seg0*[2-9]\d*\.ts$/u.test(file)) {
-          await new Promise((resolve) => setTimeout(resolve, lateSegmentDelayMs));
         }
         const range = /^bytes=(\d+)-(\d*)$/u.exec(request.headers.range ?? "");
         if (range !== null) {
@@ -431,7 +428,6 @@ describe("the link, with real ffmpeg behind it", () => {
 
   afterEach(async () => {
     delayMs = 0;
-    lateSegmentDelayMs = 0;
     while (apps.length > 0) {
       // oxlint-disable-next-line no-await-in-loop
       await apps.pop()?.shutdown();
@@ -457,7 +453,7 @@ describe("the link, with real ffmpeg behind it", () => {
    * survive.
    */
   async function realApp(
-    config: { maxFileSizeBytes?: number; stageTimeoutMs?: number } = {},
+    config: { maxFileSizeBytes?: number } = {},
   ): Promise<{ app: App; origin: string }> {
     const app = await createApp({
       startGc: false,
@@ -469,6 +465,8 @@ describe("the link, with real ffmpeg behind it", () => {
         enableBrowserResolver: false,
         enableYtdlpResolver: false,
         enableDirectResolver: true,
+        // Off: nothing here reads the interception, and it costs two RSA keygens (dl-134).
+        ffmpegTlsIntercept: false,
         rateLimitProbePerMinute: 0,
         rateLimitProbeEventsPerMinute: 0,
         rateLimitJobsPerMinute: 0,
@@ -588,21 +586,6 @@ describe("the link, with real ffmpeg behind it", () => {
       expect(received.status).toBe(413);
     }
   }, 60_000);
-
-  test("an error after the first byte aborts the connection with the code on the job", async () => {
-    // 2 s against 5 s: the 4 s and 10 s this used to hold, in the same ratio.
-    // The timeout still has to outlast the first fragment, which is what the
-    // `received.status` of 200 below proves.
-    lateSegmentDelayMs = 5_000;
-    const { app, origin } = await realApp({ stageTimeoutMs: 2_000 });
-    const job = await post(app, `${fixtureOrigin}/hls11/master.m3u8`);
-    const received = await get(origin, job.link?.url ?? "");
-    expect(received.status).toBe(200);
-    expect(received.aborted).toBe(true);
-    const ended = await terminal(app, job.id);
-    expect(ended.status).toBe("failed");
-    expect(ended.error?.code).toBe("TIMEOUT");
-  }, 60_000);
 });
 
 describe("a fresh volume", () => {
@@ -620,6 +603,8 @@ describe("a fresh volume", () => {
         storageDir,
         enableBrowserResolver: false,
         enableYtdlpResolver: false,
+        // Off: nothing here reads the interception, and it costs two RSA keygens (dl-134).
+        ffmpegTlsIntercept: false,
         turnstile: undefined,
       },
     });

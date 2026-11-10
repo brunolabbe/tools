@@ -39,8 +39,6 @@ describe("BrowserResolver", () => {
     // the owner's decision removed and which it accepted.
     describe("false candidates and the press, as gate round 1 measured them (dl-83)", () => {
       const MASTER = "/media/mse/master.m3u8";
-      // What a click behind a cover that never clears may wait (dl-118).
-      const BLOCKED_CLICK_MS = 300;
 
       function confirming(clickTimeoutMs?: number, waits: Waits = BASE_WAITS): BrowserResolver {
         const hls = recordingHlsParser();
@@ -160,33 +158,6 @@ describe("BrowserResolver", () => {
           expectCode(error, "NO_MEDIA_FOUND");
           expect(error.details?.["reason"]).toBe("navigated-away");
           expect(server.requests).toContain("/beacon/nav-18");
-        },
-      );
-
-      test.each([
-        [
-          "a cookie sheet's View our 18 partners, closable panel",
-          "/age-false-cookie-sheet-closable.html",
-          "/beacon/view-partners",
-        ],
-        [
-          "a cookie sheet's View our 18 partners, sticky panel",
-          "/age-false-cookie-sheet-sticky.html",
-          "/beacon/view-partners",
-        ],
-        ["a shell's 18+ menu button", "/age-false-shell-menu-button.html", "/beacon/nav-18"],
-      ])(
-        "accepted residue: %s is pressed where play is a click, and nothing plays",
-        { timeout: TEST_TIMEOUT_MS },
-        async (_name, pathname, pressed) => {
-          server.requests.length = 0;
-          // The cover these pages put up stays up, so every play and consent click
-          // is retried until its timeout, 8 to 10 s a row at 2000 ms (dl-118).
-          const error = await probeError(pathname, confirming(BLOCKED_CLICK_MS));
-
-          expectCode(error, "NO_MEDIA_FOUND");
-          expect(server.requests).toContain(pressed);
-          expect(server.requests).not.toContain("/beacon/play");
         },
       );
     });

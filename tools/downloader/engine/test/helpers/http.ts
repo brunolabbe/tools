@@ -62,17 +62,3 @@ export async function startFixtureServer(handler: FixtureHandler): Promise<Fixtu
       }),
   };
 }
-
-/** Deterministic body so a byte-for-byte comparison means something. */
-export function makeBody(size: number): Buffer {
-  const buffer = Buffer.alloc(size);
-  for (let index = 0; index < size; index += 1) buffer[index] = index % 251;
-  return buffer;
-}
-
-/** `bytes=100-` / `bytes=100-199` → start offset, or null. */
-export function parseRangeStart(header: string | undefined): number | null {
-  if (header === undefined) return null;
-  const match = /^bytes=(\d+)-/u.exec(header.trim());
-  return match?.[1] === undefined ? null : Number(match[1]);
-}

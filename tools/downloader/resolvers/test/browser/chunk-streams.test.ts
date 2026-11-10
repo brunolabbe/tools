@@ -33,7 +33,8 @@ import { BrowserPool } from "../../src/browser/pool.ts";
 import { BrowserResolver } from "../../src/resolvers/browser.ts";
 import { startChunkServer } from "./helpers/chunk-server.ts";
 import type { ChunkServer } from "./helpers/chunk-server.ts";
-import { STREAM_WAITS } from "./helpers/stream-waits.ts";
+import { AT_ONCE_WAITS } from "./helpers/stream-waits.ts";
+import type { Waits } from "./helpers/browser-harness.ts";
 
 const TEST_TIMEOUT_MS = 90_000;
 /** The resolver's default `minWaitMs` (1200), so a page that must find nothing does not wait the longer floor. */
@@ -52,17 +53,12 @@ afterAll(async () => {
   await files.close();
 });
 
-function resolver(
-  waits: { quietMs: number; minWaitMs?: number } = { quietMs: 1200 },
-): BrowserResolver {
+function resolver(waits: Waits = { quietMs: 1200 }): BrowserResolver {
   return new BrowserResolver({ pool, ...waits, emptyMinWaitMs: NO_EMPTY_FLOOR_MS });
 }
 
 // Only a probe that expects a stream may wait less (dl-115).
-async function probe(
-  pathname: string,
-  waits?: { quietMs: number; minWaitMs?: number },
-): Promise<ProbeResult> {
+async function probe(pathname: string, waits?: Waits): Promise<ProbeResult> {
   files.requests.length = 0;
   return await resolver(waits).resolve(new URL(files.url(pathname)), {
     timeoutMs: 25_000,
@@ -106,7 +102,7 @@ describe("numbered whole files are still offered (dl-90)", () => {
     "three whole files in one directory are all offered, one with its moov after its mdat",
     { timeout: TEST_TIMEOUT_MS },
     async () => {
-      const result = await probe("/gallery.html", STREAM_WAITS);
+      const result = await probe("/gallery.html", AT_ONCE_WAITS);
 
       expect(urls(result).toSorted()).toEqual([
         files.url("/media/1.mp4"),
@@ -137,7 +133,7 @@ describe("a cancelled probe stops sniffing (dl-90)", () => {
 
       let caught: unknown;
       try {
-        await resolver().resolve(new URL(files.url("/slow.html")), {
+        await resolver(AT_ONCE_WAITS).resolve(new URL(files.url("/slow.html")), {
           timeoutMs: 25_000,
           signal: controller.signal,
         });

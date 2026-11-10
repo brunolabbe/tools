@@ -235,6 +235,11 @@ export async function createHarness(options: HarnessOptions = {}): Promise<Harne
       enableBrowserResolver: false,
       enableYtdlpResolver: false,
       enableDirectResolver: true,
+      // Off unless a test is about the interception. The stub engine never opens
+      // a stream through the proxy, and the default costs two RSA-2048 keygens
+      // per app: a boot of 122-145 ms against 6-8 ms (dl-134). A test about the
+      // interception passes `ffmpegTlsIntercept: true` itself.
+      ffmpegTlsIntercept: false,
       // Off unless a test asks for them. Every injected request shares one
       // client address, so the production defaults would have unrelated suites
       // tripping a limiter they are not testing. `rate-limit.test.ts` turns

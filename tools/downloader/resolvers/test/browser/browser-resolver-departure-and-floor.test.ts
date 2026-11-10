@@ -280,21 +280,24 @@ describe("BrowserResolver", () => {
 
 describe("Empty media floor: pages with delayed players wait longer before NO_MEDIA_FOUND (dl-80)", () => {
   test(
-    "captures an HLS player that attaches after 6 seconds with extended floor",
+    "captures an HLS player that attaches after 2.5 seconds with an extended floor of 4",
     { timeout: TEST_TIMEOUT_MS },
     async () => {
       const hls = recordingHlsParser();
+      // 2500 ms against a 4000 ms floor, the 6 s against 9 s this used to hold:
+      // the player lands after the stock quiet window and before the floor ends,
+      // which is the branch under test (dl-134).
       const resolver = new BrowserResolver({
         pool,
         hlsParser: hls.parser,
         ...STREAM_WAITS,
-        emptyMinWaitMs: 9000,
+        emptyMinWaitMs: 4000,
       });
       const startTime = Date.now();
-      const result = await probe("/delayed-player.html", resolver);
+      const result = await probe("/delayed-player.html?delay=2500", resolver);
       const elapsedMs = Date.now() - startTime;
 
-      // The fixture's player starts at 6 seconds, so we expect to see it
+      // The fixture's player starts at 2.5 seconds, so we expect to see it
       expect(result.variants.length).toBeGreaterThan(0);
       expect(result.variants[0]?.protocol).toBe("hls");
       expect(result.resolver).toBe("browser");
@@ -304,9 +307,10 @@ describe("Empty media floor: pages with delayed players wait longer before NO_ME
       expect(hls.calls.length).toBeGreaterThan(0);
 
       // The extended floor did not delay the result unnecessarily —
-      // we got the result shortly after the player attached (6 s + ~1-2 s for quiet)
-      // rather than waiting the full 9 seconds.
-      expect(elapsedMs).toBeLessThan(9500);
+      // we got the result shortly after the player attached (2.5 s + page load)
+      // rather than waiting the full 4 seconds of floor, which starts after the
+      // load and the two fixed sleeps, so ends past 5.5 s.
+      expect(elapsedMs, `${elapsedMs} ms`).toBeLessThan(4500);
     },
   );
 
@@ -318,8 +322,10 @@ describe("Empty media floor: pages with delayed players wait longer before NO_ME
       // floor, and the registry's existing meaning of TIMEOUT ("the deadline
       // arrived before quiet") stands. Pinned here so a floor that ignores the
       // deadline fails loudly; it ended NO_MEDIA_FOUND at 10.6 s of an 8 s budget.
+      // The budget is now 5 s, the resolver's own minimum (`Math.max(5000, …)`):
+      // still short of the 9 s floor, and TIMEOUT on 10 runs in a row (dl-134).
       const hls = recordingHlsParser();
-      const timeoutMs = 8000;
+      const timeoutMs = 5000;
       const resolver = new BrowserResolver({
         pool,
         hlsParser: hls.parser,
@@ -450,6 +456,8 @@ describe("the quiet wait's minimum can be set, and defaults to 1200 ms (dl-115)"
     handedMs: number | undefined;
     reachedQuiet: boolean | undefined;
     wallWaitedMs: number | undefined;
+    /** What `sleep` was handed by the probe, in order; the quiet wait's 200 ms ticks are in it (dl-129). */
+    sleeps: number[];
   }> {
     const resolver = new BrowserResolver({
       pool,
@@ -461,6 +469,7 @@ describe("the quiet wait's minimum can be set, and defaults to 1200 ms (dl-115)"
     let stopwatch: (() => number) | undefined;
     let waitedMs: number | undefined;
     quietWaitCalls.length = 0;
+    sleepCalls.length = 0;
     await probe(
       "/mse.html",
       resolver,
@@ -478,6 +487,7 @@ describe("the quiet wait's minimum can be set, and defaults to 1200 ms (dl-115)"
       handedMs: quietWaitCalls[0]?.minWaitMs,
       reachedQuiet: quietWaitCalls[0]?.reachedQuiet,
       wallWaitedMs: quietWaitCalls[0]?.wallWaitedMs,
+      sleeps: [...sleepCalls],
     };
   }
 
@@ -486,10 +496,12 @@ describe("the quiet wait's minimum can be set, and defaults to 1200 ms (dl-115)"
   });
 
   test(
-    "a resolver given no minWaitMs hands the wait MIN_WAIT_MS, and holds it that long",
+    "a resolver given no options hands the wait MIN_WAIT_MS and holds it that long, and sleeps 500 ms after load and 900 ms between the passes (dl-115, dl-129)",
     { timeout: TEST_TIMEOUT_MS },
     async () => {
-      const { waitedMs, handedMs, reachedQuiet, wallWaitedMs } = await quietWait(undefined);
+      // One probe for both: dl-115's minimum and dl-129's two fixed sleeps are
+      // read off the same defaults, and were two probes of the same page (dl-134).
+      const { waitedMs, handedMs, reachedQuiet, wallWaitedMs, sleeps } = await quietWait(undefined);
 
       // Exactly the constant: a default that skips it, 2400 say, fails here and
       // not on a timing bound a slow runner could cross.
@@ -509,54 +521,6 @@ describe("the quiet wait's minimum can be set, and defaults to 1200 ms (dl-115)"
         waitedMs,
         `the wait lasted ${Math.round(waitedMs)} ms by performance.now and ${wallWaitedMs} ms by Date.now`,
       ).toBeGreaterThanOrEqual(MIN_WAIT_MS);
-    },
-  );
-
-  test(
-    "a minWaitMs below it is the one the wait is handed",
-    { timeout: TEST_TIMEOUT_MS },
-    async () => {
-      // Only the handed value is read, and `/mse.html` mounts its player at once.
-      const { handedMs } = await quietWait(STREAM_WAITS.minWaitMs, {
-        landingSettleMs: AT_ONCE_WAITS.landingSettleMs,
-        passPauseMs: AT_ONCE_WAITS.passPauseMs,
-      });
-
-      expect(handedMs).toBe(STREAM_WAITS.minWaitMs);
-    },
-  );
-});
-
-describe("the two fixed sleeps every probe pays keep their production values (dl-129)", () => {
-  /**
-   * What `sleep` was handed by a probe of `/mse.html`, in order. The 200 ms ticks
-   * of the quiet wait are in it too; the two sleeps under test are the ones that
-   * are not ticks. `resolver.resolve` runs one probe at a time, so nothing else
-   * in this file writes to the list while it does.
-   */
-  async function sleepsOf(overrides: BrowserResolverOptions): Promise<number[]> {
-    const resolver = new BrowserResolver({
-      pool,
-      hlsParser: recordingHlsParser().parser,
-      ...STREAM_WAITS,
-      ...overrides,
-    });
-    sleepCalls.length = 0;
-    await probe("/mse.html", resolver);
-    return [...sleepCalls];
-  }
-
-  test("the defaults are 500 ms after load and 900 ms between the passes", () => {
-    expect(LANDING_URL_SETTLE_MS).toBe(500);
-    expect(PROVOKE_PASS_PAUSE_MS).toBe(900);
-  });
-
-  test(
-    "a resolver given neither option sleeps 500 ms after load and 900 ms between the passes",
-    { timeout: TEST_TIMEOUT_MS },
-    async () => {
-      const sleeps = await sleepsOf({});
-
       // The literals, not the constants: a default changed in the source moves
       // the constants with it and the sleeps with them, and must still fail here.
       expect(sleeps.filter((ms) => ms === 500)).toHaveLength(1);
@@ -565,17 +529,32 @@ describe("the two fixed sleeps every probe pays keep their production values (dl
   );
 
   test(
-    "landingSettleMs and passPauseMs replace those two sleeps and nothing else",
+    "a minWaitMs below it is the one the wait is handed, and landingSettleMs and passPauseMs replace the two sleeps and nothing else",
     { timeout: TEST_TIMEOUT_MS },
     async () => {
-      const sleeps = await sleepsOf({ landingSettleMs: 250, passPauseMs: 350 });
+      // Only the handed value and the sleeps are read, and `/mse.html` mounts its
+      // player at once. All three options set together, one probe (dl-134).
+      const { handedMs, sleeps } = await quietWait(STREAM_WAITS.minWaitMs, {
+        landingSettleMs: 250,
+        passPauseMs: 350,
+      });
 
+      expect(handedMs).toBe(STREAM_WAITS.minWaitMs);
       expect(sleeps.filter((ms) => ms === 250)).toHaveLength(1);
       expect(sleeps.filter((ms) => ms === 350)).toHaveLength(1);
       expect(sleeps).not.toContain(500);
       expect(sleeps).not.toContain(900);
     },
   );
+});
+
+describe("the two fixed sleeps every probe pays keep their production values (dl-129)", () => {
+  // The probes that read the sleeps a real resolver makes are the two in the
+  // dl-115 block above, which share their pages with the minimum's (dl-134).
+  test("the defaults are 500 ms after load and 900 ms between the passes", () => {
+    expect(LANDING_URL_SETTLE_MS).toBe(500);
+    expect(PROVOKE_PASS_PAUSE_MS).toBe(900);
+  });
 
   test("no production source passes either option", () => {
     const downloaderRoot = fileURLToPath(new URL("../../../", import.meta.url));

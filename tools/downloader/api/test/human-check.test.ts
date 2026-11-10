@@ -505,22 +505,13 @@ describe("the settings", () => {
       return { code, stdout, stderr };
     };
 
+    // One row, the one that holds a key value the output must not carry. The
+    // other three varied which key was missing or blank, which the in-process
+    // cases above cover with the same `loadApiConfig` (dl-134).
     const cases: Array<{ env: Record<string, string>; names: string[] }> = [
-      {
-        env: { REQUIRE_HUMAN_CHECK: "true" },
-        names: ["TURNSTILE_SITE_KEY", "TURNSTILE_SECRET_KEY"],
-      },
-      {
-        env: { REQUIRE_HUMAN_CHECK: "true", TURNSTILE_SITE_KEY: "", TURNSTILE_SECRET_KEY: "" },
-        names: ["TURNSTILE_SITE_KEY", "TURNSTILE_SECRET_KEY"],
-      },
       {
         env: { REQUIRE_HUMAN_CHECK: "true", TURNSTILE_SECRET_KEY: PASS_SECRET },
         names: ["TURNSTILE_SITE_KEY"],
-      },
-      {
-        env: { REQUIRE_HUMAN_CHECK: "true", TURNSTILE_SITE_KEY: PASS_SITE_KEY },
-        names: ["TURNSTILE_SECRET_KEY"],
       },
     ];
     const results = await Promise.all(cases.map(({ env }) => boot(env)));
