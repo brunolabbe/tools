@@ -101,3 +101,35 @@ The rule "a different model gates, not a cheaper one" (`SKILL.md`) holds under
 - 2026-11-01 — Filed from the 2026-11-01 review's reading of the eight
   batches' accounting tables (session tools-5d); figures copied from the
   entries, not re-run.
+- 2026-11-10 — Owner's answer (a) recorded and status set to `ready` in the
+  first commit of this branch. Built option (a): the filing row of
+  `SKILL.md`'s pairing table reads `builder-standard` (Sonnet 5.5, high) with
+  `ticket-reviewer-sonnet`, narrow, after the PR opens; the sentence under the
+  table that cited lg-24 now cites this ticket and the five filings.
+  `roles/builder.md`'s maintenance paragraph loses "a filing whose reproduction
+  is in hand". `reference/dispatching.md` needed no change (Build 2).
+  - Done when 1 as worded cannot pass. `grep -rn "filing whose reproduction"
+    .claude/skills` after the build returns three lines: `SKILL.md` 260, the
+    row's own label; `SKILL.md` 265, the sentence; and
+    `review-ticket/gate.md` 27, "filing whose reproduction does not show what
+    it claims is wrong", which is unrelated. The check needs the old row's
+    text (`builder-mechanical`, prompt saying "maintenance") in place of the
+    label.
+  - Open decision, not settled in this branch: the sentence kept under the row
+    ("The rule is 'a different model', not 'a cheaper one'") no longer holds
+    for (a). The pinned models of `builder-standard` and
+    `ticket-reviewer-sonnet` are both `claude-sonnet-5-5` (`.claude/agents/`), and
+    `review-ticket/SKILL.md`'s "A different model reviews" table sends a Sonnet
+    invoker to `ticket-reviewer-opus`. The Decision's "holds under (a) and
+    (b)" is true of (b) only. Put to the orchestrator as options in the build's
+    report; the answer names the Sonnet gate, so the choice is the owner's.
+  - Reproduction figure: the Reproduction's "the gates cost $3.3 to $4.9" has
+    no matching sum. From `history.md`'s #696 rows, repo-133's two gates are
+    $1.5551 and $1.5519, $3.11 together; lg-80's gates 1 and 2 are $1.0958 and
+    $1.7347, $2.83 without its round. The page now cites the totals only, and
+    the one-gate filings' totals re-summed from history: lg-81 (#687) $0.2817 +
+    $0.9902 + $0.2713 = $1.54; pl-65 (#695) $0.0337 + $0.7857 + $0.3211 = $1.14.
+  - Left as written, not in the Build: `SKILL.md`'s bullet "A Haiku build or
+    filing is always gated" is still true, but "or filing" now names no row.
+  - Done when 2 waits for the merge: the first three filings after it are
+    logged in `reference/history.md`.
