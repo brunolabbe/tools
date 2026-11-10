@@ -95,8 +95,10 @@ change even with no advisory against 7.
       `guarded-fetch.ts` → `ssrf.test.ts` "re-checks after a redirect, which is
       how a naive guard is defeated", `embedded-ipv4.test.ts` "a redirect hop in
       guarded-fetch, with no dispatcher behind it", and the new test below fail.
-    - **No test failed if undici itself began following redirects, and one now
-      does.** `embedded-ipv4.test.ts` "both layers: a redirect hop through the
+    - **WITHDRAWN — do not cite the first sentence of this bullet (the
+      builder's error, gate 1 F2; the correction is the Fixed at landing entry
+      below). No test failed if undici itself began following redirects, and one
+      now does.** `embedded-ipv4.test.ts` "both layers: a redirect hop through the
       pinned dispatcher" ends in the connector's refusal either way, and
       `ssrf.test.ts` stubs the fetch. Changing `redirect: "manual"` to `"follow"`
       in `guarded-fetch.ts` left both green. New, at the end of
@@ -115,7 +117,9 @@ change even with no advisory against 7.
     skipped (2612)`, 79 s (after the fix; 33 failed before it). `ProxyAgent`
     (the proxy mode) is exercised by `proxied-https.test.ts` and
     `egress-proxy.test.ts`, both green on 8.
-  - **Not run here.** The e2e suites: the paths only e2e reaches are the whole
+  - **Not run here.** The e2e suites: WITHDRAWN — do not cite this clause (the
+    builder's error, gate 1 F3; the correction is the Fixed at landing entry
+    below): the paths only e2e reaches are the whole
     server booted by `createApp` (so `egress.fetch` with the pinned dispatcher
     on a probe, thumbnail and manifest fetch against the fixture origin) and
     the container's Node. Both are the draft PR's `downloader` workflow
@@ -143,4 +147,35 @@ change even with no advisory against 7.
   result was `instanceof Response` false and `instanceof Headers` false. Proof,
   after the commit:
   `git diff e5a039a8 HEAD -- tools/downloader/api/src/dispatcher.ts | grep -v 'Fixed at landing' | grep -c '^+.*wider than that disagreement'`
+  → `1`.
+- 2026-11-10 — Fixed at landing by owner choice: gate 1, F2 — "No test failed if
+  undici itself began following redirects" is not true of the mutation the Log
+  ran. The Log's sentence is withdrawn in place above. The mutation, redone on
+  the gated source (`"manual"` to `"follow"` in `guarded-fetch.ts`, one test
+  file): `npx vitest run tools/downloader/api/test/embedded-ipv4.test.ts` read
+  `1 failed | 27 passed (28)`, the failure being the test "a redirect hop in
+  guarded-fetch, with no dispatcher behind it". So that test already fails
+  without the new ones in `dispatcher.test.ts`, which remain the direct
+  statement of the invariant. Proof, after the commit:
+  `git diff e5a039a8 HEAD -- tools/downloader/docs/work/dl-131-undici-8.md | grep -c '^-.*No test failed if undici itself began'`
+  → `1`.
+- 2026-11-10 — Fixed at landing by owner choice: gate 1, F3 — "the paths only
+  e2e reaches are the whole server booted by `createApp`" is wrong. The Log's
+  clause is withdrawn in place above. Unit tests boot `createApp` through
+  `helpers.ts` and fetch the fixture origin through its `guardedFetch`.
+  Reproduced on undici 8.12.3: replacing the fetch that `server.ts` hands to
+  `createGuardedFetch` with one that throws, the api unit suite (the vitest
+  command over `tools/downloader/api`, `--project downloader`) read
+  `Test Files 7 failed | 46 passed | 1 skipped (54)` and
+  `Tests 23 failed | 828 passed | 2 skipped (853)`, in
+  `egress-ca`, `pipeline`, `range-ignoring-origin`, `routes`, `stream-link`,
+  `thumbnails` and `webm-undeclared-codecs`, which is the gate's count. The
+  gate called that mutation "paired back to `globalThis.fetch`", and that
+  wording does not reproduce: with the line changed to `globalThis.fetch`
+  itself, the same run read 0 failed of 853, twice, so under vitest no unit test
+  tells the server's pairing from the platform's (a plain node process throws
+  `invalid onRequestStart method` for the same pair, and the cause of the
+  difference was not found). What only e2e reaches is therefore that one
+  pairing at `server.ts`, not the server. Proof, after the commit:
+  `git diff e5a039a8 HEAD -- tools/downloader/docs/work/dl-131-undici-8.md | grep -c '^-.*the paths only e2e reaches are the whole'`
   → `1`.
