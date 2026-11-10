@@ -958,7 +958,7 @@ function oneShopEach(id: number): ReadReceiptResponse {
   };
 }
 
-function chooseSeveral(files: File[]): ReturnType<typeof render> {
+function chooseSeveral(files: File[]): ReturnType<typeof renderWithClient> {
   const screenRendered = renderWithClient(<Receipts />);
   fireEvent.change(field("Choose photos of receipts"), { target: { files } });
   return screenRendered;
