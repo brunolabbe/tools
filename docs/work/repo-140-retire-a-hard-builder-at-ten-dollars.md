@@ -159,3 +159,26 @@ or (c), so it is not built.
   - **Fold-in.** None. No other small, already-specified piece came free from
     this change. The brief's figures are corrected here, not in the table,
     because the Build does not name the ticket's own text.
+- 2026-11-10 — Owner's answers at the tools-86 batch checkpoint 5, taken after
+  gate 1 (PASS, four lows) and relayed in the lander's dispatch; each is the
+  gate's recommendation and none was overridden. Recorded by the lander before
+  the records.
+  - **Question 1 — F2, the open decision.** "Step 6 says the bar is read at the
+    first report, but not that the batch entry records it, and `history.md`'s
+    entry schema has no place for it; Done when 2 reads off an entry that is
+    only written that way if someone does it unprompted." Options: **(a)**
+    add one clause to step 6's paragraph saying the batch entry's Tickets line
+    states whether the builder was read against the bar (recommended); **(b)**
+    reword Done when 2 to read the builder's cost off the entry's accounting
+    table, with no page edit. **Chosen: (a).** The clause is an owner-authorised
+    landing edit to `SKILL.md` step 6 and was not gated.
+  - **Question 2 — F1, F3, F4.** Options: fix F1 and F4 at the landing with no
+    re-gate and leave F3 recorded unfixed (recommended), or fix all three.
+    **Chosen: F1 and F4 fixed at landing; F3 stays recorded unfixed.** F1's
+    figure is re-derived from `reference/history.md` in the entry that marks it.
+  - **Question 3 — Done when 2.** The gate graded it `awaiting`. Options: an
+    `awaiting:` line naming the event and the reading (recommended), or leave
+    the line unmarked. **Chosen: the line.** The event is the first batch entry
+    in `reference/history.md` after this merge whose table has a `builder-hard`
+    row; the reading is whether that entry's Tickets line names the bar ($10)
+    its builder was read against.
