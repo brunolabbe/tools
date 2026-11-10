@@ -31,10 +31,10 @@ csv-import and seed 4 in workbook-describe. The owner's split files the ledger
 half here, and names repo-144 (PR #788, not merged, titled "the preflight leak
 spec reads shim directories other tests made") as the repo half.
 
-A second test in the same file reads the same array and can pass without
-checking anything: `csv-import.test.ts:1005` asserts that no logged line holds a
-token, which is true of an empty array. It does not fail under a shuffle, but it
-is the same dependence, and it is named here so the fix does not leave it.
+`csv-import.test.ts:1005` also reads the same array, asserting that no logged
+line holds a token. It is not part of this defect: its own app logs its rejected
+request, so the array is never empty in any order, and a planted token line makes
+its cases fail. It needs no change.
 
 ## Reproduction
 
@@ -94,11 +94,14 @@ csv-import, seed 3: the log test is the first test to run, and sixty-two tests
 run after it. `LOGGED` is empty when line 1113 runs, which is why the assertion
 reports `expected 0`.
 
-workbook-describe, seed 4: the log test runs sixth. The six tests before it
-logged more than twenty lines, so the `toBeGreaterThan(20)` at line 791 passes.
-The `a workbook was described` line (logged at `tools/ledger/api/src/routes/workbook.ts:85`)
-comes only from the `describing a workbook (Done when 5)` describe, whose tests
-run after it, so the assertion at line 807 fails.
+workbook-describe, seed 4: the log test runs seventh, with six tests before it.
+Those six logged more than twenty lines, so the `toBeGreaterThan(20)` at line
+791 passes. The `a workbook was described` line is logged at
+`tools/ledger/api/src/routes/workbook.ts:85`, on each describe request that
+reaches the route's handler, whether its answer is ok or a refusal. None of the
+six logged it, which the assertion at line 807 shows, and the `describing a
+workbook (Done when 5)` describe, which sends describe requests, runs after the
+log test.
 
 **5. Seed sweep, each file alone, seeds 1 to 10.**
 
@@ -128,6 +131,24 @@ fails differs with the seed, which says what the test saw:
 So the defect is latent: the default order passes, and only a shuffled order
 reaches it.
 
+**7. The filter commands, at the base.** These are the `-t` lines the Done when
+section names, run on the same tree, with the exit code read on its own line.
+
+- `npx vitest run tools/ledger/api/test/csv-import.test.ts -t "no line of any request above holds a CSV"`
+  → exit 1, `Tests 1 failed | 62 skipped (63)`
+- `npx vitest run tools/ledger/api/test/workbook-describe.test.ts -t "no line of any request above holds the upload"`
+  → exit 1, `Tests 1 failed | 44 skipped (45)`
+- `npx vitest run tools/ledger/api/test/csv-import.test.ts -t "the fake is called once on describe and never on confirm"`
+  → exit 0, `Tests 1 passed | 62 skipped (63)`
+- `npx vitest run tools/ledger/api/test/workbook-describe.test.ts -t "lg37: a fake answering its correct description"`
+  → exit 0, `Tests 1 passed | 44 skipped (45)`
+- `npx vitest run tools/ledger/api/test/csv-import.test.ts -t "no such test anywhere"`
+  → exit 0, `Tests 63 skipped (63)`. A pattern that matches nothing passes, so
+  the counts are part of the Done when lines.
+- `grep -n "tests in order\|Last: it reads" tools/ledger/api/test/csv-import.test.ts tools/ledger/api/test/workbook-describe.test.ts`
+  → `tools/ledger/api/test/workbook-describe.test.ts:790` and
+  `tools/ledger/api/test/csv-import.test.ts:1110`, one line per file.
+
 ## Shared state, read at `a100f429`
 
 `tools/ledger/api/test/csv-import.test.ts`:
@@ -137,11 +158,11 @@ reaches it.
 - `:123-126` the `afterEach` shuts down `app`, not `LOGGED`.
 - `:1110-1113` the failing describe and test. `:1112` is the test name; `:1113` `expect(LOGGED.length).toBeGreaterThan(20)` is the first assertion that fails under seed 3.
 - `:1126-1127` two `LOGGED.some(...)` checks, which need `a workbook was described`-style lines from the earlier describes to exist.
-- `:1005`, inside the `Done when 10` describe, `expect(LOGGED.filter(...)).toEqual([])` reads the same array and passes on an empty one.
+- `:1005`, inside the `Done when 10` describe, `expect(LOGGED.filter(...)).toEqual([])` reads the same array. Its own app logs the rejected request, so the array is never empty, and the check is not part of this defect.
 
 `tools/ledger/api/test/workbook-describe.test.ts`:
 
-- `:144-146` the module-level `let app` and `const LOGGED: string[] = []`, with the comment at `:145` saying it holds "every app of this file".
+- `:144-146` the module-level `let app` and `const LOGGED: string[] = []`, with the comment at `:145` reading "Every line any app of this file logged".
 - `:191` the logger's `write` pushes into `LOGGED`.
 - `:787-810` the failing describe. `:788` is the test name. `:789-790` is the comment that states the order assumption. `:791` `LOGGED.length > 20` passes under seed 4; `:807` `a workbook was described` (needs the `describing a workbook (Done when 5)` describe at `:255`) fails.
 - `:808` `a described workbook was imported`, logged by the `confirming (Done when 7)` describe at `:569`, is read after `:807` and is never reached under seed 4.
@@ -151,38 +172,36 @@ order is only ever shuffled by the flag on the command line.
 
 ## Build
 
-1. In each file, make the log test read only lines its own run produced. Two
-   shapes are open, and the builder picks one and says in the Log which and
-   why: (a) the log test makes the requests whose lines it checks, against its
-   own app, so it does not need the earlier describes to have run; or (b) each
-   test captures its own app's lines, and the log test checks the captures
-   rather than a shared array. _Option (b) is superseded 2026-11-10: the owner
-   deleted it, see the Log._ Whichever is chosen, the log test must not depend
-   on the order of the describes above it.
+1. In each file, make the log test read only lines its own run produced: the
+   log test makes the requests whose lines it checks, against its own app, so it
+   does not need the earlier describes to have run. The owner chose this shape
+   over a per-test capture on 2026-11-10; see the Log. The log test must not
+   depend on the order of the describes above it.
 2. The checks must not pass on an empty log. The `toBeGreaterThan(20)` and each
    `LOGGED.some(...)` precondition must hold under every seed the sweep runs,
-   because they now hold by the test's own requests, not by what ran before. At
-   `csv-import.test.ts:1005`, the "no token in any line" check must assert
-   against lines it has shown to exist, not against whatever happens to be in
-   the array.
+   because they now hold by the test's own requests, not by what ran before.
 3. Replace the two order comments (`csv-import.test.ts:1110`,
    `workbook-describe.test.ts:789-790`) with a statement of what the test now
    relies on. Neither may still say that vitest runs a file's tests in order.
 4. Do not change `tools/ledger/api/src`, `tools/ledger/contract`, any vitest
    config, or the `.claude/` pages. Do not hide the dependence by excluding these
    files from shuffled runs or by forcing them to run in a fixed order: the
-   point is that each test stands on its own.
+   point is that each test stands on its own. Do not add a file-level hook
+   (`afterAll`, `beforeAll` or a module-level check) that reads `LOGGED`: a
+   filtered run would then fail on an unrelated test that logs fewer lines than
+   the hook expects, which Done when 8 catches.
 5. Do not touch the repo-129 or repo-144 branches. This is ledger-only.
 
 ## Done when
 
 1. `npx vitest run tools/ledger/api/test/csv-import.test.ts --sequence.shuffle --sequence.seed=N` reports every test passing for each N from 1 to 10, and the same for `tools/ledger/api/test/workbook-describe.test.ts`. The sweep output, with its counts, goes in the Log.
-2. Each log test passes when it is the only test selected by name (`npx vitest run <file> -t "<its name>"`), so its result does not depend on any other test having run.
-3. No `LOGGED` assertion in either file is satisfied by an empty array: the `toBeGreaterThan(20)` precondition, each `LOGGED.some(...)`, and `csv-import.test.ts:1005` all assert against lines the test's own run produced.
+2. Each log test passes when it is the only test selected by name: `npx vitest run tools/ledger/api/test/csv-import.test.ts -t "no line of any request above holds a CSV"` ends `Tests 1 passed | 62 skipped (63)`, and `npx vitest run tools/ledger/api/test/workbook-describe.test.ts -t "no line of any request above holds the upload"` ends `Tests 1 passed | 44 skipped (45)`. At the base the same commands exit 1 with `1 failed | 62 skipped (63)` and `1 failed | 44 skipped (45)`, so the counts are what discriminate.
+3. No `LOGGED` precondition in either file is satisfied by an empty array: the `toBeGreaterThan(20)` and each `LOGGED.some(...)` assert against lines the test's own run produced.
 4. Unshuffled, both files pass in full: `npx vitest run tools/ledger/api/test/csv-import.test.ts` and `npx vitest run tools/ledger/api/test/workbook-describe.test.ts`, with the counts in the Log.
-5. `grep -n "runs a file's tests in order\|Last: it reads" tools/ledger/api/test/csv-import.test.ts tools/ledger/api/test/workbook-describe.test.ts` prints nothing.
+5. `grep -n "tests in order\|Last: it reads" tools/ledger/api/test/csv-import.test.ts tools/ledger/api/test/workbook-describe.test.ts` prints nothing. At the base it prints one line per file (`workbook-describe.test.ts:790` and `csv-import.test.ts:1110`), so it fails there.
 6. `git diff --name-only origin/main...HEAD` lists only the two spec files and this ticket. Nothing under `tools/ledger/api/src` or `tools/ledger/contract` changes.
 7. `npm run check` exits 0, and `npm test -- --project ledger` passes through the test gate, both at the fix's head.
+8. A filtered run of an unrelated test passes, so a file-level hook cannot hide: `npx vitest run tools/ledger/api/test/csv-import.test.ts -t "the fake is called once on describe and never on confirm"` exits 0 with `Tests 1 passed | 62 skipped (63)`, and `npx vitest run tools/ledger/api/test/workbook-describe.test.ts -t "lg37: a fake answering its correct description"` exits 0 with `Tests 1 passed | 44 skipped (45)`. Both exit 0 at the base, measured 2026-11-10 (Reproduction 7).
 
 ## Log
 
@@ -213,3 +232,27 @@ the Build.**
 - Provenance: the owner, 2026-11-10, at tools-86 checkpoint 8. The orchestrator
   relayed the answer to the builder in its round-1 message; the builder records
   it as relayed and did not verify it against the owner directly.
+
+**2026-11-10, gate 1 (narrow) on `c218b509`: CONCERNS, applied in round 1.** The
+gate's findings, each with what this round did:
+
+- F1, `Done when` 2 passed on nothing: a `-t` matching no test exits 0 with
+  `63 skipped`. Done when 2 now names the exact patterns and requires the counts.
+  The first pattern put an apostrophe in the `-t` text, which the sandbox refused
+  to run, so the patterns are apostrophe-free substrings of the test titles.
+- F2, `Done when` 5's grep could not fail on the workbook half, because the
+  comment wraps. The pattern is now `tests in order\|Last: it reads`, which
+  prints one line per file at the base.
+- F3, no line guarded a filtered run against a file-level hook. Done when 8 is
+  new, and Build 4 forbids the hook.
+- F4, option (b) would not fix the failure. Answered and recorded above; (b) is
+  deleted from Build 1.
+- F5, the `csv-import.test.ts:1005` vacuity claim was false. The Why, the Shared
+  state bullet and Build 2 now say the check is not part of the defect, and
+  Done when 3 no longer names it. The gate's no-op-logger idea was not run and
+  is not a Done when line.
+- F6, the seed-4 workbook log test runs seventh, not sixth, and the module comment
+  is quoted as written. The claim that `a workbook was described` comes only from
+  the describing describe was wrong, since the route logs every describe that
+  reaches its handler; the Reproduction now says what the assertion at line 807
+  shows.
