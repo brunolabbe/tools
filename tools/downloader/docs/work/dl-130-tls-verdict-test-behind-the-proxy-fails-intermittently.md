@@ -345,3 +345,22 @@ _Parked_: the frontmatter's `awaiting` line holds Done when 1, 2, 3 and 5
 until a failing run's message names the branch. Whoever reads that message
 records it here as Done when 1's proof, and Build 3 to 5 then apply to it as
 written; Done when 4 is met above.
+
+**2026-11-10 — the owner's answers after the build** (relayed by the
+orchestrator, which put the questions; recorded by the lander, Sonnet 5.5).
+
+- _How to park the ticket._ Asked after the build: an `awaiting:` line alone
+  leaves dl-130 on `--ready`. Options: add a `held:` note / leave as is /
+  `needs-decision`. The owner chose the `held:` note, the builder's
+  recommendation.
+- _Re-asked on a measurement._ Gate 1's med: a `ready` ticket carrying
+  `## Review` fails the board check `reviewed-but-ready`. On a scratch copy,
+  `status: ready` gives `status --json` exit 1 with or without the held note,
+  and `status: in-flight` gives exit 0 and is off `--ready`. Options:
+  in-flight with the awaiting line only / in-flight plus the held note / ready
+  plus the held note anyway. The owner chose **in-flight, awaiting line only**,
+  which supersedes the held-note answer. The ticket lands `in-flight` with no
+  `held:` note.
+- _Gate 1's lows._ Options: fix L1 and L3 at the landing / record all / a round
+  for all three. The owner chose **fix L1 and L3 at the landing, no re-gate**;
+  L2 stays recorded as the gate wrote it.
