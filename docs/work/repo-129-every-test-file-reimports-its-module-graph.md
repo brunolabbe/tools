@@ -181,5 +181,11 @@ where it holds; (b) not now. **Chosen: (a).**
     plain; 32.8, 18.5 and 21.3 s aliased; 27.3, 11.7 and 16.6 s externalised;
     `import` 37-48 % in all three. Neither beats the 6.6-6.8 s of the split, and
     neither separates from the plain project beyond the machine's noise.
+  - **The new test fails when the pattern stops matching:** with `vi\.(?:mock|` in
+    `vitest.isolation.ts` changed to `vi\.(?:nomock|`, `npx vitest run
+    scripts/test/vitest-projects.test.ts` → `1 failed | 1 passed (2)`, `a test file
+    that mocks, stubs or resets modules is in the isolated half`; restored from
+    the commit. The test states the mock calls itself (a first version imported
+    `NEEDS_ISOLATION` and passed under that same mutation).
   - **Pending:** Done when 2 and the CI pass for Done when 1 are read from this
     pull request's run, below, once it has one.
