@@ -187,5 +187,25 @@ where it holds; (b) not now. **Chosen: (a).**
     that mocks, stubs or resets modules is in the isolated half`; restored from
     the commit. The test states the mock calls itself (a first version imported
     `NEEDS_ISOLATION` and passed under that same mutation).
-  - **Pending:** Done when 2 and the CI pass for Done when 1 are read from this
-    pull request's run, below, once it has one.
+  - **CI, this pull request's run `42732276312` at `2b13cbd9` (Done when 1's CI pass
+    and Done when 2).** `test (ubuntu-latest)` passed: `Test Files 342 passed | 1
+    skipped (343)`, `Duration 198.63s (tests 90%, import 4%, environment 3%,
+    transform 2%)`. `test (windows-latest, informational)` passed: `340 passed | 3
+    skipped (343)`, `Duration 343.53s (tests 87%, environment 6%, import 6%,
+    transform 1%)`. Both read with `gh run view 42732276312 --job <id> --log`.
+  - **Done when 2 cannot be read in seconds.** The comparison run `40210503276`
+    was vitest 4 and printed `import 144.65s, tests 814.81s`; vitest 5.0.5, which
+    `main` runs now, prints each as a share of the summed time and no seconds. The
+    nearest `main` push run with its matrix executed is `42525621981` (`d7137816`,
+    two docs commits and one ledger change before this base): ubuntu `341 passed | 1
+    skipped (342)`, `Duration 229.18s (tests 83%, import 11%, environment 4%,
+    transform 2%)`; windows `322.30s`, `import 11%`. So **ubuntu import went from
+    11 % to 4 % of the summed time and the wall clock from 229 s to 199 s; windows
+    import from 11 % to 6 %, wall 322 s to 344 s** (the informational leg, whose
+    wall time moves with its runner). In seconds that is a derived estimate and not
+    a reading: with the old run's 815 s of tests held fixed, 11 % is about 108 s
+    and 4 % about 36 s. The 145 s figure is not comparable to either, which the
+    brief could not have known; the Done when wants rewording to the share.
+  - **Not proven by anything run here:** that a file project's `maxWorkers: 4` took
+    effect on CI (vitest prints no worker count). The wall clock fell, which is
+    consistent with it and does not show it.
