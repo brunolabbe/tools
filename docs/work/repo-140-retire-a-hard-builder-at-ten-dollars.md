@@ -147,9 +147,10 @@ or (c), so it is not built.
        carry a round or a resume inside the row (lg-76, repo-131). The other
        five were $6.39 to $10.39.
     4. "None of the five under $10.40 needed a round": none of the five had a
-       builder round, but each had a fresh fixer for owner answers or landing
-       (`a632eb598726a1564`, `afa7141de4a8bf99d`, `ae23f1b723c5ae207`,
-       `af85f863831fd99cf`, `aa90fbde84ac03c93`). And lg-67's $10.39 sits
+       builder round. Four had a fresh fixer for owner answers or landing
+       (`afa7141de4a8bf99d`, `ae23f1b723c5ae207`, `af85f863831fd99cf`,
+       `aa90fbde84ac03c93`); lg-71's fixer (`a632eb598726a1564`) took its
+       round 1, a med, two lows and two owner answers. And lg-67's $10.39 sits
        just above the new bar, so "changes nothing for the five" holds only
        because it had no builder round.
 
@@ -182,3 +183,26 @@ or (c), so it is not built.
     in `reference/history.md` after this merge whose table has a `builder-hard`
     row; the reading is whether that entry's Tickets line names the bar ($10)
     its builder was read against.
+- 2026-11-10 — Fixed at landing by owner choice: gate 1, F1 — "Those batches
+  hold nine such first-build rows". `SKILL.md` step 6 now reads "each of nine
+  tickets". repo-127's row is re-derived from `reference/history.md`, "Batch
+  2026-10-25 (tools-97, repo-119 repo-127 repo-128)": `af6a85377816e2387`,
+  `builder-hard, repo-127 + probe PR #659`, $7.1044, so $7.10. It sits inside
+  the range, so "$6.39 to $20.14" and "three of them above fifteen dollars" are
+  unchanged at three of nine. The brief's table and the Log's figures keep
+  their eight rows, as they were not edited.
+  Proof: `git diff 74b9d49a HEAD -- .claude/skills/orchestrate-tickets/SKILL.md | grep -c '^-.*opened each of eight tickets'` → `1`.
+- 2026-11-10 — Fixed at landing by owner choice: gate 1, F4 — "'for owner
+  answers or landing' is not the whole of lg-71's". Correction 4 above now
+  says four of the five had a fresh fixer for owner answers or landing, and
+  that lg-71's fixer took its round 1, which `reference/history.md` words as
+  "med + two lows + two owner answers".
+  Proof: `git diff 74b9d49a HEAD -- docs/work/repo-140-retire-a-hard-builder-at-ten-dollars.md | grep -c '^-.*builder round, but each had a fresh fixer'` → `1`.
+- 2026-11-10 — Fixed at landing by owner choice, not gated: gate 1, F2, option
+  (a) — "one clause in the step 6 paragraph". `SKILL.md` step 6 now carries the
+  sentence "The batch entry's Tickets line says whether that builder was read
+  against the bar." It adds one sentence.
+  Proof: `git diff 74b9d49a HEAD -- .claude/skills/orchestrate-tickets/SKILL.md | grep -c '^+.*says whether that builder'` → `1`.
+- 2026-11-10 — Gate 1's F3 (step 6's "round" beside step 4's resume of a
+  failing line) is recorded in the gate's section and left unfixed, by owner
+  choice.

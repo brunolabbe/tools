@@ -149,9 +149,10 @@ the batch cannot proceed, put it to the user at once.
    The bar is about $10, read at the builder's first report with
    `node scripts/agent-cost.mjs --agent <id>`: a builder past it is not resumed
    for a round; the round goes to a fresh `builder-hard` handed the branch, its
-   head and the Log. The figure is repo-140's measurement from
+   head and the Log. The batch entry's Tickets line says whether that builder
+   was read against the bar. The figure is repo-140's measurement from
    `reference/history.md`: on the 2026-10-25 and 2026-10-31 batches, the
-   `builder-hard` row that opened each of eight tickets cost $6.39 to $20.14,
+   `builder-hard` row that opened each of nine tickets cost $6.39 to $20.14,
    three of them above fifteen dollars (two of those rows also carry a round or
    a resume). On those three tickets the later agents were gates and fixers at
    $0.48 to $4.41 each, and one fresh builder for two rounds at a little over
