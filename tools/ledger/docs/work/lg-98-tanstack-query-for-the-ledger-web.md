@@ -59,6 +59,29 @@ lg-98 was not in a batch.
 The Done when line quoted above is superseded by that choice. It stays as written
 until lg-98's builder rewords it in that builder's first commit. Status stays `ready`.
 
+## Decision — answered again 2026-11-10 by the owner, at the batch's intake
+
+**Question.** The same line, put again at intake with a recount at `a100f429`:
+`grep -rhoE "method: *['\"](POST|PUT|PATCH|DELETE)['\"]" tools/ledger/web/src | sort | uniq -c`
+→ `34 method: "POST"`. How should the line be scoped?
+
+**Options**
+
+1. **All 34 POSTs, listed.** Reword the line to "each of the 34 POST calls in
+   `web/src/api/*.ts` at `a100f429`". The builder lists them in the Log, each mapped
+   to a test, and writes sharing one invalidation key may share a test.
+2. One write per `api/` module, the other writes out of scope.
+3. Keep the wording.
+
+**Chosen: option 1**, the orchestrator's recommendation, by the owner on
+2026-11-10. It is the 2026-11-07 answer with two things added: the base is
+`a100f429`, and writes that invalidate the same keys may share one test. The
+question counted the calls in 10 files; `grep -rlE` over the same pattern lists
+11 (`households`, `inbox`, `mortgage-splits`, `mortgage`, `periods`, `receipts`,
+`rules`, `salaries`, `spending`, `statements`, `workbook`), as the 2026-11-07 count
+did. The 34 are the same either way. The Done when line is reworded below, with
+the line it replaces kept beside it, struck.
+
 ## Build
 
 1. **Add the dependency** to `tools/ledger/web/package.json` `dependencies`. Use a
@@ -122,8 +145,14 @@ Traps worth knowing:
   tab switches.
 - Opening every tab once, in order, from a cold start sends each distinct
   `ROUTES.*` GET once, which proves people and categories are asked for once each.
-- Every write's invalidations are tested: after the write, the affected screen
-  shows the new data without a reload.
+- Each of the 34 POST calls in `web/src/api/*.ts` at `a100f429` has its
+  invalidations tested: after the write, the affected screen shows the new data
+  without a reload. The Log lists the 34, each with its file, its function, the keys
+  it invalidates and the test that proves it; writes that invalidate the same keys
+  may share a test (owner, 2026-11-10).
+- ~~Every write's invalidations are tested: after the write, the affected screen
+  shows the new data without a reload.~~ Superseded by the line above (owner,
+  2026-11-07 and 2026-11-10).
 - The lg-33 and lg-54 tests in `app.test.tsx` pass.
 - A `RATE_LIMITED` query retries once after `retryAfterSec`, and any other failure
   is shown as before. Both are tested.
