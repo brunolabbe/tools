@@ -117,7 +117,8 @@ Do not escalate on anything but a flag.
   shows the response carries the escalated reading, with no flags, and
   `model` naming the escalation model.
 - A test with an escalation reading that is no better (no fewer `items-differ`
-  proposals, and no fewer flags when those tie) shows the first reading is
+  proposals, and no fewer flags when those tie; or fewer proposals in all than
+  the first, whatever its flags) shows the first reading is
   returned, with `model` naming the first model.
 - A test with a first reading that adds up shows the escalation reader is never
   called.
@@ -269,3 +270,4 @@ dispatch.
   naming Sonnet 5.5 for a flagged reading. `git diff c7767dd8 HEAD -- tools/ledger/CLAUDE.md | grep -v 'Fixed at landing' | grep -c '^+.*Sonnet 5.5 for a flagged reading'` → 1.
 - 2026-11-10 — Fixed at landing by owner choice: gate 2, F4 remainder — "the doc comment on `ReceiptReader.model` in `receipts/src/reader.ts`". It now says the screen names Anthropic and Claude, not the model. `git diff c7767dd8 HEAD -- tools/ledger/receipts/src/reader.ts | grep -c '^-.*which the screen names before the photo is sent'` → 1.
 - 2026-11-10 — Fixed at landing by owner choice: gate 2, N1 — "the Log's F2 entry says deleting the branch fails the test because the second reader is then asked". The F2 entry now names the log's `outOfTime` as what fails. `git diff c7767dd8 HEAD -- tools/ledger/docs/work/lg-105-a-flagged-reading-is-read-again-by-a-stronger-model.md | grep -c '^-.*second reader is then asked'` → 1.
+- 2026-11-10 — Fixed at landing by owner choice: gate 2, N2 — "the reworded Done when 2 parenthetical names two conditions and is silent on the third rule". The parenthetical now adds "or fewer proposals in all than the first, whatever its flags", the whole rule, matching Build 3. `git diff c7767dd8 HEAD -- tools/ledger/docs/work/lg-105-a-flagged-reading-is-read-again-by-a-stronger-model.md | grep -c '^-.*and no fewer flags when those tie) shows the first reading is'` → 1.
