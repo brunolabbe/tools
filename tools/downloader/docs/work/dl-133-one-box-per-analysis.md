@@ -259,3 +259,13 @@ Red, then green, from the worktree root:
 - `E2E_PORT=8133 npm run e2e:downloader` → `22 passed (1.0m)`. The
   screenshots of both new cases were opened at 360 px and 1280 px.
 - `npm run check` → exit 0.
+
+**2026-11-10, answered by the owner** (relayed by the orchestrator), on gate
+2's findings at `4c621dc8`.
+
+1. **N1 and N4: what lands with dl-133.** Options: fix N1 and N4 at the
+   landing; N1 only; record all four. **Chosen: fix N1 and N4 at the landing,
+   with no re-gate.**
+2. **N2 and N3.** Options: record only; file a ticket. **Chosen: file a
+   ticket.** N2 and N3 are filed separately, with no id yet; they are not
+   built here.
