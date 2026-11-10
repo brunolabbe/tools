@@ -83,6 +83,23 @@ receipt that adds up is read once, by Haiku alone.
    the screen's sentence must name the second model is that question; until
    it is answered, word the screen's existing sentence so it stays true
    ("read by Claude"), if that needs no contract change.
+
+   **Answered 2026-11-10 by the owner, at intake** (relayed in the builder's
+   dispatch). The question: the upload answer's `reader` names the one model
+   the photo will go to, but with escalation a flagged photo goes to two; how
+   should the screen handle that?
+   - **Reword the screen's existing sentence to "read by Claude". No contract
+     change; the response's `model` still names the model whose reading was
+     kept (chosen).**
+   - Add a contract field to `UploadedReceipt` naming the escalation model, so
+     the screen can say both.
+   - Leave the sentence naming the first model only.
+
+   So `@ledger/contract` is not changed. The "until it is answered" above is
+   superseded by this answer: the rewording is the decision, not a stopgap. If
+   the rewording turns out to need a contract change, the build stops and
+   reports it as an open decision.
+
 5. **Timeout.** Two reads can take twice as long. The route's own timeout, if
    there is one above the reader's per-attempt `DEFAULT_READ_TIMEOUT_MS`, must
    leave room for the second. Measure it: find what stops the request, rather
