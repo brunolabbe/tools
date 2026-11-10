@@ -344,3 +344,19 @@ anything else that the taxonomy does not mark `retryable`". `UNREACHABLE` and
 require it. Done when 5 says any other failure is "shown as before", and before
 nothing was retried. The build retries neither. The report puts the choice to the
 orchestrator.
+
+### 2026-11-10 — the owner's answers after gate 1
+
+Relayed by the orchestrator in the dispatch of gate 1's fix round, 2026-11-10.
+
+- **The retry, the open question above.** Answered by the owner: a `RATE_LIMITED`
+  read is retried once, and `UNREACHABLE` and `TIMEOUT` are not retried. The
+  options were the two the question named: retry neither (as built), or retry
+  those two as well, since the taxonomy marks them retryable. The build already
+  does what was chosen, so nothing changes. The dispatch said this answer was on
+  the ticket already; at `70b129cc` it was not, so it is written here.
+- **Gate 1's F3** (a paged list read again past 500 rows asks for more than the
+  API's `limit` allows, and the refusal is not shown). Answered by the owner: fix
+  it in this round. The options were: fix it in this round (chosen, the
+  orchestrator's recommendation); record it unfixed in the gate's record; or file
+  a ticket for it.
