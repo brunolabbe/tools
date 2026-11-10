@@ -58,7 +58,7 @@ export interface CategoryChoice {
  * anything else arrives with none (the owner's answer of 2026-10-16).
  */
 export interface ReceiptReader {
-  /** The model that reads, which the screen names before the photo is sent. */
+  /** The model that reads. The screen names Anthropic and Claude before the photo is sent, not the model (lg-105). */
   readonly model: string;
   read(
     photo: ReceiptPhoto,

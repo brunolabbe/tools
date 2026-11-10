@@ -266,3 +266,4 @@ dispatch.
   the Layout line stays is superseded by this answer.
 - 2026-11-10 — Fixed at landing by owner choice: the Layout line of `tools/ledger/CLAUDE.md`
   naming Sonnet 5.5 for a flagged reading. `git diff c7767dd8 HEAD -- tools/ledger/CLAUDE.md | grep -v 'Fixed at landing' | grep -c '^+.*Sonnet 5.5 for a flagged reading'` → 1.
+- 2026-11-10 — Fixed at landing by owner choice: gate 2, F4 remainder — "the doc comment on `ReceiptReader.model` in `receipts/src/reader.ts`". It now says the screen names Anthropic and Claude, not the model. `git diff c7767dd8 HEAD -- tools/ledger/receipts/src/reader.ts | grep -c '^-.*which the screen names before the photo is sent'` → 1.
