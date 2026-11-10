@@ -75,6 +75,21 @@ export type FetchDispatcher = NonNullable<RequestInit["dispatcher"]>;
  * undici's `fetch`, typed as the platform's: the two declaration sets disagree
  * for the same reason `FetchDispatcher` above exists, and the cast lives here
  * for the same reason.
+ *
+ * **The cast is wider than that disagreement, and the type does not say so.**
+ * The platform type accepts three things the runtime package's `fetch` does not
+ * honour, each measured on undici 8.12.3 (dl-131, gate 1):
+ *
+ * - a platform `FormData` body goes out as the literal text `[object FormData]`
+ *   with `content-type: text/plain`, and no error;
+ * - a platform `Request` passed as the input throws `Failed to parse URL from
+ *   [object Request]`;
+ * - the `Response` and `Headers` it returns are undici's own classes, so
+ *   `instanceof Response` and `instanceof Headers` against the globals are false.
+ *
+ * Nothing in `src` reaches any of the three: `createGuardedFetch` reduces its
+ * input to a URL string, nothing POSTs through it, and no code checks
+ * `instanceof`. A caller that needs one of them must not rely on this type.
  */
 const egressFetch = undiciFetch as unknown as typeof globalThis.fetch;
 

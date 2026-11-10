@@ -133,3 +133,14 @@ change even with no advisory against 7.
   ticket. The owner chose to leave 8.12.3 and take 8.12.4 in the next dependency
   update, which was the builder's recommendation; nothing was overridden and no
   ticket was filed.
+- 2026-11-10 — Fixed at landing by owner choice: gate 1, F1 — "The doc comment
+  presents the cast as a declaration-set difference only, which is wrong in the
+  safe direction." The comment on `egressFetch` in `dispatcher.ts` now names the
+  three limits the gate measured; no code changed. Reproduced first, with a
+  scratch script against undici 8.12.3's `fetch`: a `FormData` POST arrived as
+  content type `text/plain;charset=UTF-8` with the body `[object FormData]`, a
+  `Request` input threw `Failed to parse URL from [object Request]`, and the
+  result was `instanceof Response` false and `instanceof Headers` false. Proof,
+  after the commit:
+  `git diff e5a039a8 HEAD -- tools/downloader/api/src/dispatcher.ts | grep -v 'Fixed at landing' | grep -c '^+.*wider than that disagreement'`
+  → `1`.
