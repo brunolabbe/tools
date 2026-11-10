@@ -16,32 +16,35 @@ difficulty: standard
 `scripts/test/preflight.test.ts` ends with a spec that reads a module-level list,
 `shimDirsMade`, and asserts two things about it: that at least three shim
 directories were made, and that none of them still exists
-(`scripts/test/preflight.test.ts:3038-3041`). The file says why it sits last:
-"it reads what every test above left behind" (`:3037`). Under vitest's file
-order that holds. Under `--sequence.shuffle` it does not. The spec runs before
-some of the tests that call `makeShimDir()`, so the floor sees fewer than three
-and fails, even though nothing leaks.
+(`scripts/test/preflight.test.ts:3038-3041`). The two-line comment above it says
+why it sits last: "it reads what every test above left behind" (`:3036-3037`).
+Under vitest's file order that holds. Under `--sequence.shuffle` it does not. The
+spec runs before some of the tests that call `makeShimDir()`, so the floor sees
+fewer than three and fails, even though nothing leaks.
 
 The defect is order, not isolation. The spec reads state that other tests in the
-same file write, and the shuffle decides whether they have run yet. The
-`shimDirsMade` list lives for the whole file, so the same reading would also
-hide a real leak whenever the spec ran with nothing made.
+same file write, and the shuffle decides whether they have run yet. The spec
+only sees the shim directories made before it runs, so a shim test that leaks
+after the spec has read the list is not seen in that run. With nothing made
+before it, the floor reds, which is the safe direction.
 
 This was recorded before. repo-110's Log on `main` names the order dependence
 and the same message under `--sequence.shuffle --sequence.seed=1`, and carries
-it as finding F3 (low), left unfixed by the owner's choice. On 2026-11-10, at the
-tools-86 checkpoint, the owner chose to file tickets for it rather than leave it in
-the Log, and this is the repo half. The ledger half is a separate ticket and is not covered here.
-repo-129's builder reached the same failure while splitting the suites into
-isolated and shared projects (that work is on branch `repo-129-split-isolation`,
-pull request #783, not merged), and asked for it to be fixed or excluded before
-shuffled readings were taken. It was never an isolation problem, which is why
-`--isolate` is not the fix and why this ticket does not touch the project split.
+it as finding F3 (low), left unfixed by the owner's choice. At the tools-86
+checkpoint 4 the owner chose to file tickets for it rather than leave it in the
+Log; this is the repo half. The ledger half is a separate ticket and is not
+covered here. The repo-129 builder's report at that checkpoint recommended
+filing a ledger ticket for the two ledger files and a repo ticket for ghshim,
+and the owner chose that. repo-129's branch (`repo-129-split-isolation`, pull
+request #783, not merged) diagnoses the same failure on 2026-11-10 and leaves it
+alone. It was never an isolation problem, which is why `--isolate` is not the
+fix and why this ticket does not touch the project split.
 
-The failure is seed-dependent, and the seed that fails is a property of the
-current test set, not of the spec. It is 2 at the base sha below; seeds 1, 3, 4
-and 5 pass there. repo-110's Log had seed 1 failing on an earlier copy of the
-file. A sweep of seeds is therefore the reading that counts, not a single seed.
+The failure is seed-dependent, and the failing seeds are a property of the
+current test set, not of the spec. At the base sha, seeds 1 through 20 fail on
+four of them: 2, 7, 8 and 16. repo-110's Log had seed 1 failing on an earlier
+copy of the file. A sweep of seeds is therefore the reading that counts, not a
+single seed.
 
 ### Reproduction
 
@@ -96,9 +99,11 @@ n=4: Tests  121 passed | 1 skipped (122)
 n=5: Tests  121 passed | 1 skipped (122)
 ```
 
-The spec passes in file order, fails alone (zero made), and reds under one
-shuffled seed of five. The owner's wording "1 failed | 120 passed" matches; the
-skipped test is counted here because the file has one.
+Seeds 1 through 20, the full sweep, on the same base file: seeds 2, 7, 8 and 16
+exit 1, the rest exit 0 (see the Log for the per-seed record). The spec passes in
+file order, fails alone (zero made), and reds under four of the twenty shuffled
+seeds. The owner's wording "1 failed | 120 passed" matches; the skipped test is
+counted here because the file has one.
 
 ### The state it depends on, at `a100f429`
 
@@ -120,19 +125,27 @@ skipped test is counted here because the file has one.
 
 ## Build
 
+The owner's answer to the open question on the floor, 2026-11-10, is recorded in
+the Log: option (a). Build what it says.
+
 1. Move the leak check out of the test body and into a file-level `afterAll`.
    Hooks run after every test in the file in both orders, so the list is complete
    whatever the shuffle. The file already has file-level `afterAll` hooks at
    `:135` and `:376`; follow their shape. The hook asserts that no entry of
    `shimDirsMade` still exists, and its failure message names each leftover path
-   (use `expect(leftovers, message).toEqual([])` or a thrown `Error` listing them).
-2. Keep the floor (`shimDirsMade.length >= 3`) inside the hook, so that a run in
-   which no shim test ran fails rather than passing vacuously. Under
-   `-t "repo-110"` the three `removeShimDir` unit tests make three directories
-   and the floor is met; the Done-when line below checks that.
-3. Remove the old `test(...)` at `:3038` and its comment `:3037`, rather than
-   leaving an empty test behind. Keep the explanatory comment in the hook and say
-   why it is in an `afterAll`: shuffled order is the reason.
+   (for example `expect(leftovers, "leaked: " + leftovers.join(", ")).toEqual([])`). **The hook has no floor.** A filtered run whose tests make no
+   shim directory passes the hook: it says nothing leaked among the tests that ran,
+   not that a shim test ran. That is the cost of option (a), and the Build accepts
+   it.
+2. Add an order-free cover test for the empty-list case, the one thing the hook
+   no longer proves. It calls `makeShimDir()` once, asserts the directory is in
+   `shimDirsMade` and exists, then calls `removeShimDir(dir)`. Name it with
+   `(repo-144)` and keep it out of any ordering dependence: it makes its own
+   directory and removes it.
+3. Remove the old `test(...)` at `:3038-3041` and its two-line comment at
+   `:3036-3037`. Delete all four lines: deleting only `:3037` leaves a dangling
+   comment. Keep an explanatory comment in the hook that says why it is in an
+   `afterAll`: shuffled order is the reason.
 4. Mutation control, committed first: commit the file as a baseline
    (`test(repo): preflight leak spec baseline`), then comment out the
    `removeShimDir(shimDir)` in the `finally` at `:2296`, run the file in file order
@@ -149,19 +162,29 @@ skipped test is counted here because the file has one.
 ## Done when
 
 1. `npx vitest run scripts/test/preflight.test.ts --sequence.shuffle --sequence.seed=2`
-   reports 0 failed. At `a100f429` it reports 1 failed (Reproduction above).
-2. The same command for seeds 1 through 20 reports 0 failed on every seed, and the
-   Log lists the sweep's per-seed totals.
+   exits 0 and prints `Test Files  1 passed (1)`. At `a100f429` it exits 1 and
+   prints `Test Files  1 failed (1)` (Reproduction above).
+2. The same command for seeds 1 through 20 exits 0 with `Test Files  1 passed (1)`
+   on every seed. The Log records the sweep, and the base's four failing seeds
+   (2, 7, 8, 16) beside it.
 3. `npx vitest run scripts/test/preflight.test.ts` (file order) and
-   `--sequence.shuffle.files --sequence.seed=2` both pass.
-4. The leak check is order-free: `grep -n "afterAll" scripts/test/preflight.test.ts`
-   shows the hook, and no test body reads `shimDirsMade`. The mutation control in
-   Build 4 is red under file order and under seed 2, and names the directory, and
-   the file is restored to the baseline sha.
-5. `npx vitest run scripts/test/preflight.test.ts -t "repo-110"` passes, with the
-   three `removeShimDir` unit tests and the hook's floor met.
+   `--sequence.shuffle.files --sequence.seed=2` each exit 0 with
+   `Test Files  1 passed (1)`.
+4. The leak check is order-free. `grep -n "afterAll" scripts/test/preflight.test.ts`
+   shows the hook, and `grep -n "shimDirsMade"` shows only its declaration, the
+   `makeShimDir` helper, the cover test and the hook, with no test body reading the
+   list. The mutation control in Build 4 exits 1 and prints `Test Files  1 failed (1)`
+   under file order and under seed 2, and the hook's failure names the leaked
+   directory path. After the restore, `git diff <baseline sha> --
+   scripts/test/preflight.test.ts` prints nothing.
+5. Each of these exits 0 with `Test Files  1 passed (1)`:
+   `-t "repo-110"`, `-t "repo-104"`,
+   `-t "the CLI never leaks next-id.mjs's id-sweep wording"`,
+   `-t "allProjects is exactly"`, and `-t "makeShimDir records each directory"`.
+   The first four are the filters that went red under the floor, which is the
+   regression this round removes. The last is the cover test.
 6. `npm run check` exits 0 and `npx oxfmt --check scripts/test/preflight.test.ts`
-   exits 0 at the branch head.
+   exits 0, both at the branch head.
 
 ## Log
 
@@ -171,13 +194,87 @@ Reproduced at `origin/main` `a100f42967ec3fc3760a5a6032449be3e986806a` on branch
 `repo-file-ghshim-order`: `--sequence.shuffle --sequence.seed=2` gives
 `1 failed | 120 passed | 1 skipped`, and `--sequence.shuffle.files --sequence.seed=2`
 gives `121 passed | 1 skipped`. The output and the controls are in Reproduction.
-Filed as the repo half of the owner's 2026-11-10 decision at tools-86 checkpoint 4
-(options: file two tickets, record in the Log only, or fix in repo-129; the owner
-chose filing two, after the repo-129 builder's recommendation).
+Filed as the repo half of the owner's tools-86 checkpoint 4 decision (options:
+file two tickets, record in the Log only, or fix in repo-129 and file only the
+ledger ticket; the owner chose filing two, the repo-129 builder's recommendation).
 
 Two readings on record that this measurement qualifies. repo-110's Log on `main`
-says seed 1 fails with the same message, and repo-128's Review on branch
-`repo-129-split-isolation` (unmerged) has a note in repo-128's file that seeds 1 and
-2 fail on the base's copy of the file. At `a100f429`, seed 1 passes and only
-seed 2 fails (run twice). The failing seed moves with the test set, so the Build
-asks for a sweep rather than one seed.
+says seed 1 fails with the same message, and repo-128's gate record on the
+unmerged branch `repo-129-split-isolation` says seeds 1 and 2 fail on the base's
+copy of the file. At `a100f429`, seed 1 passes and seed 2 fails (run twice). The
+failing seeds move with the test set, so the Build asks for a sweep rather than
+one seed.
+
+_Correction, round 1 (2026-11-10):_ the first draft said repo-129's builder "asked
+for it to be fixed or excluded before shuffled readings were taken". That request
+is a 2026-10-25 note in repo-129's file, taken from repo-128's gate 1, not the
+builder's. The builder's own recommendation is the one at checkpoint 4 above.
+
+### 2026-11-10 — round 1, the gate's findings and the owner's answers
+
+Gate 1 (`ticket-reviewer-sonnet`, narrow, on head `962f628f`) returned CONCERNS.
+Its section and full report are in the gate's scratch directory, and this round
+answers each of its findings.
+
+**Open decision, answered 2026-11-10 at tools-86 checkpoint 6.** The question
+(gate F1): the Build kept the `shimDirsMade.length >= 3` floor inside the
+file-level `afterAll`. A file-level hook runs after any run that executes at least
+one test of the file, so a filtered run that makes fewer than three shim
+directories goes red. Measured by the gate on a probe with the real file
+untouched: `-t "repo-104"` exit 1 (`expected 2`, `Tests 14 passed | 107 skipped`),
+`-t "the CLI never leaks next-id.mjs's id-sweep wording"` exit 1 (`expected 1`),
+`-t "allProjects is exactly"` exit 1 (`expected 0`); the same filters exit 0 at
+the base. Re-measured by this round on a probe with the floor in the hook:
+`-t "repo-104"` exit 1, `AssertionError: expected 2 to be greater than or equal to 3`,
+`Tests 14 passed | 107 skipped (121)`.
+
+Options, as the gate and the owner had them:
+
+- **(a)** drop the floor from the hook and keep the leftovers assertion, with an
+  order-free cover test for the empty list. Measured on that variant by this round:
+  `-t "repo-104"` exit 0 (`Tests 14 passed | 107 skipped`) and `-t "allProjects is
+  exactly"` exit 0 (`Tests 1 passed | 120 skipped`). The mutation and the sweep on
+  it are the Build's own Done-when lines, not yet run.
+- **(b)** keep the floor and document in the Build and the hook's comment that only
+  the whole file or `-t "repo-110"` is a supported filter, accepting the red.
+- **(c)** keep the floor but detect whether the file ran whole. The gate found no
+  stable vitest API for that.
+
+**Choice: (a).** Provenance: the owner's answer at tools-86 checkpoint 6, taken as
+the gate's recommendation, which the owner accepted. Recorded here by the builder
+of round 1 because the ticket has no `needs-decision` heading to hold it.
+
+**Lows, fixed in this round, with the owner's direction to fix all six** (F2-F7):
+
+- **F2** (Done when 1, 2, 3, 5): the lines said "reports 0 failed" or "passes", and
+  a failing hook is not counted on the `Tests` line (`Test Files  1 failed (1)` over
+  `Tests 120 passed | 1 skipped (121)`, exit 1). Reworded to exit codes and
+  `Test Files` lines.
+- **F3** (Done when 4): the `afterAll` grep did not show that no test body reads
+  the list, and the restore named no command. Reworded to `grep -n shimDirsMade`
+  and `git diff <baseline sha> -- <path>` empty.
+- **F4** (Why, Reproduction): the Why said "the seed that fails is 2" and listed
+  seeds 1, 3, 4 and 5 as passing; the ticket never ran past 5. Seeds 1 through 20
+  at the base: four fail, 2, 7, 8 and 16. The sweep is in the Reproduction and
+  the Done-when baseline now records the four.
+- **F5** (Why): the Why said the list "would also hide a real leak whenever the
+  spec ran with nothing made". With nothing made the floor reds. Reworded to the
+  case that is hidden: a leak by a shim test that runs after the spec has read
+  the list.
+- **F6** (Why, Build 3): the phrase is on `:3036`, and the comment is two lines,
+  `:3036-3037`. Build 3 now deletes all four lines of the old test and comment.
+- **F7** (Why, Log): the repo-129 builder attribution. Corrected above, and the
+  Why now cites the checkpoint-4 recommendation as the batch conversation.
+
+**Measured this round, on the base file (the real file is unchanged by this round):**
+A sweep of one `npx vitest run` per seed, on the base tree, gives, for
+`--sequence.shuffle --sequence.seed=n` with n = 1 to 20: exit 1 for seeds 2, 7, 8
+and 16, exit 0 for the other sixteen. The same script's other runs at the base:
+in the same sweep: file order exit 0; `--sequence.shuffle.files --sequence.seed=2` exit 0;
+`-t "repo-110"` exit 0; `-t "removeShimDir survives one EBUSY"` exit 0;
+`-t "the CLI never leaks next-id.mjs's id-sweep wording"` exit 0;
+`-t "no preflight-ghshim directory"` exit 1 (`expected 0`), as the Reproduction
+records.
+
+**Dropped by the gate:** "the ledger half is a separate ticket" with no id. The
+ledger ticket is outside this pull request's range, so it is not a defect here.
