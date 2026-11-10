@@ -331,3 +331,26 @@ different tickets, different builders — which is why this is a ticket.
   fourth gate, which was the orchestrator's recommendation. For F2 the owner's
   remedy is to put the fixer sentence in Build 4 and Done when 2 under every
   option.
+
+- 2026-11-10 — Fixed at landing by owner choice: gate 3, F2 clause 1 — "Build 4
+  says under (ii) the fixer sentence 'becomes true and needs no edit', and (ii)
+  says it 'makes the … fixer sentence true'". repo-145's (ii) now states the
+  landing-only case (lg-91 #734, lg-101 #752 on `history.md`), and Build 4 and
+  Done when 2 put the fixer sentence in scope under every option. Proof:
+  `git diff 80fc0631 HEAD -- docs/work/repo-145-whether-the-standard-rows-opus-gate-should-become-a-sonnet-gate.md | grep -c '^-.*round and makes the'`
+  → `1`.
+- 2026-11-10 — Fixed at landing by owner choice: gate 3, F2 clause 2 — "The Why
+  says … 'both `standard`, so none has paired yet'". repo-145's Why now records
+  the two pairings (lg-93's gate 2 `a6fd87563b7599062`; repo-143's gate 1) and
+  names the rows that pair `builder-web` (`mechanical`, `hard`, the filing row
+  until #778 merges); Question 2's lead-in follows. Proof:
+  `git diff 80fc0631 HEAD -- docs/work/repo-145-whether-the-standard-rows-opus-gate-should-become-a-sonnet-gate.md | grep -c '^-.*so none has paired yet'`
+  → `1`.
+- 2026-11-10 — Fixed at landing by owner choice: gate 3, P1 — "The swap adds about
+  $0.64 to $1.04 a round is each Opus reading less the Sonnet mean, not a spread
+  of rounds". repo-145's (ii) now says the swap adds $0.82 on the means, that
+  $0.64 to $1.04 is the spread of the three Opus readings, and that pairing
+  every Opus reading with every Sonnet reading gives -$0.66 to +$1.63
+  (2.2648 - 2.9263 and 2.6604 - 1.0337). Proof:
+  `git diff 80fc0631 HEAD -- docs/work/repo-145-whether-the-standard-rows-opus-gate-should-become-a-sonnet-gate.md | grep -c '^-.*swap adds about'`
+  → `1`.
