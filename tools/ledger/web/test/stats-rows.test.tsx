@@ -9,8 +9,9 @@
 
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import type { QueryClient } from "@tanstack/react-query";
 import { formatCents } from "@ledger/books";
-import { AppError } from "@ledger/contract";
+import { AppError, periodLinesQuerySchema, rowsQuerySchema } from "@ledger/contract";
 import type {
   PeriodLine,
   SpendingCategory,
@@ -25,8 +26,11 @@ import {
   setRowSpendingCategory,
 } from "../src/api/spending.ts";
 import { fetchSpendingStats } from "../src/api/stats.ts";
+import { spendingLinesQuery, spendingRowsQuery } from "../src/queries.ts";
+import { STALE_MS } from "../src/query.ts";
 import { SpendingCard } from "../src/stats/Cards.tsx";
-import { renderWithClient } from "./render-with-client.tsx";
+import { PeriodRows } from "../src/stats/PeriodRows.tsx";
+import { renderWithClient, testQueryClient } from "./render-with-client.tsx";
 
 vi.mock("../src/api/spending.ts", () => ({
   fetchSpendingCategories: vi.fn(),
@@ -670,4 +674,139 @@ test("a click on a column, or Enter, opens that period's rows as its readout's b
       expect.anything(),
     ),
   );
+});
+
+// lg-98, gate 1's F3: the rows and the card lines under the chart, read again, keep the
+// pages the person opened, and the API reads at most 500 of either a request
+// (`rowsQuerySchema`'s and `periodLinesQuerySchema`'s `limit`). The fakes answer from 600
+// rows and 700 lines and refuse, as the API does, any query its schema refuses.
+
+const FEBRUARY = { name: "February", start: "2026-02-01", end: "2026-02-28" };
+const SLICE = { from: FEBRUARY.start, to: FEBRUARY.end, category: null };
+
+/** The stored rows and lines, and fakes over them that hold to the API's schemas. */
+function manyRowsAndLines(): { rows: StoredRow[]; lines: PeriodLine[] } {
+  const rows = Array.from({ length: 600 }, (_, at) => row(at + 1, `Achat ${String(at + 1)}`, -100));
+  const lines = Array.from({ length: 700 }, (_, at) =>
+    line(1001 + at, { category: `Ligne ${String(at + 1)}` }),
+  );
+  const refused = (): never => {
+    throw new AppError("BAD_REQUEST", "The API refused the query.");
+  };
+  vi.mocked(fetchSpendingRows).mockImplementation(async (query) => {
+    const parsed = rowsQuerySchema.safeParse({
+      scope: "spending",
+      offset: String(query.offset),
+      limit: String(query.limit),
+    });
+    if (!parsed.success) return refused();
+    const offset = parsed.data.offset ?? 0;
+    return { rows: rows.slice(offset, offset + (parsed.data.limit ?? 25)), total: rows.length };
+  });
+  vi.mocked(fetchSpendingLines).mockImplementation(async (query) => {
+    const parsed = periodLinesQuerySchema.safeParse({
+      offset: String(query.offset),
+      limit: String(query.limit),
+    });
+    if (!parsed.success) return refused();
+    const offset = parsed.data.offset ?? 0;
+    return { lines: lines.slice(offset, offset + (parsed.data.limit ?? 25)), total: lines.length };
+  });
+  return { rows, lines };
+}
+
+/**
+ * Opens February's rows on 500 rows and 500 lines and taps each Show more once, to 525. The
+ * 500 are put in the cache entries as nineteen taps of each would leave them, to keep the test
+ * to seconds; the taps past 500 are the screen's own.
+ */
+async function show525(
+  client: QueryClient,
+  { rows, lines }: { rows: StoredRow[]; lines: PeriodLine[] },
+): Promise<void> {
+  client.setQueryData(spendingRowsQuery(SLICE).queryKey, { rows: rows.slice(0, 500), total: 600 });
+  client.setQueryData(spendingLinesQuery(SLICE).queryKey, {
+    lines: lines.slice(0, 500),
+    total: 700,
+  });
+  renderWithClient(<PeriodRows period={FEBRUARY} category={null} onClose={() => undefined} />, {
+    client,
+  });
+  await screen.findByText("500 of 600");
+  fireEvent.click(screen.getByRole("button", { name: "Show more" }));
+  fireEvent.click(screen.getByRole("button", { name: "Show more card lines" }));
+  await screen.findByText("525 of 600");
+  await screen.findByText("525 of 700");
+}
+
+function picked(label: string): string {
+  return screen.getByLabelText<HTMLSelectElement>(label).value;
+}
+
+test("past 500 shown, the rows and card lines under the chart are read again whole after a write and after staleTime (lg-98)", async () => {
+  const stored = manyRowsAndLines();
+  vi.mocked(setRowSpendingCategory).mockImplementation(async (rowId, id) => {
+    const spendingCategory = { id: id ?? 0, source: "override" } as const;
+    stored.rows[rowId - 1] = row(rowId, `Achat ${String(rowId)}`, -100, { spendingCategory });
+    return { rowId, spendingCategory };
+  });
+  const client = testQueryClient();
+  await show525(client, stored);
+
+  // The 510th row given a category: both lists are read again, and keep every row and line opened.
+  const rowsRead = vi.mocked(fetchSpendingRows).mock.calls.length;
+  const linesRead = vi.mocked(fetchSpendingLines).mock.calls.length;
+  fireEvent.change(screen.getByLabelText("Spending category for Achat 510"), {
+    target: { value: "3" },
+  });
+  await waitFor(() => expect(picked("Spending category for Achat 510")).toBe("3"));
+  await waitFor(() =>
+    expect(vi.mocked(fetchSpendingLines).mock.calls.length).toBeGreaterThan(linesRead),
+  );
+  expect(vi.mocked(fetchSpendingRows).mock.calls.length).toBeGreaterThan(rowsRead);
+  expect(screen.getByText("525 of 600")).toBeTruthy();
+  expect(await screen.findByText("525 of 700")).toBeTruthy();
+  expect(screen.queryByRole("alert")).toBeNull();
+
+  // Opened again after staleTime, each is read again whole, with what changed meanwhile.
+  cleanup();
+  stored.rows[519] = row(520, "Achat 520", -100, {
+    spendingCategory: { id: 1, source: "override" },
+  });
+  stored.lines[519] = line(1520, { category: "Ligne 520", spendingCategoryId: 3 });
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(Date.now() + STALE_MS + 1_000);
+  renderWithClient(<PeriodRows period={FEBRUARY} category={null} onClose={() => undefined} />, {
+    client,
+  });
+  await waitFor(() => expect(picked("Spending category for Achat 520")).toBe("1"));
+  await waitFor(() => expect(picked("Spending category for Ligne 520 of 2026-01-20")).toBe("3"));
+  expect(screen.getByText("525 of 600")).toBeTruthy();
+  expect(screen.getByText("525 of 700")).toBeTruthy();
+  expect(screen.queryByRole("alert")).toBeNull();
+  vi.useRealTimers();
+});
+
+test("rows and card lines read again and refused say so, over what they still show (lg-98)", async () => {
+  const client = testQueryClient();
+  await show525(client, manyRowsAndLines());
+
+  cleanup();
+  vi.mocked(fetchSpendingRows).mockRejectedValue(new AppError("UNREACHABLE", "Down."));
+  vi.mocked(fetchSpendingLines).mockRejectedValue(new AppError("UNREACHABLE", "Down."));
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(Date.now() + STALE_MS + 1_000);
+  renderWithClient(<PeriodRows period={FEBRUARY} category={null} onClose={() => undefined} />, {
+    client,
+  });
+
+  await waitFor(() => expect(screen.getAllByRole("alert")).toHaveLength(2));
+  for (const alert of screen.getAllByRole("alert")) {
+    expect(alert.textContent).toBe(
+      "The list could not be read again, so it shows what was read before. Down.",
+    );
+  }
+  expect(screen.getByText("525 of 600")).toBeTruthy();
+  expect(screen.getByText("525 of 700")).toBeTruthy();
+  vi.useRealTimers();
 });

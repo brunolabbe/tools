@@ -47,6 +47,7 @@ import {
   peopleIn,
   peopleQuery,
   periodsQuery,
+  rereadFailureOf,
   settledRead,
 } from "../queries.ts";
 import { useWrite } from "../writes.ts";
@@ -230,6 +231,9 @@ export function History(): React.ReactElement {
         ? { state: "loading" }
         : { state: "ready", rows: rowsRead.data.rows, total: rowsRead.data.total };
   const listsFailure = failureOf(named, inNow, listed);
+  // A read again that failed over the rows still shown, which a change's own re-read
+  // already words as `problem`, and which a reopened screen's would otherwise not say.
+  const rereadFailure = badFilter === null ? rereadFailureOf(rowsRead) : null;
 
   // A further page in flight is dropped with the list it was for.
   useEffect(
@@ -463,9 +467,9 @@ export function History(): React.ReactElement {
           {badFilter}
         </p>
       )}
-      {(problem ?? listsFailure) !== null && (
+      {(problem ?? listsFailure ?? rereadFailure) !== null && (
         <p className="bad" role="alert">
-          {problem ?? listsFailure}
+          {problem ?? listsFailure ?? rereadFailure}
         </p>
       )}
       {notice !== null && <output>{notice}</output>}

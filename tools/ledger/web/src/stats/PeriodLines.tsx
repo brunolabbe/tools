@@ -19,7 +19,7 @@ import type { PeriodLine, SpendingCategory } from "@ledger/contract";
 import { fetchSpendingLines } from "../api/spending.ts";
 import { SpendingCategoryPicker } from "../spending/Picker.tsx";
 import { shownName, usePeopleNames } from "../people.tsx";
-import { PAGE, failureOf, spendingLinesQuery } from "../queries.ts";
+import { PAGE, failureOf, rereadFailureOf, spendingLinesQuery } from "../queries.ts";
 import { useWrite } from "../writes.ts";
 
 type Load =
@@ -64,6 +64,7 @@ export function PeriodLines({
       : read.data === undefined
         ? { state: "loading" }
         : { state: "ready", lines: read.data.lines, total: read.data.total };
+  const reread = rereadFailureOf(read);
 
   const showMore = async (): Promise<void> => {
     if (load.state !== "ready") return;
@@ -122,6 +123,11 @@ export function PeriodLines({
       {load.state === "failed" && (
         <p className="bad" role="alert">
           {load.message}
+        </p>
+      )}
+      {reread !== null && (
+        <p className="bad" role="alert">
+          {reread}
         </p>
       )}
       {load.state === "ready" && (

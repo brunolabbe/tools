@@ -169,6 +169,12 @@ export function seriesQuery<T>(route: string, fetcher: SeriesFetch<T>, range: St
 export const PAGE = 25;
 
 /**
+ * The most rows or lines the API gives in one request: `limit` above it is refused
+ * as `BAD_REQUEST` by `rowsQuerySchema` and `periodLinesQuerySchema` alike.
+ */
+export const READ_LIMIT_MAX = 500;
+
+/**
  * How many a read from the top asks for: a page, or as many as the list already
  * shows, so a list read again after a write does not send the person back to the
  * first page. "Show more" puts its page into the same entry (`setQueryData`).
@@ -177,20 +183,44 @@ function shownSoFar(length: number | undefined, page = PAGE): number {
   return Math.max(page, length ?? 0);
 }
 
+/**
+ * Reads `wanted` from the top, `READ_LIMIT_MAX` a request (lg-98's gate 1, F3): a
+ * list shown past that many is read again in as many requests as it takes rather
+ * than in one the API refuses. One request up to 500, the case nearly always; the
+ * last request's `total` is the list's. Stops early when the list is shorter.
+ */
+async function readFromTop<T>(
+  wanted: number,
+  read: (offset: number, limit: number) => Promise<{ items: T[]; total: number }>,
+): Promise<{ items: T[]; total: number }> {
+  const items: T[] = [];
+  let total = 0;
+  for (let offset = 0; offset < wanted; offset += READ_LIMIT_MAX) {
+    const limit = Math.min(READ_LIMIT_MAX, wanted - offset);
+    // One after another, not at once: a short answer ends the list, and a burst would
+    // spend the edge's budget (lg-97) on requests that may not be needed.
+    // oxlint-disable-next-line no-await-in-loop
+    const answer = await read(offset, limit);
+    items.push(...answer.items);
+    total = answer.total;
+    if (answer.items.length < limit) break;
+  }
+  return { items, total };
+}
+
 /** The whole account's rows under the history's filters (lg-41), `page` at a time. */
 export function historyRowsQuery(query: RowsQuery, page: number) {
   const queryKey = [ROUTES.rows, { list: "history", ...query }] as const;
   return queryOptions<RowsResponse, Error, RowsResponse, QueryKey>({
     queryKey,
-    queryFn: ({ client, signal }) =>
-      fetchRows(
-        {
-          ...query,
-          offset: 0,
-          limit: shownSoFar(client.getQueryData<RowsResponse>(queryKey)?.rows.length, page),
-        },
-        signal,
-      ),
+    queryFn: async ({ client, signal }) => {
+      const wanted = shownSoFar(client.getQueryData<RowsResponse>(queryKey)?.rows.length, page);
+      const { items, total } = await readFromTop(wanted, async (offset, limit) => {
+        const answer = await fetchRows({ ...query, offset, limit }, signal);
+        return { items: answer.rows, total: answer.total };
+      });
+      return { rows: items, total };
+    },
   });
 }
 
@@ -206,15 +236,14 @@ export function spendingRowsQuery(slice: SpendingSlice) {
   const queryKey = [ROUTES.rows, { list: "spending", ...slice }] as const;
   return queryOptions<RowsResponse, Error, RowsResponse, QueryKey>({
     queryKey,
-    queryFn: ({ client, signal }) =>
-      fetchSpendingRows(
-        {
-          ...slice,
-          offset: 0,
-          limit: shownSoFar(client.getQueryData<RowsResponse>(queryKey)?.rows.length),
-        },
-        signal,
-      ),
+    queryFn: async ({ client, signal }) => {
+      const wanted = shownSoFar(client.getQueryData<RowsResponse>(queryKey)?.rows.length);
+      const { items, total } = await readFromTop(wanted, async (offset, limit) => {
+        const answer = await fetchSpendingRows({ ...slice, offset, limit }, signal);
+        return { items: answer.rows, total: answer.total };
+      });
+      return { rows: items, total };
+    },
   });
 }
 
@@ -223,15 +252,14 @@ export function spendingLinesQuery(slice: SpendingSlice) {
   const queryKey = [ROUTES.periodLines, slice] as const;
   return queryOptions<PeriodLinesResponse, Error, PeriodLinesResponse, QueryKey>({
     queryKey,
-    queryFn: ({ client, signal }) =>
-      fetchSpendingLines(
-        {
-          ...slice,
-          offset: 0,
-          limit: shownSoFar(client.getQueryData<PeriodLinesResponse>(queryKey)?.lines.length),
-        },
-        signal,
-      ),
+    queryFn: async ({ client, signal }) => {
+      const wanted = shownSoFar(client.getQueryData<PeriodLinesResponse>(queryKey)?.lines.length);
+      const { items, total } = await readFromTop(wanted, async (offset, limit) => {
+        const answer = await fetchSpendingLines({ ...slice, offset, limit }, signal);
+        return { items: answer.lines, total: answer.total };
+      });
+      return { lines: items, total };
+    },
   });
 }
 
@@ -263,4 +291,15 @@ export async function settledRead(
 export function failureOf(...results: readonly { error: unknown; data: unknown }[]): string | null {
   const failed = results.find((result) => result.error !== null && result.data === undefined);
   return failed === undefined ? null : AppError.from(failed.error).message;
+}
+
+/**
+ * What a list says when it was read again and the read failed while it still
+ * shows the answer before, which `failureOf` leaves alone: a list that stays old
+ * without a word reads as current (lg-98's gate 1, F3). `null` otherwise.
+ */
+export function rereadFailureOf(result: { error: unknown; data: unknown }): string | null {
+  return result.error === null || result.data === undefined
+    ? null
+    : `The list could not be read again, so it shows what was read before. ${AppError.from(result.error).message}`;
 }

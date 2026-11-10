@@ -15,7 +15,13 @@ import { formatCents } from "@ledger/books";
 import { AppError } from "@ledger/contract";
 import type { StoredRow } from "@ledger/contract";
 import { fetchSpendingRows } from "../api/spending.ts";
-import { PAGE, categoriesQuery, failureOf, spendingRowsQuery } from "../queries.ts";
+import {
+  PAGE,
+  categoriesQuery,
+  failureOf,
+  rereadFailureOf,
+  spendingRowsQuery,
+} from "../queries.ts";
 import { RowSpending } from "../spending/RowSpending.tsx";
 import { useWrite } from "../writes.ts";
 import { PeriodLines } from "./PeriodLines.tsx";
@@ -76,6 +82,7 @@ export function PeriodRows({ period, category, onClose }: PeriodRowsProps): Reac
         ? { state: "loading" }
         : { state: "ready", rows: read.data.rows, total: read.data.total };
   const unlisted = failureOf(listed);
+  const reread = rereadFailureOf(read);
 
   const choose = (next: Filter): void => {
     setFilter(next);
@@ -153,6 +160,11 @@ export function PeriodRows({ period, category, onClose }: PeriodRowsProps): Reac
       {load.state === "failed" && (
         <p className="bad" role="alert">
           {load.message}
+        </p>
+      )}
+      {reread !== null && (
+        <p className="bad" role="alert">
+          {reread}
         </p>
       )}
       {load.state === "ready" && (

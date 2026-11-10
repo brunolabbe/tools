@@ -8,7 +8,8 @@
 
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { AppError } from "@ledger/contract";
+import type { QueryClient } from "@tanstack/react-query";
+import { AppError, rowsQuerySchema } from "@ledger/contract";
 import type { ClosedPeriod, RowsQuery, StoredRow } from "@ledger/contract";
 import { classifyRow } from "../src/api/inbox.ts";
 import { fetchPeriods } from "../src/api/periods.ts";
@@ -16,8 +17,10 @@ import { fetchRows } from "../src/api/rows.ts";
 import { fetchPeople } from "../src/api/people.ts";
 import { fetchSpendingCategories } from "../src/api/spending.ts";
 import { History, closedPeriodOf } from "../src/history/History.tsx";
+import { historyRowsQuery } from "../src/queries.ts";
+import { STALE_MS } from "../src/query.ts";
 import { peopleAnswer } from "./people-answer.ts";
-import { renderWithClient } from "./render-with-client.tsx";
+import { renderWithClient, testQueryClient } from "./render-with-client.tsx";
 
 vi.mock("../src/api/rows.ts", () => ({ fetchRows: vi.fn() }));
 vi.mock("../src/api/inbox.ts", () => ({ classifyRow: vi.fn() }));
@@ -938,3 +941,94 @@ for (const arm of ["unfocused", "focused"] as const) {
     expect(classifyRow).toHaveBeenCalledTimes(1);
   });
 }
+
+// lg-98, gate 1's F3: a list read again keeps the pages the person opened, and the API reads
+// at most 500 rows a request (`rowsQuerySchema`'s `limit`). The fake answers from 600 stored
+// rows and refuses, as the API does, any query its schema refuses.
+
+/** 600 rows a person filed, newest first, and a fake `fetchRows` over them that holds to the API's schema. */
+function manyRows(): StoredRow[] {
+  const rows = Array.from({ length: 600 }, (_, index) =>
+    filedTo(index + 1, `Achat ${String(index + 1)}`),
+  );
+  vi.mocked(fetchRows).mockImplementation(async (query) => {
+    const parsed = rowsQuerySchema.safeParse({
+      offset: String(query.offset ?? 0),
+      limit: String(query.limit ?? 50),
+    });
+    if (!parsed.success) throw new AppError("BAD_REQUEST", "The API refused the query.");
+    const offset = parsed.data.offset ?? 0;
+    return { rows: rows.slice(offset, offset + (parsed.data.limit ?? 50)), total: rows.length };
+  });
+  return rows;
+}
+
+/**
+ * Opens the history on 500 of its 600 rows and taps Show more once, to 550. The 500 are put
+ * in the cache entry as nine taps of Show more would leave them (each tap puts its page into
+ * the one entry), which keeps the test to seconds; the tap past 500 is the screen's own.
+ */
+async function show550(client: QueryClient, rows: readonly StoredRow[]): Promise<void> {
+  client.setQueryData(historyRowsQuery({}, 50).queryKey, { rows: rows.slice(0, 500), total: 600 });
+  renderWithClient(<History />, { client });
+  await screen.findByText("500 of 600");
+  fireEvent.click(screen.getByRole("button", { name: "Show more" }));
+  await screen.findByText("550 of 600");
+}
+
+function listed(): HTMLElement[] {
+  return within(screen.getByRole("list", { name: "Bank rows" })).getAllByRole("listitem");
+}
+
+test("past 500 rows shown, the history is read again whole after a change and after staleTime (lg-98)", async () => {
+  const rows = manyRows();
+  vi.mocked(classifyRow).mockImplementation(async ({ rowId }) => {
+    rows[rowId - 1] = filedTo(rowId, `Achat ${String(rowId)}`, "sam");
+    return { ...SAVED, rowId };
+  });
+  const client = testQueryClient();
+  await show550(client, rows);
+
+  // A change to the 520th row: the list read again holds it, and every row opened.
+  const item = listed()[519] as HTMLElement;
+  fireEvent.click(within(item).getByRole("button", { name: /^Change who and what/u }));
+  fireEvent.change(within(item).getByLabelText("Belongs to"), { target: { value: "sam" } });
+  fireEvent.click(within(item).getByRole("button", { name: "Save" }));
+  await waitFor(() => expect(listed()[519]?.textContent).toContain("sam · Current expenses"));
+  expect(listed()).toHaveLength(550);
+  expect(screen.getByText("550 of 600")).toBeTruthy();
+  expect(screen.queryByRole("alert")).toBeNull();
+
+  // Opened again after staleTime, it is read again whole, and shows what changed meanwhile.
+  cleanup();
+  rows[529] = filedTo(530, "Achat 530", "sam");
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(Date.now() + STALE_MS + 1_000);
+  const before = asked().length;
+  renderWithClient(<History />, { client });
+  await waitFor(() => expect(listed()[529]?.textContent).toContain("sam · Current expenses"));
+  expect(listed()).toHaveLength(550);
+  expect(screen.queryByRole("alert")).toBeNull();
+  expect(
+    asked()
+      .slice(before)
+      .every((query) => (query.limit ?? 0) <= 500),
+  ).toBe(true);
+});
+
+test("a history read again that is refused says so, over the rows it still shows (lg-98)", async () => {
+  const rows = manyRows();
+  const client = testQueryClient();
+  await show550(client, rows);
+
+  cleanup();
+  vi.mocked(fetchRows).mockRejectedValue(new AppError("UNREACHABLE", "Down."));
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(Date.now() + STALE_MS + 1_000);
+  renderWithClient(<History />, { client });
+
+  expect((await screen.findByRole("alert")).textContent).toBe(
+    "The list could not be read again, so it shows what was read before. Down.",
+  );
+  expect(listed()).toHaveLength(550);
+});
