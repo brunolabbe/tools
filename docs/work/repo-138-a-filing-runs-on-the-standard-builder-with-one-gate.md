@@ -72,8 +72,36 @@ What the filing row should read.
 - **(c) Keep the row.** The two-gate pattern is the price of a correct
   `needs-decision` filing; $5 is cheap against a wrong answer.
 
-The rule "a different model gates, not a cheaper one" (`SKILL.md`) holds under
-(a) and (b).
+~~The rule "a different model gates, not a cheaper one" (`SKILL.md`) holds under
+(a) and (b).~~ Superseded 2026-11-10: false for (a). `builder-standard` and
+`ticket-reviewer-sonnet` both pin `claude-sonnet-5-5`, so a Sonnet filer under
+the Sonnet gate is the same model reviewing itself. It holds under the second
+answer below.
+
+**Second answer, owner, 2026-11-10, over (a)'s same-model pairing.** Question
+as put by the orchestrator at the tools-86 checkpoint 2: "Your answer (a) pairs
+a builder-standard filer with a ticket-reviewer-sonnet gate. Both agent
+definitions are claude-sonnet-5-5. That breaks the rule 'a different model, not
+a cheaper one' (orchestrate-tickets SKILL.md, and review-ticket's 'A different
+model reviews'), and the ticket's claim that the rule 'holds under (a)' is
+false. Which pairing should the filing row carry?"
+
+Options offered:
+
+- **(ii) Sonnet filer, Opus gate** (the orchestrator's recommendation).
+- (i) Keep (a) and write an exception into the rule sentence.
+- (b) Haiku filer, no gate 2.
+- (c) Keep today's row.
+
+**Chosen: (ii), the recommendation; no recommendation overridden.** Provenance:
+the orchestrator's check behind the question, run by the orchestrator and not
+the builder: `grep -n '^model'` on `builder-standard.md` and
+`ticket-reviewer-sonnet.md`, both `claude-sonnet-5-5`; the Opus gate-1 costs
+from `reference/history.md`'s #684 ($3.1060), #691 ($3.4652) and #703
+($2.6522) rows.
+
+The filing row now reads `builder-standard` (Sonnet 5.5, high) with
+`ticket-reviewer-opus`, narrow, after the PR opens. The status stays `ready`.
 
 ## Build
 
@@ -133,3 +161,22 @@ The rule "a different model gates, not a cheaper one" (`SKILL.md`) holds under
     filing is always gated" is still true, but "or filing" now names no row.
   - Done when 2 waits for the merge: the first three filings after it are
     logged in `reference/history.md`.
+- 2026-11-10 — Second answer applied on this branch (owner, over (a)'s
+  same-model pairing; see the Decision). The "different model" conflict logged
+  above is resolved: the filing row reads `builder-standard` (Sonnet 5.5, high)
+  with `ticket-reviewer-opus`, narrow, after the PR opens, and the sentence
+  under the table cites the Opus gate 1 costs on `standard` builds ($2.65 to
+  $3.47, #684, #691, #703, from `reference/history.md`). The "different model"
+  sentence is unchanged and now holds. The Decision's "holds under (a) and (b)"
+  line is struck, as false for (a).
+  - Done when 1's grep is reported as it lists, for inspection: after this
+    change, `grep -rn "filing whose reproduction" .claude/skills` returns the
+    row's own label (`SKILL.md`), the sentence under the table (`SKILL.md`) and
+    `review-ticket/gate.md`'s unrelated sentence. Its wording is left alone, per
+    the orchestrator.
+  - Checked on this change: `grep -n '^model'` on the three agent definitions
+    read `builder-standard.md:5:model: claude-sonnet-5-5`,
+    `ticket-reviewer-sonnet.md:5:model: claude-sonnet-5-5` and
+    `ticket-reviewer-opus.md:5:model: claude-opus-5-5`.
+  - Left as before, not in the Build: `SKILL.md`'s "A Haiku build or filing is
+    always gated" bullet.
