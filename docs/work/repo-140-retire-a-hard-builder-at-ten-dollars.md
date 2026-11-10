@@ -3,7 +3,7 @@ id: repo-140
 tool: repo
 title: Retire a hard builder at about ten dollars, not fifteen
 kind: chore
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: mechanical
@@ -83,6 +83,79 @@ or (c), so it is not built.
    under step 6, and the paragraph names the new figure with this ticket.
 2. The next `hard` ticket's entry in `reference/history.md` names which bar
    its builder was read against.
+
+## Review
+
+**Gate: PASS** — 2026-11-10 · `a100f429..74b9d49a` · Sonnet 5.5, depth narrow
+
+| Done when                                                                                                             | Proof                                                                                                                                                                                                                                                                                                                           |
+| --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. `grep -n '\$15'` on `SKILL.md` finds nothing under step 6, and the paragraph names the new figure with this ticket | **verified** (docs-only, by command) — the grep prints nothing and exits 1; step 6's resume paragraph reads "The bar is about $10" and "repo-140's measurement". "fifteen dollars" appears twice in it as the cutoff of the data (three first builds above it), not as a bar, so the property holds as well as the literal grep |
+| 2. The next `hard` ticket's entry in `reference/history.md` names which bar its builder was read against              | **awaiting** — the first batch entry written to `reference/history.md` after the merge whose table has a `builder-hard` row; the reading is whether that entry's text names the bar ($10) its builder was read against (see F2: no page tells the orchestrator to write it)                                                     |
+
+- **low** · F1 · no `Done when` line depends on it · `nfr:maintainability` — the
+  new paragraph says the `builder-hard` row "that opened each of eight tickets"
+  on the 2026-10-25 and 2026-10-31 batches cost $6.39 to $20.14. Those batches
+  hold **nine** such first-build rows: `reference/history.md`, "Batch 2026-10-25
+  (tools-97 …)", has repo-127's (`af6a85377816e2387`, $7.10), which the brief's
+  table and the paragraph leave out. The range and "three of them above fifteen
+  dollars" survive with it (three of nine, $6.39 to $20.14), so the text is
+  incomplete, not wrong, and the falsehood runs in the safe direction. The same
+  shape as repo-138's gate: a chosen subset written as the batches' range.
+- **low** · F2 · open decision, no `Done when` line is unmet by it, but line 2's
+  reading depends on it — nothing tells the orchestrator to record the bar.
+  Step 6's new paragraph says the bar is read at the first report, not that the
+  batch entry says so, and `reference/history.md`'s entry schema ("An entry is
+  this and nothing more": table, Tickets, Defects, Worked) has no place for it;
+  `git grep -n -i 'which bar\|read against' -- .claude docs/01-TICKETS.md`
+  finds only an unrelated sentence. Line 2 will be read off an entry that is
+  only written that way if someone does it unprompted. No live call site until
+  the next `hard` batch. Remedy options, for the lander or owner: **(a)** one
+  clause in the step 6 paragraph, that the batch entry's Tickets line says
+  whether the builder was read against the bar (recommended: it puts the
+  obligation where the orchestrator reads, one sentence); **(b)** reword line
+  2 to read the builder's cost off the entry's table, with no page edit.
+- **low** · F3 · no `Done when` line depends on it · `nfr:maintainability` —
+  "a builder past it is not resumed for a round", read "at the builder's first
+  report", sits beside three other resumes the sentence does not address: step
+  4's "Send a failing line back now, while the builder's cache is warm" (the
+  same moment), the paragraph's own "one owner stop", and the routing table's
+  "any one needs judgement → the builder, resumed with `SendMessage`". By step
+  6's own vocabulary a "round" is a gate's findings, so there is no
+  contradiction, but a reader at step 4 with a $10.39 builder and a failing line
+  has no instruction. The old "$15" sentence had the same shape; the new "first
+  report" wording puts the bar at step 4's moment. Safe direction (a cost, not a
+  correctness, rule).
+- **low** · F4 · no `Done when` line depends on it — the ticket's Log, correction
+  4, says none of the five builders under $10.40 "had a builder round, but each
+  had a fresh fixer for owner answers or landing". lg-71's fixer
+  (`a632eb598726a1564`) is, in `reference/history.md`, "lg-71 round 1 (med + two
+  lows + two owner answers)": a round, with a `med` in it, went to a fixer. "No
+  builder round" is true; "for owner answers or landing" is not the whole of
+  lg-71's. Log text, safe direction, nothing relies on it.
+- **dropped** · "fifteen dollars" in the new paragraph as a way round the
+  `\$15` grep: it states the data's cutoff, not a bar, and no page still tells an
+  orchestrator to resume a builder up to $15 (`grep -rn '\$15\|fifteen' .claude/
+  CLAUDE.md docs/` returns only history rows, other tickets' own figures and
+  repo-140's own text).
+- **dropped** · the $10 against $15 choice changes the data's decisions only for
+  lg-67 ($10.39): the owner's settled choice (a), a product decision.
+- **dropped** · the personal memory file `retire-long-lived-builders.md` still
+  says "~$15": outside this tree and not a page; named in the report to the
+  dispatcher.
+- **findings** · the hunt returned 7; 4 carried, 3 dropped.
+- Checked and clean: every dollar figure and agent id in the changed `SKILL.md`
+  lines re-derived from `reference/history.md` (35 of 35 cost cells equal,
+  every id present); the ticket's two named Log corrections (lg-76's total is
+  $27.78, not $27.73; the floor is $0.48, not $0.53) hold; `npm run status --
+  --json` reads repo-140 as `ready`, `problems: []`; the Decision's option text
+  is unchanged from the base (the diff of that section is the heading, the
+  provenance paragraph and the "Chosen" paragraph); a clean `git merge-tree`
+  of this head with repo-138's (PR #778) head.
+- CI at `74b9d49a`: check, pr-title, codeql, dependency-review success; the unit
+  matrix is skipped (markdown only).
+- NFR: security n/a · performance n/a · reliability — F2 · maintainability —
+  F1, F3, F4.
 
 ## Log
 
