@@ -71,7 +71,9 @@ const BOOKS = [
   ROUTES.spendingCategoryMap,
   ...STATS,
 ];
-const RULES = [ROUTES.rules, ROUTES.inbox];
+// The rows: an unfiled row is given the category of the rule that would file it. Grounded
+// in `rule-rows.test.tsx`, whose fake answers differently after the rule (gate 1's F2).
+const RULES = [ROUTES.rules, ROUTES.inbox, ROUTES.rows];
 const SPENDING = [
   ROUTES.spendingCategories,
   ROUTES.spendingCategoryMap,
@@ -118,7 +120,10 @@ const EXPECTED: Record<WriteName, Expected> = {
   fileMortgageSplit: { changes: [ROUTES.mortgageSplits, ...BOOKS] },
   saveMortgage: { changes: BOOKS, patched: [ROUTES.mortgage], answer: LIVE },
   // periods.ts (6)
-  closePeriod: { changes: BOOKS },
+  // A close applies the retirements waiting for it. Grounded in `periods.test.tsx` › "a
+  // person retired at the close is no longer offered on the Period tab once it is closed"
+  // (gate 1's F1).
+  closePeriod: { changes: [ROUTES.people, ROUTES.adminHouseholds, ...BOOKS] },
   addLine: { changes: BOOKS },
   correctLine: { changes: BOOKS },
   retireLine: { changes: BOOKS },

@@ -745,3 +745,38 @@ test("lists a charge to the pot apart from what each person paid, and closes on 
   );
   await waitFor(() => expect(retireLine).toHaveBeenCalledWith(9));
 });
+
+// lg-98, gate 1's F1: a close is what applies a retirement to the books, so it changes who
+// `GET /api/people` says is in. The API's own test asserts it:
+// `api/test/retire-person.test.ts` › "a person retired while a period is open" › "takes
+// part in its settlement, and from the day after its close is no longer offered". The fake
+// below answers the same way: casey is in before the close and retired after it.
+test("a person retired at the close is no longer offered on the Period tab once it is closed (lg-98)", async () => {
+  let isClosed = false;
+  vi.mocked(fetchPeople).mockImplementation(async () =>
+    isClosed ? peopleAnswer(["alex", "sam"], ["casey"]) : peopleAnswer(["alex", "casey", "sam"]),
+  );
+  vi.mocked(closePeriod).mockImplementation(async () => {
+    isClosed = true;
+    return closed(4, "2026-10-02", "expected");
+  });
+  renderWithClient(<Periods />);
+
+  const payer = (): string[] =>
+    [
+      ...(
+        within(screen.getByRole("form", { name: "Add a line" })).getByLabelText(
+          "Paid by",
+        ) as HTMLSelectElement
+      ).options,
+    ].map((option) => option.value);
+  await screen.findByRole("heading", { name: "Close the period" });
+  expect(payer()).toEqual(["alex", "casey", "sam"]);
+
+  fireEvent.click(
+    within(section("Close the period")).getByRole("button", { name: "Close the period" }),
+  );
+  await waitFor(() => expect(closePeriod).toHaveBeenCalledTimes(1));
+
+  await waitFor(() => expect(payer()).toEqual(["alex", "sam"]));
+});

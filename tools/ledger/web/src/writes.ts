@@ -10,9 +10,10 @@
  * A route is in a write's list when the API recomputes that route's answer from
  * what the write stores. The books' figures are recomputed from every row,
  * filing, line, close and ratio on each read, so a write to any of those makes
- * all of `BOOKS` stale; a write that only names things (a rule, a spending
- * category, a person) makes stale only what shows the name. A workbook import can
- * store anything, so it makes everything stale.
+ * all of `BOOKS` stale; a write that only names things (a spending category, a
+ * person) makes stale only what shows the name. A close changes who is in, and a
+ * rule what an unfiled row is given, besides (below). A workbook import can store
+ * anything, so it makes everything stale.
  *
  * **A write whose answer is the new state patches the cache with it** instead of
  * reading again: an answer in the inbox leaves the list at once, and classifying
@@ -96,8 +97,15 @@ export const BOOKS = [
   ...STATS,
 ] as const;
 
-/** A rule changes no filing (it applies to the next paste), only what the inbox suggests. */
-export const RULES = [ROUTES.rules, ROUTES.inbox] as const;
+/**
+ * A rule files nothing already stored (it applies to the next paste), but it is
+ * what the inbox suggests, and `GET /api/rows` gives a row nobody has filed the
+ * spending category of the rule that would file it: the rows lists, the
+ * Spending tab's uncategorised one included, change with the rules
+ * (`api/test/spending-categories.test.ts` › "a rule that matches a row filed
+ * before the rule existed"; lg-98's gate 1, F2).
+ */
+export const RULES = [ROUTES.rules, ROUTES.inbox, ROUTES.rows] as const;
 
 /**
  * Where a spending category, or a row's, is shown: the list, the map, every row
@@ -202,8 +210,11 @@ export const WRITES = {
     apply: (client, answer: MortgageResponse) =>
       client.setQueryData(mortgageQuery.queryKey, answer),
   }),
-  // periods.ts
-  closePeriod: entry(() => closePeriod, BOOKS),
+  // periods.ts — a close applies the retirements waiting for it: who is in
+  // (`people`) and where each stands (the admin's list) change with it
+  // (`api/test/retire-person.test.ts` › "a person retired while a period is open";
+  // lg-98's gate 1, F1).
+  closePeriod: entry(() => closePeriod, [ROUTES.people, ROUTES.adminHouseholds, ...BOOKS]),
   addLine: entry(() => addLine, BOOKS),
   correctLine: entry(() => correctLine, BOOKS),
   retireLine: entry(() => retireLine, BOOKS),
