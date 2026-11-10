@@ -202,3 +202,73 @@ and the fix will depend on what step 2 names, which is the judgement the rating
 means. The gate's figures under **Measurements** were read from its own logs in
 its scratch directory. The dl-129 builder's figures were relayed by the
 orchestrator and have not been checked by anyone.
+
+**2026-11-10 — Build 2 swept: 20 of 20 passed, so no cause is named; stopped at
+Done when 1** (builder, Opus 5.5, branch `downloader/dl-130-proxy-flake` off
+`a100f429`). Nothing under `src/` changed, and no fix was attempted: Build 5
+fixes "the cause the Log names", and this Log names none.
+
+_The instrumentation_ (test-side only, uncommitted, removed after the sweep):
+in `tiers-on-the-terminating-proxy.test.ts`, the proxy's
+`onCertificateRejected` logged its arguments and then called
+`rejections.record` as before; `onOtherConnectFailure` and
+`onConnectEstablished` were passed as spies that only log, calling no
+`TlsRejectionLog` method; the guard's `assertAllowed` was wrapped to log each
+`CONNECT` the proxy received, so a navigation the proxy never saw would show as
+no line; and `rejections.since` was wrapped for the rogue test's call only,
+logging its arguments and return value, and restored after it. Each event went
+as one JSON line to a file named by an environment variable, never to a
+`TlsRejectionLog`.
+
+_The command_, one at a time from the worktree root, `/proc/loadavg` read before
+each run:
+`npx vitest run tools/downloader/api/test/tiers-on-the-terminating-proxy.test.ts -t "still refuses a certificate the proxy could not verify"`.
+Every run printed `Tests  1 passed | 4 skipped (5)` and exited 0.
+
+| runs  | 1-min load before each run                                 | foreign `vitest` processes |
+| ----- | ---------------------------------------------------------- | -------------------------- |
+| 1–10  | 1.84, 2.98, 2.98, 2.90, 2.90, 2.91, 2.91, 3.16, 3.86, 3.86 | 0                          |
+| 11–20 | 4.20, 7.06, 7.06, 8.02, 8.02, 7.62, 7.62, 7.33, 7.33, 7.14 | 3, then 14–19              |
+
+Runs 11 to 20 overlapped another session's `vitest` run, so half the sweep was
+taken at the load gate 1 reported for its failure ("about 4") and above it.
+
+_What the spies captured_ — identical in shape in all 20 traces, five lines
+each: one `assertAllowed` (one `CONNECT`), one `onCertificateRejected` with
+`DEPTH_ZERO_SELF_SIGNED_CERT`, no `onOtherConnectFailure`, no
+`onConnectEstablished`, and a `since` that returned the code. Run 20, at load
+7.14 (`hint` cut):
+
+```
+{"t":1794269753737,"event":"rogue-start","originPort":46203}
+{"t":1794269753888,"event":"assertAllowed","rawUrl":"https://127.0.0.1:46203"}
+{"t":1794269753905,"event":"onCertificateRejected","host":"127.0.0.1","code":"DEPTH_ZERO_SELF_SIGNED_CERT"}
+{"t":1794269753924,"event":"since","host":"127.0.0.1","port":46203,"at":1794269753738,"returned":"DEPTH_ZERO_SELF_SIGNED_CERT"}
+{"t":1794269753925,"event":"rogue-error","code":"TLS_VERIFICATION_FAILED","message":"The site's security certificate could not be verified.","details":{"url":"https://127.0.0.1:46203/watch","reason":"DEPTH_ZERO_SELF_SIGNED_CERT", …}}
+```
+
+So Done when 1 stays open for the owner, as the line says. What a passing run
+does show: the wiring is as this ticket's Code path reads it (the two conflict
+hooks never fire in this test), and across the 20 traces the refusal was
+recorded 12–24 ms after the `CONNECT` reached the proxy, 117–218 ms after the
+`startedAt` that `since` was given, and 13–47 ms before `since` read it. None of
+those margins was close to a stale-record miss.
+
+**Done when 4 — the base, 10 of 10 passed** at `da4673e1`, in a detached second
+tree, uninstrumented, the same command one run at a time. Every run printed
+`Tests  1 passed | 4 skipped (5)`, exit 0, 2.0–2.5 s each. Loads before each run
+(1-min): 7.56, 7.56, 7.12, 7.12, 6.63, 6.63, 6.09, 6.09, 6.09, 5.69; no foreign
+`vitest` process was running at any of them. Ten is the bound, and a clean ten
+does not show the defect absent at the base.
+
+One thing the base run met that the brief does not say: `npm run build` at
+`da4673e1` exits 2 in `@ledger/api` (`TS2307: Cannot find module 'exceljs'`),
+after the downloader workspaces had built — `packages/*` and
+`tools/downloader/*` come before `tools/ledger/*` in the workspace order, and
+their `dist` was written in that run. That the tree measured ran the base's own
+code is shown by a `dist` grep: `PROVOKE_PASS_PAUSE_MS`, which dl-129 added to
+`resolvers/src/resolvers/browser.ts`, occurs 0 times in the base tree's
+`resolvers/dist/resolvers/browser.js` and 2 times in this branch's.
+
+Not folded in: dl-134's `AT_ONCE_WAITS` in the same test file, which waits for
+this ticket. Nothing else became free.
