@@ -255,3 +255,14 @@ dispatch.
   is built.
 - Not this round, left as gate 1 wrote them: no minimum time for the second
   read, and the escalation default being Sonnet when `RECEIPT_MODEL` is Sonnet.
+
+### 2026-11-10 — owner's answer at the landing (recorded by the lander, Sonnet 5.5)
+
+- **The Layout line of `tools/ledger/CLAUDE.md`: does the lander add the second
+  model?** Options: **add "and Sonnet 5.5 for a flagged reading (lg-105)" after
+  "Anthropic's SDK" (chosen, the orchestrator's recommendation)**; leave the
+  line as it was. The owner's answer, 2026-11-10, relayed in the lander's
+  dispatch. Only that sentence changed, re-wrapped; the entry above that said
+  the Layout line stays is superseded by this answer.
+- 2026-11-10 — Fixed at landing by owner choice: the Layout line of `tools/ledger/CLAUDE.md`
+  naming Sonnet 5.5 for a flagged reading. `git diff c7767dd8 HEAD -- tools/ledger/CLAUDE.md | grep -v 'Fixed at landing' | grep -c '^+.*Sonnet 5.5 for a flagged reading'` → 1.

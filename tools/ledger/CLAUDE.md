@@ -44,8 +44,8 @@ off its shared amount, at the GST and QST rates in effect on its date
 (`splitReceipt` and the dated `SALES_TAX_RATES` table, lg-10: a rate change is an
 entry added there). The name is `books` because
 `ledger` is the tool. **`receipts`** is the receipt reader (lg-8): Claude Haiku
-5.5 through Anthropic's SDK, given its key and model by `api`, and reading no
-environment itself.
+5.5 through Anthropic's SDK, and Sonnet 5.5 for a flagged reading (lg-105), given
+its key and model by `api`, and reading no environment itself.
 
 ## Commands
 
