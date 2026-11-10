@@ -272,3 +272,22 @@ code is shown by a `dist` grep: `PROVOKE_PASS_PAUSE_MS`, which dl-129 added to
 
 Not folded in: dl-134's `AT_ONCE_WAITS` in the same test file, which waits for
 this ticket. Nothing else became free.
+
+**2026-11-10 — the owner answered Done when 1's open question** (relayed by the
+orchestrator, which put the question). The question as put: 0 failures in 50
+isolated runs (this ticket's 20 at head and 10 at base, and dl-129's builder's
+20 at base, relayed), so Done when 1 cannot be met from a sweep; what next? The
+options:
+
+- **(A)** commit a small test-side diagnostic, so that the next failure anywhere
+  (CI, a gate, a whole-project run) prints `error.details.reason` and the
+  `since` read in its assertion message, and park the ticket with an
+  `awaiting:` line until a failure is captured — no retry, no wider timeout;
+- **(B)** a bigger sweep now, about 100 isolated runs and a few whole-project
+  runs;
+- **(C)** close as not reproduced.
+
+**The owner chose (A)**, which was the builder's and the orchestrator's
+recommendation. No `Done when` line is reworded: lines 1, 2, 3 and 5 are parked
+behind the `awaiting` line until a failing run's message names the branch, and
+Build 3 to 5 then apply to that run as written.
