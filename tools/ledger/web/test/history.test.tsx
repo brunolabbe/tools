@@ -1032,3 +1032,22 @@ test("a history read again that is refused says so, over the rows it still shows
   );
   expect(listed()).toHaveLength(550);
 });
+
+test("a history read again that finds the list shorter than one request asks for nothing more (lg-98, gate 2's N2)", async () => {
+  const rows = manyRows();
+  const client = testQueryClient();
+  await show550(client, rows);
+
+  // 550 are wanted, which is two requests of 500 and 50, but only 300 rows are left: the
+  // first answer is short, which ends the list, so the second request is never sent.
+  cleanup();
+  rows.length = 300;
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(Date.now() + STALE_MS + 1_000);
+  const before = asked().length;
+  renderWithClient(<History />, { client });
+
+  await screen.findByText("300 of 300");
+  const sent = asked().slice(before);
+  expect(sent.map((query) => [query.offset ?? 0, query.limit])).toEqual([[0, 500]]);
+});

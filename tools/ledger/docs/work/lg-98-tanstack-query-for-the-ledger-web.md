@@ -399,6 +399,7 @@ of 14 new and changed `lg-98` tests pass at the round's head.
   filed rows, which cite the rule version that filed them, so a rule moves no
   chart; `ratiosAsOf` and `splitsAsOf` read no periods or retirements; the
   household's own route carries no standing, so a close does not change it.
+  UNVERIFIED: read from the code, not run; see gate 2's F1 residual.
 - **F3, a paged list read again past 500.** History's rows, and the bank rows and
   card lines under a spending chart, are read again from the top with as many as
   are shown, and the API refuses `limit` above 500 (`rowsQuerySchema`,
