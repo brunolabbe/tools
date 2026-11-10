@@ -279,16 +279,18 @@ describe("the browser tier behind a proxy that terminates its TLS", () => {
       // dl-130: the `since` read this call's verdict turned on, recorded and
       // passed through unchanged, so a failure can say what it returned.
       let sinceRead = false;
+      const startedAt = Date.now();
       const since = rejections.since.bind(rejections);
       rejections.since = (host, port, at) => {
         const code = since(host, port, at);
         sinceRead = true;
+        // `at` relative like every other line: a stale record is the
+        // comparison of this against the refusal's own time.
         noteEvent(
-          `since(${host}, ${String(port)}, at ${String(at)}) returned ${code ?? "undefined"}`,
+          `since(${host}, ${String(port)}, at ${String(at - startedAt)} ms) returned ${code ?? "undefined"}`,
         );
         return code;
       };
-      const startedAt = Date.now();
       let error: AppError;
       try {
         error = await resolveError(
@@ -305,6 +307,9 @@ describe("the browser tier behind a proxy that terminates its TLS", () => {
         `dl-130 diagnosis, times relative to ${String(startedAt)}:`,
         `reason: ${String(error.details?.["reason"])}`,
         ...(sinceRead ? [] : ["since: never read"]),
+        ...(events.some(({ at, what }) => at >= startedAt && what.startsWith("assertAllowed"))
+          ? []
+          : ["no CONNECT reached the proxy: no assertAllowed line after 0 ms"]),
         ...events.map(({ at, what }) => `${String(at - startedAt)} ms: ${what}`),
         "verdict",
       ].join("\n");
