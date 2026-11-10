@@ -133,3 +133,68 @@ keeping or deleting it.
 
 **2026-10-25**: filed from the owner's request and their answers above, in the
 pull request that shipped the smaller requests from the same message.
+
+**2026-11-10**: built on branch `downloader/dl-133-one-box-per-analysis` from
+`a100f429`.
+
+- **Shape.** `web/src/lib/boxes.ts` holds the box type, `PROBE_SLOTS` and
+  `JOB_SLOTS` (both 2, the API's `maxProbesPerClient` and `maxJobsPerClient`
+  defaults), `displayBoxes` and the two first-come-first-served pickers.
+  `web/src/hooks/useBoxes.ts` owns the boxes, a token and a stage channel per
+  box, and the queue: a layout effect that starts waiting boxes whenever the
+  boxes or the jobs change, so a box made with a slot free never paints
+  "Waiting". `BoxList` replaces `JobList`; `BoxHead` is the one head the
+  analysis (`ProbeHead`) and the job (`JobCard`) both draw, so Download leaves
+  the preview and the title where they were. The list is named "Analyses"; the
+  e2e specs find a box there.
+- **Counted as a job in flight**: every job not yet terminal, restored ones
+  included, plus every box whose `createJob` is in flight. A queued job whose
+  link was refused still counts until it ends or is dismissed: conservative
+  against the server, whose job gate is taken at the link, not at creation.
+- **The reveal (trap 3), measured.** A scratch Playwright spec (deleted, never
+  committed) put two analysed boxes on the page, scrolled the top box's
+  Download to the window's bottom edge, pressed it, and read the new bar's
+  position with and without `scrollIntoView` stubbed out. With the fixture's
+  two renditions the bar stayed on screen either way (360 px: 492 px without,
+  418 px with; 1280 px: 460 px both). With fourteen renditions (the probe answer
+  padded by `page.route`): without the reveal the bar landed 34 px (360 px) and
+  57 px (1280 px) from the top of the window, the head and title above it and
+  out of view; with it, 166 px and 130 px. **Kept**, on the job's root, per job
+  id; a longer table would push the bar off screen without it.
+- **What the brief had wrong or left open.**
+  - Build 1's `idle-waiting` state has no `idle`: a box exists only once
+    Analyse is pressed. An address the contract refuses makes no box; its
+    `INVALID_URL` panel sits under the form, since nothing was analysed.
+  - An analysed box needed a way out that the brief did not name: with a new
+    analysis no longer replacing it, it would stay until a reload. It gained a
+    Dismiss beside Analyse again, disabled while its job is being created. A
+    failed analysis shows its address above the error, which alone does not
+    say which of several pages it is about.
+  - "A waiting box can be closed" is read for both waits: Stop waiting removes
+    the box, for a waiting Download too (rather than returning it to its
+    options).
+  - A failed job's "Analyse and retry" re-analyses in the same box and dismisses
+    the failed job; it no longer writes the address into the field, since the
+    box shows it and decision 3 keeps the field the visitor's. A restored
+    job's retry makes a new box at the top, as every box made in this page's
+    life goes above restored ones (Build 4).
+  - The saved row keeps dl-109's one-line result with its own small preview
+    and gains Dismiss; the head and the large preview are the active job's.
+  - `UrlForm`'s `busy` prop went: the form is never busy now.
+  - The `react/set-state-in-effect` lint rule fires on the queue's effect; it
+    carries a disable line with the reason (each start is a request to the
+    server, and a job slot frees on a stream frame no handler of the hook sees).
+
+Commands, from the worktree root:
+
+- `npx vitest run tools/downloader/web` → `Test Files 23 passed (23)`,
+  `Tests 338 passed (338)`.
+- `npx vitest run tools/downloader/web/test/app.test.tsx` with `PROBE_SLOTS`
+  and `JOB_SLOTS` mutated to 3 → `Tests 3 failed | 33 passed (36)`: the two
+  Done-when-2 cases and "a waiting analysis can be closed, and then is never
+  sent". Restored from the commit.
+- `E2E_PORT=8133 npm run e2e:downloader` → `20 passed (59.6s)`, the new
+  `layout.spec.ts` case "two boxes analysing side by side fit a phone and a
+  desktop (dl-133)" among them. Its screenshots at 360 px and 1280 px were
+  opened: two boxes, each with its long address wrapped, its bar and its line.
+- `npm run check` → exit 0.

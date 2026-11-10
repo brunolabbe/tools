@@ -11,8 +11,8 @@
  * **The screens are the page's view states** (`web/src/App.tsx`, no router),
  * the ones `docs/work/repo-109-…` lists: the address form, the analysing panel,
  * the renditions table, a finished download's card, and the terms page that sits
- * beside the bundle. A new one is a new test here, in the pull request that
- * adds it.
+ * beside the bundle — and, since dl-133, two boxes on the page at once. A new
+ * one is a new test here, in the pull request that adds it.
  *
  * Two of them carry a long address on purpose. A URL is the one piece of
  * content here that has no break points, which is how a narrow column ends up
@@ -151,9 +151,10 @@ test("a finished download's card fits a phone and a desktop", async ({ page }, t
     page.getByRole("button", { name: "Download", exact: true }).click(),
   ]);
   await download.path();
-  const card = page.getByRole("list", { name: "Downloads" }).locator(":scope > li").first();
+  const card = page.getByRole("list", { name: "Analyses" }).locator(":scope > li").first();
   await expect(card.getByText(/^Saved by your browser — /u)).toBeVisible({ timeout: 120_000 });
-  // The renditions are still above it: this is the page as a person leaves it.
+  // The saved box, with its Dismiss: this is the page as a person leaves it.
+  // The renditions left the box when Download was pressed (dl-133).
   await fitsBothWidths(page, testInfo, "Finished download");
 });
 
@@ -233,4 +234,38 @@ test("the theme switch's segments are 44 px tall at 360 px, beside the name", as
   });
   expect(natural, "the widened name's width on one line").toBeGreaterThanOrEqual(158.7);
   await nameBesideSwitch(page);
+});
+
+test("two boxes analysing side by side fit a phone and a desktop (dl-133)", async ({
+  page,
+}, testInfo) => {
+  // Both probes are held, as the analysing panel's case holds its one, so the
+  // two boxes are running for as long as it takes to measure them.
+  let release: (() => void) | undefined;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/api/probe", async (route) => {
+    await held;
+    await route.abort();
+  });
+
+  await page.goto("/");
+  const field = page.getByLabel("Page address");
+  const analyse = page.getByRole("button", { name: "Analyse" });
+  // Two long addresses, one after the other without waiting: the field keeps
+  // its value after Analyse, so the second is typed over the first.
+  await field.fill(longUrl());
+  await analyse.click();
+  await field.fill(`${longUrl()}&second=${"fedcba9876543210".repeat(4)}`);
+  await analyse.click();
+
+  const boxes = page.getByRole("list", { name: "Analyses" }).locator(":scope > li");
+  await expect(boxes).toHaveCount(2);
+  for (const box of await boxes.all()) {
+    await expect(box.getByRole("heading", { name: "Analysing" })).toBeVisible();
+    await expect(box.locator(".stage")).toHaveText(/\S/u);
+  }
+  await fitsBothWidths(page, testInfo, "Two boxes");
+  release?.();
 });
