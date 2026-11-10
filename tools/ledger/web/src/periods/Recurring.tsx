@@ -8,8 +8,8 @@
 import { useId, useState } from "react";
 import { formatCents, parseTypedAmountCents } from "@ledger/books";
 import type { RecurringItem } from "@ledger/contract";
-import { addRecurring, changeRecurring } from "../api/periods.ts";
 import { shownName, usePeopleNames } from "../people.tsx";
+import { useWrite } from "../writes.ts";
 
 interface Props {
   items: readonly RecurringItem[];
@@ -29,6 +29,7 @@ function EndItem({
   onProblem,
 }: { item: RecurringItem } & Pick<Props, "busy" | "send" | "onProblem">): React.ReactElement {
   const id = useId();
+  const changeRecurring = useWrite("changeRecurring");
   const [last, setLast] = useState("");
   const end = (): void => {
     if (!DAY.test(last) || last < item.startDate) {
@@ -67,6 +68,7 @@ function EndItem({
 export function Recurring({ items, people, me, busy, send, onProblem }: Props): React.ReactElement {
   const id = useId();
   const names = usePeopleNames();
+  const addRecurring = useWrite("addRecurring");
   const [payer, setPayer] = useState(people.includes(me) ? me : (people[0] ?? ""));
   const [label, setLabel] = useState("");
   const [amount, setAmount] = useState("");

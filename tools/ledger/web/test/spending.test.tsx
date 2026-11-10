@@ -7,7 +7,7 @@
  */
 
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { AppError } from "@ledger/contract";
 import type { SpendingCategory, SpendingCategoryMapEntry, StoredRow } from "@ledger/contract";
 import {
@@ -21,6 +21,7 @@ import {
   setSpendingMapEntry,
 } from "../src/api/spending.ts";
 import { Spending } from "../src/spending/Spending.tsx";
+import { renderWithClient } from "./render-with-client.tsx";
 
 vi.mock("../src/api/spending.ts", () => ({
   fetchSpendingCategories: vi.fn(),
@@ -73,7 +74,7 @@ function card(name: string): HTMLElement {
 }
 
 test("lists the categories, retired ones marked and without controls", async () => {
-  render(<Spending />);
+  renderWithClient(<Spending />);
 
   const list = within(await screen.findByRole("list", { name: "Spending categories" }));
 
@@ -86,7 +87,7 @@ test("lists the categories, retired ones marked and without controls", async () 
 
 test("adds a category, and refuses an empty name before sending anything", async () => {
   vi.mocked(addSpendingCategory).mockResolvedValue(category(7, "Pets"));
-  render(<Spending />);
+  renderWithClient(<Spending />);
   const form = within(await screen.findByRole("form", { name: "Add a spending category" }));
 
   fireEvent.click(form.getByRole("button", { name: "Add" }));
@@ -102,7 +103,7 @@ test("adds a category, and refuses an empty name before sending anything", async
 test("renames a category under its id, and retires one", async () => {
   vi.mocked(renameSpendingCategory).mockResolvedValue(category(1, "Food"));
   vi.mocked(retireSpendingCategory).mockResolvedValue(category(4, "Pharmacy", true));
-  render(<Spending />);
+  renderWithClient(<Spending />);
 
   fireEvent.click(await screen.findByRole("button", { name: "Rename Groceries" }));
   fireEvent.change(screen.getByLabelText("New name"), { target: { value: "Food" } });
@@ -114,7 +115,7 @@ test("renames a category under its id, and retires one", async () => {
 });
 
 test("the map has a line per bank category seen, with its spending category or none", async () => {
-  render(<Spending />);
+  renderWithClient(<Spending />);
   await screen.findByRole("list", { name: "Bank categories" });
 
   const map = within(card("From the bank’s categories"));
@@ -136,7 +137,7 @@ test("setting a map entry sends the bank category's text and the spending catego
     spendingCategoryId: 4,
     rows: 3,
   });
-  render(<Spending />);
+  renderWithClient(<Spending />);
   const select = await screen.findByLabelText("Spending category for Pharmacie");
 
   fireEvent.change(select, { target: { value: "4" } });
@@ -148,7 +149,7 @@ test("setting a map entry sends the bank category's text and the spending catego
 
 test("clearing a map entry sends a null", async () => {
   vi.mocked(setSpendingMapEntry).mockResolvedValue({ ...MAP[0]!, spendingCategoryId: null });
-  render(<Spending />);
+  renderWithClient(<Spending />);
   const select = await screen.findByLabelText("Spending category for Épicerie");
 
   fireEvent.change(select, { target: { value: "" } });
@@ -161,7 +162,7 @@ test("a row with no spending category can be given one there, which writes its o
     rowId: ROW.id,
     spendingCategory: { id: 1, source: "override" },
   });
-  render(<Spending />);
+  renderWithClient(<Spending />);
   const rows = within(await screen.findByRole("list", { name: "Rows with no spending category" }));
   expect(rows.getByText(/Virement entre folios/u)).toBeTruthy();
   vi.mocked(fetchUncategorisedRows).mockResolvedValue({ rows: [], total: 0 });
@@ -177,7 +178,7 @@ test("a row with no spending category can be given one there, which writes its o
 
 test("says how many rows have none when only the newest are listed", async () => {
   vi.mocked(fetchUncategorisedRows).mockResolvedValue({ rows: [ROW], total: 240 });
-  render(<Spending />);
+  renderWithClient(<Spending />);
 
   expect(await screen.findByText("240 rows; the newest 1 are here.")).toBeTruthy();
 });
@@ -187,7 +188,7 @@ test("a category retired by the other person meanwhile is refused in the server'
   vi.mocked(setSpendingMapEntry).mockRejectedValue(
     new AppError("SPENDING_CATEGORY_NOT_FOUND", message),
   );
-  render(<Spending />);
+  renderWithClient(<Spending />);
   const select = await screen.findByLabelText("Spending category for Pharmacie");
   vi.mocked(fetchSpendingCategories).mockResolvedValue([GROCERIES, category(4, "Pharmacy", true)]);
 

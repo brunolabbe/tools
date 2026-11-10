@@ -1,8 +1,10 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { AppError } from "@ledger/contract";
 import { bootTheme } from "@webtools/ui/theme";
 import { App } from "./App.tsx";
+import { createQueryClient } from "./query.ts";
 // Before the tool's own stylesheet, so its `:root` can set the values the shared names take.
 // oxlint-disable-next-line import/no-unassigned-import -- Vite injects the stylesheet; there is nothing to bind.
 import "@webtools/ui/tokens.css";
@@ -25,6 +27,9 @@ if (!container) throw new AppError("INTERNAL", "The application root element is 
 
 createRoot(container).render(
   <StrictMode>
-    <App />
+    {/* One cache for the whole app, with its defaults stated in `query.ts` (lg-98). */}
+    <QueryClientProvider client={createQueryClient()}>
+      <App />
+    </QueryClientProvider>
   </StrictMode>,
 );

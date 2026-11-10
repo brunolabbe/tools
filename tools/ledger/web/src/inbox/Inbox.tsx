@@ -18,29 +18,26 @@
  * still standing as history filed them.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatCents } from "@ledger/books";
-import { AppError } from "@ledger/contract";
+import { AppError, ROUTES } from "@ledger/contract";
 import type { AutoFiledRow, Bucket, InboxRow, SpendingCategory } from "@ledger/contract";
-import { classifyRow, fetchAutoFiled, fetchInbox } from "../api/inbox.ts";
-import { createRule, fetchPeople } from "../api/rules.ts";
-import { fetchSpendingCategories, setRowSpendingCategory } from "../api/spending.ts";
 import { REASON_LABELS, answerLabel, criteriaLabel, historyLabel } from "../labels.ts";
 import { RuleForm } from "../rules/RuleForm.tsx";
 import { RowSpending } from "../spending/RowSpending.tsx";
 import { usePeopleNames } from "../people.tsx";
 import { AnswerControls } from "./AnswerControls.tsx";
 import { AutoFiled } from "./AutoFiled.tsx";
-
-interface Ready {
-  state: "ready";
-  rows: InboxRow[];
-  autoFiled: AutoFiledRow[];
-  people: string[];
-  categories: SpendingCategory[];
-}
-
-type Load = { state: "loading" } | { state: "failed"; message: string } | Ready;
+import {
+  autoFiledQuery,
+  categoriesQuery,
+  everyone,
+  failureOf,
+  inboxQuery,
+  peopleQuery,
+} from "../queries.ts";
+import { invalidate, useWrite } from "../writes.ts";
 
 /** An answer of the person's own, waiting to be offered as a rule. */
 interface Offer {
@@ -49,63 +46,50 @@ interface Offer {
   bucket: Bucket;
 }
 
-export interface InboxProps {
-  /** Told how many rows are waiting, whenever that changes, for the tab's number. */
-  onCount?: (count: number) => void;
-}
-
-export function Inbox({ onCount }: InboxProps): React.ReactElement {
+/**
+ * The tab's number is the shell's read of the same answer, so a row answered here
+ * leaves both at once (lg-98): `classifyRow` takes it out of the cache.
+ */
+export function Inbox(): React.ReactElement {
   const shown = usePeopleNames();
-  const [load, setLoad] = useState<Load>({ state: "loading" });
+  const client = useQueryClient();
   const [problem, setProblem] = useState<string | null>(null);
   const [offer, setOffer] = useState<Offer | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [reviewing, setReviewing] = useState(false);
+  const waiting = useQuery(inboxQuery);
+  const filed = useQuery(autoFiledQuery);
+  // A row may predate a retirement, so it can be filed to anyone the books
+  // hold (lg-35); the API takes any of them.
+  const asked = useQuery({ ...peopleQuery, select: everyone });
+  const listed = useQuery(categoriesQuery);
+  const classifyRow = useWrite("classifyRow");
+  const setRowSpendingCategory = useWrite("setRowSpendingCategory");
+  const createRule = useWrite("createRule");
 
-  const refresh = useCallback(
-    async (signal?: AbortSignal): Promise<void> => {
-      try {
-        const [rows, autoFiled, people, categories] = await Promise.all([
-          fetchInbox(signal),
-          fetchAutoFiled(signal),
-          // A row may predate a retirement, so it can be filed to anyone the books
-          // hold (lg-35); the API takes any of them.
-          fetchPeople(signal, "everyone"),
-          fetchSpendingCategories(signal),
-        ]);
-        setLoad({ state: "ready", rows, autoFiled, people, categories });
-        onCount?.(rows.length);
-      } catch (error: unknown) {
-        if (signal?.aborted === true) return;
-        setLoad({ state: "failed", message: AppError.from(error).message });
-      }
-    },
-    [onCount],
-  );
+  /** The list as it is now, after a refusal that says someone else changed it. */
+  const refresh = async (): Promise<void> => {
+    await invalidate(client, [ROUTES.inbox, ROUTES.autoFiled, ROUTES.spendingCategories]);
+  };
 
-  useEffect(() => {
-    const controller = new AbortController();
-    // oxlint-disable-next-line react/set-state-in-effect -- `refresh` sets state only after its request settles; the rule cannot see through the await.
-    void refresh(controller.signal);
-    return () => controller.abort();
-  }, [refresh]);
-
-  if (load.state === "loading") return <p className="muted">Loading the inbox…</p>;
-  if (load.state === "failed") {
+  const failure = failureOf(waiting, filed, asked, listed);
+  if (failure !== null) {
     return (
       <p className="bad" role="alert">
-        {load.message}
+        {failure}
       </p>
     );
   }
+  if (
+    waiting.data === undefined ||
+    filed.data === undefined ||
+    asked.data === undefined ||
+    listed.data === undefined
+  ) {
+    return <p className="muted">Loading the inbox…</p>;
+  }
 
-  const { rows, autoFiled, people, categories } = load;
-
-  const leave = (row: InboxRow): void => {
-    const rest = rows.filter((other) => other.id !== row.id);
-    setLoad({ ...load, rows: rest });
-    onCount?.(rest.length);
-  };
+  const [rows, autoFiled, people, categories] = [waiting.data, filed.data, asked.data, listed.data];
 
   // Confirming and changing are both a person's answer, and either ends the review.
   const answerFiled = async (
@@ -116,8 +100,8 @@ export function Inbox({ onCount }: InboxProps): React.ReactElement {
     setProblem(null);
     setNotice(null);
     try {
+      // The answer takes the row out of the review (`writes.ts`).
       await classifyRow({ rowId: row.id, personId, bucket });
-      setLoad({ ...load, autoFiled: autoFiled.filter((other) => other.id !== row.id) });
     } catch (error: unknown) {
       setProblem(AppError.from(error).message);
     }
@@ -130,13 +114,8 @@ export function Inbox({ onCount }: InboxProps): React.ReactElement {
     setProblem(null);
     setNotice(null);
     try {
-      const answered = await setRowSpendingCategory(row.id, spendingCategoryId);
-      setLoad({
-        ...load,
-        autoFiled: autoFiled.map((other) =>
-          other.id === row.id ? { ...other, spendingCategory: answered.spendingCategory } : other,
-        ),
-      });
+      // The answer is put on the row in the cache (`writes.ts`).
+      await setRowSpendingCategory(row.id, spendingCategoryId);
     } catch (error: unknown) {
       setProblem(AppError.from(error).message);
       if (error instanceof AppError && error.code === "SPENDING_CATEGORY_NOT_FOUND") {
@@ -176,13 +155,7 @@ export function Inbox({ onCount }: InboxProps): React.ReactElement {
     setProblem(null);
     setNotice(null);
     try {
-      const answered = await setRowSpendingCategory(row.id, spendingCategoryId);
-      setLoad({
-        ...load,
-        rows: rows.map((other) =>
-          other.id === row.id ? { ...other, spendingCategory: answered.spendingCategory } : other,
-        ),
-      });
+      await setRowSpendingCategory(row.id, spendingCategoryId);
     } catch (error: unknown) {
       setProblem(AppError.from(error).message);
       // The category was retired by someone else: show the list as it is now.
@@ -197,7 +170,6 @@ export function Inbox({ onCount }: InboxProps): React.ReactElement {
     setNotice(null);
     try {
       await classifyRow({ rowId: row.id, ruleId });
-      leave(row);
     } catch (error: unknown) {
       setProblem(AppError.from(error).message);
       // The rule was changed or retired by someone else: show the list as it is now.
@@ -210,7 +182,6 @@ export function Inbox({ onCount }: InboxProps): React.ReactElement {
     setNotice(null);
     try {
       await classifyRow({ rowId: row.id, personId, bucket });
-      leave(row);
       setOffer({ row, personId, bucket });
     } catch (error: unknown) {
       setProblem(AppError.from(error).message);
@@ -255,9 +226,9 @@ export function Inbox({ onCount }: InboxProps): React.ReactElement {
             onSubmit={async (draft) => {
               await createRule(draft);
               setOffer(null);
+              // The rows already here may now match it exactly, and say so: the
+              // rule makes the inbox stale, and it is read again (`writes.ts`).
               setNotice("Rule added. It applies to the next paste.");
-              // The rows already here may now match it exactly, and say so.
-              await refresh();
             }}
             onCancel={() => setOffer(null)}
           />

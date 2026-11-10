@@ -7,20 +7,22 @@
  */
 
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { AppError } from "@ledger/contract";
 import type { ClosedPeriod, RowsQuery, StoredRow } from "@ledger/contract";
 import { classifyRow } from "../src/api/inbox.ts";
 import { fetchPeriods } from "../src/api/periods.ts";
 import { fetchRows } from "../src/api/rows.ts";
-import { fetchPeople } from "../src/api/rules.ts";
+import { fetchPeople } from "../src/api/people.ts";
 import { fetchSpendingCategories } from "../src/api/spending.ts";
 import { History, closedPeriodOf } from "../src/history/History.tsx";
+import { peopleAnswer } from "./people-answer.ts";
+import { renderWithClient } from "./render-with-client.tsx";
 
 vi.mock("../src/api/rows.ts", () => ({ fetchRows: vi.fn() }));
 vi.mock("../src/api/inbox.ts", () => ({ classifyRow: vi.fn() }));
 vi.mock("../src/api/periods.ts", () => ({ fetchPeriods: vi.fn() }));
-vi.mock("../src/api/rules.ts", () => ({ fetchPeople: vi.fn() }));
+vi.mock("../src/api/people.ts", () => ({ fetchPeople: vi.fn() }));
 vi.mock("../src/api/spending.ts", () => ({ fetchSpendingCategories: vi.fn() }));
 
 function row(id: number, description: string, amountCents: number, more: Partial<StoredRow> = {}) {
@@ -44,7 +46,7 @@ function asked(): RowsQuery[] {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(fetchPeople).mockResolvedValue(["alex", "sam"]);
+  vi.mocked(fetchPeople).mockResolvedValue(peopleAnswer(["alex", "sam"]));
   vi.mocked(fetchSpendingCategories).mockResolvedValue([
     {
       id: 1,
@@ -85,7 +87,7 @@ test("a search and a sort reach the request, the list is what the server answere
     row(index + 1, `Marché ${String(index)}`, -100),
   );
   vi.mocked(fetchRows).mockResolvedValue({ rows: first, total: 52 });
-  render(<History />);
+  renderWithClient(<History />);
 
   const list = await screen.findByRole("list", { name: "Bank rows" });
   expect(within(list).getAllByRole("listitem")).toHaveLength(50);
@@ -140,7 +142,7 @@ test("a search and a sort reach the request, the list is what the server answere
 });
 
 test("each filter is sent as the query field the route takes", async () => {
-  render(<History />);
+  renderWithClient(<History />);
   await screen.findByText("0 rows match.");
   await screen.findByRole("option", { name: "sam" });
 
@@ -187,7 +189,7 @@ test("the search waits for a pause in typing, and a filter change drops the requ
         });
       }),
   );
-  render(<History />);
+  renderWithClient(<History />);
   await waitFor(() => expect(asked()).toHaveLength(1));
 
   fireEvent.change(screen.getByLabelText("Money"), { target: { value: "in" } });
@@ -222,7 +224,7 @@ test("shows each row's date, amount, bucket, person and spending category, and C
     ],
     total: 2,
   });
-  render(<History />);
+  renderWithClient(<History />);
 
   const list = await screen.findByRole("list", { name: "Bank rows" });
   const [credit, unfiled] = within(list).getAllByRole("listitem");
@@ -239,12 +241,16 @@ test("shows each row's date, amount, bucket, person and spending category, and C
 
   expect((screen.getByLabelText("Money") as HTMLSelectElement).value).toBe("");
   expect((screen.getByLabelText("Search the description") as HTMLInputElement).value).toBe("");
-  await waitFor(() => expect(asked().at(-1)).toEqual({ offset: 0, limit: 50 }));
+  // The unfiltered list was read first, within `staleTime`: it is drawn from the cache (lg-98).
+  expect(await screen.findByRole("list", { name: "Bank rows" })).toBeTruthy();
+  expect(
+    asked().filter((query) => JSON.stringify(query) === JSON.stringify({ offset: 0, limit: 50 })),
+  ).toHaveLength(1);
   expect(screen.queryByRole("button", { name: "Clear filters" })).toBeNull();
 });
 
 test("a bound that is not an amount, or that crosses, is said and not sent", async () => {
-  render(<History />);
+  renderWithClient(<History />);
   await screen.findByText("0 rows match.");
   const before = asked().length;
 
@@ -260,7 +266,7 @@ test("a failed read is said in the taxonomy's words", async () => {
   vi.mocked(fetchRows).mockRejectedValue(
     new AppError("UNREACHABLE", "The ledger API is not answering."),
   );
-  render(<History />);
+  renderWithClient(<History />);
 
   expect((await screen.findByRole("alert")).textContent).toContain("not answering");
 });
@@ -284,7 +290,7 @@ test("a Show more answer that arrives after a filter change is not appended to t
         }),
     )
     .mockResolvedValue({ rows: [row(80, "Seule réponse", 700), row(81, "Autre", 800)], total: 2 });
-  render(<History />);
+  renderWithClient(<History />);
   await screen.findByText("52 rows match.");
 
   fireEvent.click(screen.getByRole("button", { name: "Show more" }));
@@ -341,7 +347,7 @@ test("a row answered by a person is filed again from the history, the list is re
     classifiedAt: "2026-11-01T00:00:00.000Z",
     classifiedBy: "alex",
   });
-  render(<History />);
+  renderWithClient(<History />);
 
   const item = (await screen.findByRole("list", { name: "Bank rows" })).querySelector("li");
   if (item === null) throw new Error("no row listed");
@@ -393,7 +399,7 @@ test("a row in a closed period says what the change reaches, and the next close 
     classifiedAt: "2026-11-01T00:00:00.000Z",
     classifiedBy: "alex",
   });
-  render(<History />);
+  renderWithClient(<History />);
 
   const [old, recent] = within(await screen.findByRole("list", { name: "Bank rows" })).getAllByRole(
     "listitem",
@@ -431,7 +437,7 @@ test("a row in a closed period says what the change reaches, and the next close 
 test("a refused change is said and leaves the control open (lg-95)", async () => {
   vi.mocked(fetchRows).mockResolvedValue({ rows: [row(1, "Épicerie", -500)], total: 1 });
   vi.mocked(classifyRow).mockRejectedValue(new AppError("UNREACHABLE", "The ledger API is down."));
-  render(<History />);
+  renderWithClient(<History />);
 
   fireEvent.click(
     await screen.findByRole("button", {
@@ -450,7 +456,7 @@ test("a row not filed yet is not offered a change here; the inbox files it (lg-9
     rows: [row(1, "Café du coin", -500, { classification: null })],
     total: 1,
   });
-  render(<History />);
+  renderWithClient(<History />);
 
   await screen.findByText("Café du coin");
   expect(screen.queryByRole("button", { name: /^Change who and what/u })).toBeNull();
@@ -471,9 +477,8 @@ test("closedPeriodOf holds a period's first and last day, and the first period h
 
 /** The people the books hold: alex and sam are in, pat left. */
 function peopleAre(): void {
-  vi.mocked(fetchPeople).mockImplementation((_signal, who) =>
-    Promise.resolve(who === "everyone" ? ["alex", "pat", "sam"] : ["alex", "sam"]),
-  );
+  // pat was retired at a close: in everyone the books held, not among those in now.
+  vi.mocked(fetchPeople).mockResolvedValue(peopleAnswer(["alex", "sam"], ["pat"]));
 }
 
 const SAVED = {
@@ -506,7 +511,7 @@ test("the control offers the people in now, and a row's own person even if they 
     ],
     total: 2,
   });
-  render(<History />);
+  renderWithClient(<History />);
 
   const [toAlex, toPat] = within(
     await screen.findByRole("list", { name: "Bank rows" }),
@@ -531,7 +536,7 @@ test("a save whose re-read fails closes the control and says the change was save
     .mockResolvedValueOnce({ rows: [row(1, "Épicerie", -500)], total: 1 })
     .mockRejectedValue(new AppError("UNREACHABLE", "The ledger API is down."));
   vi.mocked(classifyRow).mockResolvedValue(SAVED);
-  render(<History />);
+  renderWithClient(<History />);
 
   fireEvent.click(await screen.findByRole("button", { name: /^Change who and what/u }));
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
@@ -547,7 +552,7 @@ test("a save whose re-read fails closes the control and says the change was save
 test("a failed read of the closed periods leaves the names and the categories, and the control says it cannot tell (lg-95)", async () => {
   vi.mocked(fetchPeriods).mockRejectedValue(new AppError("UNREACHABLE", "The ledger API is down."));
   vi.mocked(fetchRows).mockResolvedValue({ rows: [row(1, "Épicerie", -500)], total: 1 });
-  render(<History />);
+  renderWithClient(<History />);
 
   const list = await screen.findByRole("list", { name: "Bank rows" });
   // The category's name and the people come from reads that did not fail.
@@ -563,7 +568,7 @@ test("a failed read of the closed periods leaves the names and the categories, a
 test("the button reports whether its control is open, and takes focus back when it closes (lg-95)", async () => {
   vi.mocked(fetchRows).mockResolvedValue({ rows: [row(1, "Épicerie", -500)], total: 1 });
   vi.mocked(classifyRow).mockResolvedValue(SAVED);
-  render(<History />);
+  renderWithClient(<History />);
 
   const button = await screen.findByRole("button", { name: /^Change who and what/u });
   expect(button.getAttribute("aria-expanded")).toBe("false");
@@ -605,7 +610,7 @@ test("a stored save whose re-read fails disables that row's button, with a line,
     // A filter change starts again, and the row now stands at what the save stored.
     .mockResolvedValueOnce({ rows: [filedTo(1, "R", "sam")], total: 1 });
   vi.mocked(classifyRow).mockResolvedValue(SAVED);
-  render(<History />);
+  renderWithClient(<History />);
 
   const list = await screen.findByRole("list", { name: "Bank rows" });
   const [first] = within(list).getAllByRole("listitem");
@@ -651,7 +656,7 @@ test("a save whose re-read succeeds leaves the row's button enabled (lg-99)", as
     .mockResolvedValueOnce({ rows: [filedTo(1, "R")], total: 1 })
     .mockResolvedValueOnce({ rows: [filedTo(1, "R", "sam")], total: 1 });
   vi.mocked(classifyRow).mockResolvedValue(SAVED);
-  render(<History />);
+  renderWithClient(<History />);
 
   fireEvent.click(await screen.findByRole("button", { name: /^Change who and what/u }));
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
@@ -668,7 +673,7 @@ async function twoRows(): Promise<{ a: HTMLElement; b: HTMLElement }> {
     total: 2,
   });
   vi.mocked(classifyRow).mockResolvedValue(SAVED);
-  render(<History />);
+  renderWithClient(<History />);
   const list = await screen.findByRole("list", { name: "Bank rows" });
   const [a, b] = within(list)
     .getAllByRole("listitem")
@@ -731,7 +736,7 @@ for (const arm of ["focused", "unfocused"] as const) {
         }),
       );
     vi.mocked(classifyRow).mockResolvedValue(SAVED);
-    render(<History />);
+    renderWithClient(<History />);
 
     const button = await screen.findByRole("button", { name: /^Change who and what/u });
     if (arm === "focused") button.focus();
@@ -772,7 +777,7 @@ test("a re-read that fails closes the control that was reopened while it ran (lg
       }),
     );
   vi.mocked(classifyRow).mockResolvedValue(SAVED);
-  render(<History />);
+  renderWithClient(<History />);
 
   const button = await screen.findByRole("button", { name: /^Change who and what/u });
   fireEvent.click(button);
@@ -844,7 +849,7 @@ test("a re-read that succeeds closes the control that was reopened while it ran 
       }),
     );
   vi.mocked(classifyRow).mockResolvedValue(SAVED);
-  render(<History />);
+  renderWithClient(<History />);
 
   const button = await screen.findByRole("button", { name: /^Change who and what/u });
   fireEvent.click(button);

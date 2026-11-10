@@ -13,7 +13,8 @@
  * check that policy against.
  */
 
-import { useCallback, useEffect, useId, useState } from "react";
+import { useId, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { AppError } from "@ledger/contract";
 import type {
   AddMemberRequest,
@@ -23,16 +24,6 @@ import type {
   RetirePersonRequest,
 } from "@ledger/contract";
 import {
-  adminAddMember,
-  adminChangeAddress,
-  adminRemoveMember,
-  adminRenameHousehold,
-  adminRenamePerson,
-  adminRetirePerson,
-  createHousehold,
-  fetchAdminHouseholds,
-} from "../api/households.ts";
-import {
   ACCESS_POLICY_NOTE,
   MemberForm,
   NO_EMAIL,
@@ -41,69 +32,39 @@ import {
 import { HouseholdName } from "../household/HouseholdName.tsx";
 import { byShownName, shownName } from "../people.tsx";
 import type { ShownNames } from "../people.tsx";
-
-type Load =
-  | { state: "loading" }
-  | { state: "failed"; message: string }
-  | { state: "ready"; households: AdminHousehold[] };
+import { adminHouseholdsQuery, failureOf } from "../queries.ts";
+import { useWrite } from "../writes.ts";
 
 export function Admin(): React.ReactElement {
-  const [load, setLoad] = useState<Load>({ state: "loading" });
+  const read = useQuery(adminHouseholdsQuery);
 
-  const refresh = useCallback(async (signal?: AbortSignal): Promise<void> => {
-    try {
-      setLoad({ state: "ready", households: await fetchAdminHouseholds(signal) });
-    } catch (error: unknown) {
-      if (signal?.aborted !== true) {
-        setLoad({ state: "failed", message: AppError.from(error).message });
-      }
-    }
-  }, []);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    // oxlint-disable-next-line react/set-state-in-effect -- `refresh` sets state only after its request settles; the rule cannot see through the await.
-    void refresh(controller.signal);
-    return () => controller.abort();
-  }, [refresh]);
-
-  if (load.state === "loading") return <p className="muted">Loading the households…</p>;
-  if (load.state === "failed") {
+  const failure = failureOf(read);
+  if (failure !== null) {
     return (
       <p className="bad" role="alert">
-        {load.message}
+        {failure}
       </p>
     );
   }
+  if (read.data === undefined) return <p className="muted">Loading the households…</p>;
 
-  const { households } = load;
+  const households = read.data;
   // lg-74: a person without an email signs in nowhere, so Access has nothing to admit.
   const addresses = households.flatMap((household) =>
     household.members.flatMap((member) =>
       member.address === null ? [] : [{ address: member.address, firstSignIn: member.firstSignIn }],
     ),
   );
-  // lg-71: the answer to a create is the new card, so it goes in without asking
-  // for the list again, where the list puts it: the API orders households by id.
-  const created = (household: AdminHousehold): void => {
-    setLoad({
-      state: "ready",
-      households: [...households, household].toSorted((a, b) =>
-        a.id < b.id ? -1 : a.id > b.id ? 1 : 0,
-      ),
-    });
-  };
-
   return (
     <section aria-labelledby="admin-heading" className="stack">
       <h2 id="admin-heading">Households</h2>
       <p className="muted hint">{ACCESS_POLICY_NOTE}</p>
 
       {households.map((household) => (
-        <HouseholdCard key={household.id} household={household} onChange={refresh} />
+        <HouseholdCard key={household.id} household={household} />
       ))}
 
-      <NewHousehold first={households.length === 0} onCreated={created} />
+      <NewHousehold first={households.length === 0} />
 
       {households.length > 0 && (
         <section aria-labelledby="admit-heading" className="card">
@@ -160,11 +121,12 @@ function NeverSignedIn(): React.ReactElement {
   return <span className="never-signed-in">Never signed in</span>;
 }
 
-function HouseholdCard(props: {
-  household: AdminHousehold;
-  onChange: () => Promise<void>;
-}): React.ReactElement {
-  const { household, onChange } = props;
+function HouseholdCard(props: { household: AdminHousehold }): React.ReactElement {
+  const { household } = props;
+  // Each resolves once the list is read again (`writes.ts`).
+  const adminAddMember = useWrite("adminAddMember");
+  const adminRenameHousehold = useWrite("adminRenameHousehold");
+  const adminRemoveMember = useWrite("adminRemoveMember");
   const headingId = useId();
   const [confirming, setConfirming] = useState<string | null>(null);
   // The address being edited in place (lg-34); at most one, and never with a removal open.
@@ -184,15 +146,10 @@ function HouseholdCard(props: {
   );
   const label = householdLabel(household, names);
 
-  const add = async (member: AddMemberRequest) => {
-    const added = await adminAddMember(household.id, member);
-    await onChange();
-    return added;
-  };
+  const add = async (member: AddMemberRequest) => await adminAddMember(household.id, member);
 
   const rename = async (name: string): Promise<void> => {
     await adminRenameHousehold(household.id, { name });
-    await onChange();
   };
 
   const remove = async (address: string): Promise<void> => {
@@ -201,7 +158,6 @@ function HouseholdCard(props: {
     try {
       await adminRemoveMember(household.id, address);
       setConfirming(null);
-      await onChange();
     } catch (error: unknown) {
       setProblem(AppError.from(error).message);
     } finally {
@@ -251,10 +207,7 @@ function HouseholdCard(props: {
                     household={household.id}
                     address={address}
                     onCancel={() => setEditing(null)}
-                    onChanged={async () => {
-                      setEditing(null);
-                      await onChange();
-                    }}
+                    onChanged={() => setEditing(null)}
                   />
                 ) : confirming === address ? (
                   <span className="actions">
@@ -330,7 +283,6 @@ function HouseholdCard(props: {
                 person={one.person}
                 name={shownName(names, one.person)}
                 standing={one.standing}
-                onChange={onChange}
               />
             ))}
           </ul>
@@ -359,9 +311,10 @@ function ChangeAddress(props: {
   household: string;
   address: string;
   onCancel: () => void;
-  onChanged: () => Promise<void>;
+  onChanged: () => void;
 }): React.ReactElement {
   const { household, address, onCancel, onChanged } = props;
+  const adminChangeAddress = useWrite("adminChangeAddress");
   const id = useId();
   const [typed, setTyped] = useState(address);
   const [problem, setProblem] = useState<string | null>(null);
@@ -372,7 +325,7 @@ function ChangeAddress(props: {
     setProblem(null);
     try {
       await adminChangeAddress(household, { from: address, to: typed.trim() });
-      await onChanged();
+      onChanged();
     } catch (error: unknown) {
       setProblem(AppError.from(error).message);
       setBusy(false);
@@ -450,9 +403,10 @@ function RenamePerson(props: {
   person: string;
   name: string;
   standing: PersonStanding;
-  onChange: () => Promise<void>;
 }): React.ReactElement {
-  const { household, person, name, standing, onChange } = props;
+  const { household, person, name, standing } = props;
+  const adminRetirePerson = useWrite("adminRetirePerson");
+  const adminRenamePerson = useWrite("adminRenamePerson");
   const id = useId();
   const [editing, setEditing] = useState(false);
   const [typed, setTyped] = useState(name);
@@ -465,7 +419,6 @@ function RenamePerson(props: {
     setProblem(null);
     try {
       await adminRetirePerson(household, { person, action: next.action });
-      await onChange();
     } catch (error: unknown) {
       setProblem(AppError.from(error).message);
     } finally {
@@ -479,7 +432,6 @@ function RenamePerson(props: {
     try {
       await adminRenamePerson(household, { person, name: typed.trim() });
       setEditing(false);
-      await onChange();
     } catch (error: unknown) {
       setProblem(AppError.from(error).message);
     } finally {
@@ -569,11 +521,11 @@ function RenamePerson(props: {
  * name may be left empty (lg-76): the API shows the person under the email's
  * part before the @.
  */
-function NewHousehold(props: {
-  first: boolean;
-  onCreated: (household: AdminHousehold) => void;
-}): React.ReactElement {
-  const { first, onCreated } = props;
+function NewHousehold(props: { first: boolean }): React.ReactElement {
+  const { first } = props;
+  // lg-71: the answer to a create is the new card, so it goes into the list without
+  // asking for the list again, where the list puts it: the API orders households by id.
+  const createHousehold = useWrite("createHousehold");
   const id = useId();
   const [address, setAddress] = useState("");
   const [person, setPerson] = useState("");
@@ -583,10 +535,9 @@ function NewHousehold(props: {
   const create = async (household: CreateHouseholdRequest): Promise<void> => {
     setBusy(true);
     try {
-      const made = await createHousehold(household);
+      await createHousehold(household);
       setAddress("");
       setPerson("");
-      onCreated(made);
     } catch (error: unknown) {
       setProblem(AppError.from(error).message);
     } finally {

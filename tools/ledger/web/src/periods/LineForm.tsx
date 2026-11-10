@@ -8,9 +8,9 @@
 import { useId, useState } from "react";
 import { parseTypedAmountCents } from "@ledger/books";
 import type { SpendingCategory } from "@ledger/contract";
-import { addLine } from "../api/periods.ts";
 import { SpendingCategoryPicker } from "../spending/Picker.tsx";
 import { shownName, usePeopleNames } from "../people.tsx";
+import { useWrite } from "../writes.ts";
 
 interface Props {
   people: readonly string[];
@@ -43,6 +43,7 @@ export function LineForm({
 }: Props): React.ReactElement {
   const id = useId();
   const names = usePeopleNames();
+  const addLine = useWrite("addLine");
   const [payer, setPayer] = useState(people.includes(me) ? me : (people[0] ?? ""));
   const [date, setDate] = useState(today);
   const [amount, setAmount] = useState("");

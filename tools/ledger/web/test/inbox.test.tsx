@@ -8,20 +8,25 @@
  */
 
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { AppError } from "@ledger/contract";
 import type { AutoFiledRow, InboxRow, Rule, SpendingCategory } from "@ledger/contract";
 import { classifyRow, fetchAutoFiled, fetchInbox } from "../src/api/inbox.ts";
-import { createRule, fetchPeople } from "../src/api/rules.ts";
+import { fetchPeople } from "../src/api/people.ts";
+import { createRule } from "../src/api/rules.ts";
 import { fetchSpendingCategories, setRowSpendingCategory } from "../src/api/spending.ts";
 import { Inbox } from "../src/inbox/Inbox.tsx";
+import { inboxQuery } from "../src/queries.ts";
+import { peopleAnswer } from "./people-answer.ts";
+import { renderWithClient } from "./render-with-client.tsx";
 
 vi.mock("../src/api/inbox.ts", () => ({
   fetchInbox: vi.fn(),
   fetchAutoFiled: vi.fn(),
   classifyRow: vi.fn(),
 }));
-vi.mock("../src/api/rules.ts", () => ({ fetchPeople: vi.fn(), createRule: vi.fn() }));
+vi.mock("../src/api/rules.ts", () => ({ createRule: vi.fn() }));
+vi.mock("../src/api/people.ts", () => ({ fetchPeople: vi.fn() }));
 vi.mock("../src/api/spending.ts", () => ({
   fetchSpendingCategories: vi.fn(),
   setRowSpendingCategory: vi.fn(),
@@ -33,7 +38,7 @@ const created = vi.mocked(createRule);
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(fetchPeople).mockResolvedValue(["alex", "sam"]);
+  vi.mocked(fetchPeople).mockResolvedValue(peopleAnswer(["alex", "sam"]));
   vi.mocked(fetchSpendingCategories).mockResolvedValue(CATEGORIES);
   vi.mocked(fetchAutoFiled).mockResolvedValue([]);
 });
@@ -103,7 +108,7 @@ function rowOf(description: string): HTMLElement {
 test("shows each waiting row with why it is there and the nearest rule suggested", async () => {
   inbox.mockResolvedValue([ODD, GROCERIES]);
 
-  render(<Inbox />);
+  renderWithClient(<Inbox />);
 
   const odd = within(await waitFor(() => rowOf(ODD.description)));
   expect(odd.getByText(/not the category or the amount/u)).toBeTruthy();
@@ -128,8 +133,7 @@ test("accepting a suggestion sends its rule and the row leaves the inbox", async
     classifiedAt: "2026-10-03T09:30:00.000Z",
     classifiedBy: "alex",
   });
-  const onCount = vi.fn();
-  render(<Inbox onCount={onCount} />);
+  const { client } = renderWithClient(<Inbox />);
   await waitFor(() => rowOf(ODD.description));
 
   fireEvent.click(within(rowOf(ODD.description)).getByRole("button", { name: "Accept" }));
@@ -137,9 +141,9 @@ test("accepting a suggestion sends its rule and the row leaves the inbox", async
   await waitFor(() => expect(screen.queryByText(ODD.description)).toBeNull());
   expect(classified).toHaveBeenCalledTimes(1);
   expect(classified).toHaveBeenCalledWith({ rowId: ODD.id, ruleId: RULE.id });
-  // The other row is still waiting, and the count says so.
+  // The other row is still waiting, and the count the shell reads says so (lg-98).
   expect(screen.getByText(GROCERIES.description)).toBeTruthy();
-  expect(onCount).toHaveBeenLastCalledWith(1);
+  expect(client.getQueryData(inboxQuery.queryKey)).toHaveLength(1);
   // An accepted rule already exists, so nothing offers to make another.
   expect(screen.queryByRole("group", { name: "Make a rule from this answer" })).toBeNull();
 });
@@ -157,7 +161,7 @@ test("answering with a person and a bucket, then taking the offer, creates a rul
     classifiedBy: "alex",
   });
   created.mockResolvedValue({ ...RULE, id: 8 });
-  render(<Inbox />);
+  renderWithClient(<Inbox />);
   await waitFor(() => rowOf(GROCERIES.description));
 
   const row = within(rowOf(GROCERIES.description));
@@ -207,7 +211,7 @@ test("the offered rule can be loosened before it is created", async () => {
     classifiedBy: "alex",
   });
   created.mockResolvedValue({ ...RULE, id: 8 });
-  render(<Inbox />);
+  renderWithClient(<Inbox />);
   await waitFor(() => rowOf(GROCERIES.description));
   const row = within(rowOf(GROCERIES.description));
   fireEvent.change(row.getByLabelText("Belongs to"), { target: { value: "alex" } });
@@ -242,7 +246,7 @@ test("declining the offer creates nothing", async () => {
     classifiedAt: "2026-10-03T09:30:00.000Z",
     classifiedBy: "alex",
   });
-  render(<Inbox />);
+  renderWithClient(<Inbox />);
   await waitFor(() => rowOf(GROCERIES.description));
   fireEvent.click(within(rowOf(GROCERIES.description)).getByRole("button", { name: "Classify" }));
   const offer = within(await screen.findByRole("group", { name: "Make a rule from this answer" }));
@@ -257,7 +261,7 @@ test("a rule changed by someone else is refused in the server's words and the li
   const message = "There is no such rule in force. It may have been changed or retired.";
   inbox.mockResolvedValue([ODD]);
   classified.mockRejectedValue(new AppError("RULE_NOT_FOUND", message));
-  render(<Inbox />);
+  renderWithClient(<Inbox />);
   await waitFor(() => rowOf(ODD.description));
   inbox.mockResolvedValue([{ ...ODD, suggestion: null, reason: "no-rule" }]);
 
@@ -276,7 +280,7 @@ test("names every rule that matched, when more than one did", async () => {
     { ...ODD, reason: "ambiguous", amountCents: 40000, matching: [RULE, other], suggestion: RULE },
   ]);
 
-  render(<Inbox />);
+  renderWithClient(<Inbox />);
 
   const list = within(await screen.findByRole("list", { name: "Rules that match" }));
   expect(list.getAllByRole("listitem")).toHaveLength(2);
@@ -290,7 +294,7 @@ test("names every rule that matched, when more than one did", async () => {
 test("an empty inbox says so", async () => {
   inbox.mockResolvedValue([]);
 
-  render(<Inbox />);
+  renderWithClient(<Inbox />);
 
   expect(await screen.findByText(/Nothing is waiting/u)).toBeTruthy();
 });
@@ -298,7 +302,7 @@ test("an empty inbox says so", async () => {
 test("an inbox that cannot be loaded says what the server said", async () => {
   inbox.mockRejectedValue(new AppError("UNREACHABLE", "The ledger API is not answering."));
 
-  render(<Inbox />);
+  renderWithClient(<Inbox />);
 
   expect((await screen.findByRole("alert")).textContent).toBe("The ledger API is not answering.");
 });
@@ -319,7 +323,7 @@ test("shows what was answered before, and taking it stores that person and bucke
     classifiedAt: "2026-10-03T09:30:00.000Z",
     classifiedBy: "sam",
   });
-  render(<Inbox />);
+  renderWithClient(<Inbox />);
   await waitFor(() => rowOf(GROCERIES.description));
   const row = within(rowOf(GROCERIES.description));
   expect(row.getByText(/alex · Mortgage, the last 3 times/u)).toBeTruthy();
@@ -341,7 +345,7 @@ test("shows what was answered before, and taking it stores that person and bucke
 
 test("a history answer that agrees with the rule's suggestion is one control, not two", async () => {
   inbox.mockResolvedValue([{ ...ODD, history: { personId: "sam", bucket: "mortgage", times: 2 } }]);
-  render(<Inbox />);
+  renderWithClient(<Inbox />);
   await waitFor(() => rowOf(ODD.description));
   const row = within(rowOf(ODD.description));
 
@@ -354,7 +358,7 @@ test("a history answer that differs from the suggestion is offered beside it", a
   inbox.mockResolvedValue([
     { ...ODD, history: { personId: "alex", bucket: "current-expenses", times: 1 } },
   ]);
-  render(<Inbox />);
+  renderWithClient(<Inbox />);
   await waitFor(() => rowOf(ODD.description));
   const row = within(rowOf(ODD.description));
 
@@ -370,7 +374,7 @@ test("a row shows its spending category and where it came from, and keeps its pl
     { ...GROCERIES, spendingCategory: { id: 1, source: "map" } },
     { ...ODD, spendingCategory: null },
   ]);
-  render(<Inbox />);
+  renderWithClient(<Inbox />);
   await waitFor(() => rowOf(GROCERIES.description));
 
   const groceries = within(rowOf(GROCERIES.description));
@@ -393,7 +397,7 @@ test("choosing another writes the row's own, and the row stays in the inbox", as
     rowId: GROCERIES.id,
     spendingCategory: { id: 4, source: "override" },
   });
-  render(<Inbox />);
+  renderWithClient(<Inbox />);
   await waitFor(() => rowOf(GROCERIES.description));
   const label = `Spending category for ${GROCERIES.description}`;
 
@@ -420,7 +424,7 @@ test("withdrawing the row's own choice writes a null, and a row with none of its
     rowId: GROCERIES.id,
     spendingCategory: null,
   });
-  render(<Inbox />);
+  renderWithClient(<Inbox />);
   await waitFor(() => rowOf(GROCERIES.description));
 
   // Nothing of its own to withdraw on the mapped row: choosing "no choice" is a no-op.
@@ -453,7 +457,7 @@ test("the rule offered from an answer can name a spending category", async () =>
     classifiedBy: "alex",
   });
   created.mockResolvedValue({ ...RULE, id: 9 });
-  render(<Inbox />);
+  renderWithClient(<Inbox />);
   await waitFor(() => rowOf(GROCERIES.description));
   fireEvent.click(within(rowOf(GROCERIES.description)).getByRole("button", { name: "Classify" }));
   const offer = within(await screen.findByRole("group", { name: "Make a rule from this answer" }));
@@ -503,13 +507,12 @@ async function openReview(): Promise<HTMLElement> {
 test("rows filed automatically are reached from the inbox, not counted in it, with the answers they rest on", async () => {
   inbox.mockResolvedValue([GROCERIES]);
   vi.mocked(fetchAutoFiled).mockResolvedValue([FILED]);
-  const onCount = vi.fn();
-  render(<Inbox onCount={onCount} />);
+  const { client } = renderWithClient(<Inbox />);
   await waitFor(() => rowOf(GROCERIES.description));
 
   // The inbox holds the one waiting row, and its count says one.
   expect(screen.queryByText(FILED.description)).toBeNull();
-  expect(onCount).toHaveBeenLastCalledWith(1);
+  expect(client.getQueryData(inboxQuery.queryKey)).toHaveLength(1);
 
   const list = within(await openReview());
   expect(list.getByText(FILED.description)).toBeTruthy();
@@ -527,7 +530,7 @@ test("rows filed automatically are reached from the inbox, not counted in it, wi
 
 test("an inbox with nothing filed automatically offers no review", async () => {
   inbox.mockResolvedValue([GROCERIES]);
-  render(<Inbox />);
+  renderWithClient(<Inbox />);
   await waitFor(() => rowOf(GROCERIES.description));
 
   expect(screen.queryByRole("button", { name: /filed automatically/u })).toBeNull();
@@ -546,7 +549,7 @@ test("confirming an automatic filing stores the same person and bucket, and the 
     classifiedAt: "2026-10-04T09:30:00.000Z",
     classifiedBy: "alex",
   });
-  render(<Inbox />);
+  renderWithClient(<Inbox />);
   const list = within(await openReview());
 
   fireEvent.click(list.getByRole("button", { name: "Confirm" }));
@@ -574,7 +577,7 @@ test("changing an automatic filing stores the person and bucket chosen instead",
     classifiedAt: "2026-10-04T09:30:00.000Z",
     classifiedBy: "alex",
   });
-  render(<Inbox />);
+  renderWithClient(<Inbox />);
   const list = within(await openReview());
 
   fireEvent.change(list.getByLabelText("Belongs to"), { target: { value: "" } });
@@ -589,7 +592,7 @@ test("a refused confirmation says what the server said and keeps the row for rev
   inbox.mockResolvedValue([]);
   vi.mocked(fetchAutoFiled).mockResolvedValue([FILED]);
   classified.mockRejectedValue(new AppError("ROW_NOT_FOUND", "That row is not stored."));
-  render(<Inbox />);
+  renderWithClient(<Inbox />);
   const list = within(await openReview());
 
   fireEvent.click(list.getByRole("button", { name: "Confirm" }));

@@ -12,7 +12,6 @@ import {
   act,
   cleanup,
   fireEvent,
-  render,
   renderHook,
   screen,
   waitFor,
@@ -33,12 +32,14 @@ import {
   readReceipt,
   uploadReceipt,
 } from "../src/api/receipts.ts";
-import { fetchPeople } from "../src/api/rules.ts";
+import { fetchPeople } from "../src/api/people.ts";
 import { fetchSpendingCategories } from "../src/api/spending.ts";
 import { useReceiptQueue } from "../src/receipts/Queue.tsx";
 import { Receipts } from "../src/receipts/Receipts.tsx";
+import { peopleAnswer } from "./people-answer.ts";
+import { clientWrapper, renderWithClient } from "./render-with-client.tsx";
 
-vi.mock("../src/api/rules.ts", () => ({ fetchPeople: vi.fn() }));
+vi.mock("../src/api/people.ts", () => ({ fetchPeople: vi.fn() }));
 vi.mock("../src/api/me.ts", () => ({ fetchMe: vi.fn() }));
 vi.mock("../src/api/households.ts", () => ({ fetchHousehold: vi.fn() }));
 vi.mock("../src/api/spending.ts", () => ({ fetchSpendingCategories: vi.fn() }));
@@ -96,7 +97,7 @@ function household(people: readonly string[], left: readonly string[] = []): Hou
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(fetchPeople).mockResolvedValue(["alex", "sam"]);
+  vi.mocked(fetchPeople).mockResolvedValue(peopleAnswer(["alex", "sam"]));
   vi.mocked(fetchMe).mockResolvedValue({
     person: { id: "alex", email: "alex@example.test", household: "home" },
     admin: false,
@@ -169,7 +170,7 @@ function payBy(person: string): void {
 }
 
 async function takePhoto(size = 1_234): Promise<void> {
-  render(<Receipts />);
+  renderWithClient(<Receipts />);
   const camera = field("Take a photo of a receipt");
   const photo = new File([new Uint8Array(size)], "receipt.jpg", { type: "image/jpeg" });
   fireEvent.change(camera, { target: { files: [photo] } });
@@ -688,7 +689,7 @@ test("counts the household's current members from its record, not every name the
 });
 
 test("two current members and one who has left: the screen is the two-person one", async () => {
-  vi.mocked(fetchPeople).mockResolvedValue(["alex", "casey", "sam"]);
+  vi.mocked(fetchPeople).mockResolvedValue(peopleAnswer(["alex", "casey", "sam"]));
   vi.mocked(fetchHousehold).mockResolvedValue(household(["alex", "sam"], ["casey"]));
   await readBasket();
 
@@ -958,7 +959,7 @@ function oneShopEach(id: number): ReadReceiptResponse {
 }
 
 function chooseSeveral(files: File[]): ReturnType<typeof render> {
-  const screenRendered = render(<Receipts />);
+  const screenRendered = renderWithClient(<Receipts />);
   fireEvent.change(field("Choose photos of receipts"), { target: { files } });
   return screenRendered;
 }
@@ -1171,7 +1172,7 @@ test("a second Read all while one is running reads nothing twice (lg-92 F5)", as
     await new Promise((resolve) => setTimeout(resolve, 5));
     return oneShopEach(id);
   });
-  const { result } = renderHook(() => useReceiptQueue());
+  const { result } = renderHook(() => useReceiptQueue(), { wrapper: clientWrapper() });
   await act(async () => {
     result.current.add([jpeg("a.jpg"), jpeg("b.jpg")]);
   });
@@ -1470,7 +1471,7 @@ test.each(["sam", "alex"])(
 test("an item left as Mine names nobody once paid jointly, and is Mine again on my own card (lg-91)", async () => {
   basketRow();
   vi.mocked(fetchHousehold).mockResolvedValue(household(["alex", "casey", "sam"]));
-  vi.mocked(fetchPeople).mockResolvedValue(["alex", "casey", "sam"]);
+  vi.mocked(fetchPeople).mockResolvedValue(peopleAnswer(["alex", "casey", "sam"]));
   await readBasket();
   leaveOut("BIERE 6X355");
   expect(optionsOf(whoseSelect("BIERE 6X355"))).toEqual(["Mine", "casey", "sam"]);
@@ -1625,7 +1626,7 @@ test.each([
   async (_name, chargedTo) => {
     basketRow();
     vi.mocked(fetchHousehold).mockResolvedValue(household(["alex", "casey", "sam"]));
-    vi.mocked(fetchPeople).mockResolvedValue(["alex", "casey", "sam"]);
+    vi.mocked(fetchPeople).mockResolvedValue(peopleAnswer(["alex", "casey", "sam"]));
     await readBasketCharged(chargedTo);
     expect(whoseSelect("BIERE 6X355").selectedOptions[0]?.text).toBe("Whose?");
 
@@ -1644,7 +1645,7 @@ test.each([
 test("an item the person picked on the joint card is Mine again on my own card, a read one or not (lg-94)", async () => {
   basketRow();
   vi.mocked(fetchHousehold).mockResolvedValue(household(["alex", "casey", "sam"]));
-  vi.mocked(fetchPeople).mockResolvedValue(["alex", "casey", "sam"]);
+  vi.mocked(fetchPeople).mockResolvedValue(peopleAnswer(["alex", "casey", "sam"]));
   await readBasketCharged(null);
 
   payJointly();
@@ -1677,7 +1678,7 @@ test("a refusal's words are true for a name the books never held, the payer and 
 test("an item unchecked while paid jointly is Mine again on my own card, though the read charged it to nobody (lg-94)", async () => {
   basketRow();
   vi.mocked(fetchHousehold).mockResolvedValue(household(["alex", "casey", "sam"]));
-  vi.mocked(fetchPeople).mockResolvedValue(["alex", "casey", "sam"]);
+  vi.mocked(fetchPeople).mockResolvedValue(peopleAnswer(["alex", "casey", "sam"]));
   await readBasketCharged(null);
 
   payJointly();
@@ -1700,7 +1701,7 @@ test("an item unchecked while paid jointly is Mine again on my own card, though 
 test("with one other member, a read charge to nobody stays theirs through the joint card and back (lg-94)", async () => {
   basketRow();
   vi.mocked(fetchHousehold).mockResolvedValue(household(["alex", "sam"]));
-  vi.mocked(fetchPeople).mockResolvedValue(["alex", "sam"]);
+  vi.mocked(fetchPeople).mockResolvedValue(peopleAnswer(["alex", "sam"]));
   await readBasketCharged(null);
   expect(whoseSelect("BIERE 6X355").selectedOptions[0]?.text).toBe("sam");
 
@@ -1722,7 +1723,7 @@ test("with one other member, a read charge to nobody stays theirs through the jo
 test("with nobody else, a read charge to nobody is still refused after the joint card and back (lg-94)", async () => {
   basketRow();
   vi.mocked(fetchHousehold).mockResolvedValue(household(["alex"]));
-  vi.mocked(fetchPeople).mockResolvedValue(["alex"]);
+  vi.mocked(fetchPeople).mockResolvedValue(peopleAnswer(["alex"]));
   await readBasketCharged(null);
 
   payJointly();

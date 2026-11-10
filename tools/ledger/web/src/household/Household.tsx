@@ -9,20 +9,15 @@
  * this household's records to its members and nobody else.
  */
 
-import { useCallback, useEffect, useState } from "react";
-import { AppError } from "@ledger/contract";
+import { useQuery } from "@tanstack/react-query";
 import type { AddMemberRequest, HouseholdResponse } from "@ledger/contract";
-import { addHouseholdMember, fetchHousehold, renameHousehold } from "../api/households.ts";
 import { byShownName, shownName, usePeopleNames } from "../people.tsx";
 import type { ShownNames } from "../people.tsx";
+import { failureOf, householdQuery } from "../queries.ts";
+import { useWrite } from "../writes.ts";
 import { HouseholdName } from "./HouseholdName.tsx";
 import { MemberForm, NO_EMAIL } from "./MemberForm.tsx";
 import { MortgageSetting } from "./MortgageSetting.tsx";
-
-type Load =
-  | { state: "loading" }
-  | { state: "failed"; message: string }
-  | { state: "ready"; household: HouseholdResponse };
 
 type HistoryRecord = HouseholdResponse["history"][number];
 
@@ -56,39 +51,22 @@ function describeAll(history: readonly HistoryRecord[], names: ShownNames): (str
 }
 
 export function Household({ id }: { id: string }): React.ReactElement {
-  const [load, setLoad] = useState<Load>({ state: "loading" });
+  const read = useQuery(householdQuery(id));
   const shown = usePeopleNames();
+  const addHouseholdMember = useWrite("addHouseholdMember");
+  const renameHousehold = useWrite("renameHousehold");
 
-  const refresh = useCallback(
-    async (signal?: AbortSignal): Promise<void> => {
-      try {
-        setLoad({ state: "ready", household: await fetchHousehold(id, signal) });
-      } catch (error: unknown) {
-        if (signal?.aborted !== true) {
-          setLoad({ state: "failed", message: AppError.from(error).message });
-        }
-      }
-    },
-    [id],
-  );
-
-  useEffect(() => {
-    const controller = new AbortController();
-    // oxlint-disable-next-line react/set-state-in-effect -- `refresh` sets state only after its request settles; the rule cannot see through the await.
-    void refresh(controller.signal);
-    return () => controller.abort();
-  }, [refresh]);
-
-  if (load.state === "loading") return <p className="muted">Loading the household…</p>;
-  if (load.state === "failed") {
+  const failure = failureOf(read);
+  if (failure !== null) {
     return (
       <p className="bad" role="alert">
-        {load.message}
+        {failure}
       </p>
     );
   }
+  if (read.data === undefined) return <p className="muted">Loading the household…</p>;
 
-  const { household, members, history } = load.household;
+  const { household, members, history } = read.data;
   // The shell's map, with the history's names over it, then the members' own:
   // this answer is the newer, and its history names everyone the household has
   // held, a person who left before the books ever enrolled them included (lg-76).
@@ -115,14 +93,10 @@ export function Household({ id }: { id: string }): React.ReactElement {
     .map((text, index) => ({ text, at: history[index]?.at ?? "", index }))
     .filter((line): line is { text: string; at: string; index: number } => line.text !== null)
     .toReversed();
-  const add = async (member: AddMemberRequest) => {
-    const added = await addHouseholdMember(id, member);
-    await refresh();
-    return added;
-  };
+  // Each resolves once the household is read again (`writes.ts`).
+  const add = async (member: AddMemberRequest) => await addHouseholdMember(id, member);
   const rename = async (name: string): Promise<void> => {
     await renameHousehold(id, { name });
-    await refresh();
   };
 
   return (

@@ -8,7 +8,7 @@
  */
 
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { AppError } from "@ledger/contract";
 import type { AdminHousehold } from "@ledger/contract";
 import {
@@ -22,6 +22,7 @@ import {
   fetchAdminHouseholds,
 } from "../src/api/households.ts";
 import { Admin } from "../src/admin/Admin.tsx";
+import { renderWithClient } from "./render-with-client.tsx";
 
 vi.mock("../src/api/households.ts", () => ({
   fetchAdminHouseholds: vi.fn(),
@@ -73,7 +74,7 @@ function card(name: string): HTMLElement {
 }
 
 test("shows every household with its members, and every address to admit on Access", async () => {
-  render(<Admin />);
+  renderWithClient(<Admin />);
 
   expect(await screen.findByRole("heading", { name: "Households" })).toBeTruthy();
   expect(
@@ -103,7 +104,7 @@ const CABIN: AdminHousehold = {
 
 test("creates a household from its first person, shows its card without asking again, and adds a member", async () => {
   vi.mocked(createHousehold).mockResolvedValue(CABIN);
-  render(<Admin />);
+  renderWithClient(<Admin />);
   await screen.findByRole("heading", { name: "Households" });
 
   const fresh = card("New household");
@@ -151,7 +152,7 @@ test("removes a member only once the removal is confirmed", async () => {
     person: "sam",
     name: "sam",
   });
-  render(<Admin />);
+  renderWithClient(<Admin />);
   await screen.findByRole("heading", { name: "Households" });
 
   fireEvent.click(screen.getByRole("button", { name: "Remove sam@example.test" }));
@@ -175,7 +176,7 @@ test("puts the server's own sentence in front of a refused address", async () =>
       'That email already belongs to the household "The other household", as kim. Remove it first.',
     ),
   );
-  render(<Admin />);
+  renderWithClient(<Admin />);
   await screen.findByRole("heading", { name: "Households" });
 
   const home = card("The test household");
@@ -191,7 +192,7 @@ test("puts the server's own sentence in front of a refused address", async () =>
 // the list shows the name the household answers with afterwards.
 test("renames a person, and prints the shown name after the rename, not the id", async () => {
   vi.mocked(adminRenamePerson).mockResolvedValue({ person: "alex", name: "Alex" });
-  render(<Admin />);
+  renderWithClient(<Admin />);
   await screen.findByRole("heading", { name: "Households" });
   const home = card("The test household");
   const people = within(home).getByRole("list", {
@@ -245,7 +246,7 @@ test("renames a person, and prints the shown name after the rename, not the id",
 
 test("puts the server's sentence in front of a refused rename", async () => {
   vi.mocked(adminRenamePerson).mockRejectedValue(new AppError("PERSON_NAME_TAKEN"));
-  render(<Admin />);
+  renderWithClient(<Admin />);
   await screen.findByRole("heading", { name: "Households" });
   const home = card("The test household");
 
@@ -266,7 +267,7 @@ test("edits a member's address in one request, and lists the new address under t
     person: "sam",
     name: "sam",
   });
-  render(<Admin />);
+  renderWithClient(<Admin />);
   await screen.findByRole("heading", { name: "Households" });
   const home = card("The test household");
 
@@ -320,7 +321,7 @@ test("puts the server's sentence in front of a refused new address, and keeps th
       'That email already belongs to the household "The other household", as kim. Remove it first.',
     ),
   );
-  render(<Admin />);
+  renderWithClient(<Admin />);
   await screen.findByRole("heading", { name: "Households" });
   const home = card("The test household");
 
@@ -364,7 +365,7 @@ test("lists everyone the household has named with where they stand, and retires 
     name: "Casey",
     standing: "retiring",
   });
-  render(<Admin />);
+  renderWithClient(<Admin />);
   await screen.findByRole("heading", { name: "Households" });
   const people = within(card("The test household")).getByRole("list", {
     name: "People in The test household: alex, Casey, and sam",
@@ -398,7 +399,7 @@ test("puts the server's sentence in front of a refused retirement", async () => 
       "Remove every email under sam first: nobody who can sign in is retired.",
     ),
   );
-  render(<Admin />);
+  renderWithClient(<Admin />);
   await screen.findByRole("heading", { name: "Households" });
   const home = card("The test household");
 
@@ -413,7 +414,7 @@ test("puts the server's sentence in front of a refused retirement", async () => 
 // nothing else; with no household yet it is the only form on the screen.
 test("asks a new household for its first person's email and name, and for no id or name", async () => {
   vi.mocked(fetchAdminHouseholds).mockResolvedValue([]);
-  render(<Admin />);
+  renderWithClient(<Admin />);
   await screen.findByRole("heading", { name: "Households" });
 
   const forms = document.querySelectorAll("form");
@@ -442,7 +443,7 @@ test("puts the server's sentence in front of a refused first address, and adds n
       'That email already belongs to the household "The other household", as kim. Remove it first.',
     ),
   );
-  render(<Admin />);
+  renderWithClient(<Admin />);
   await screen.findByRole("heading", { name: "Households" });
   const fresh = card("New household");
 
@@ -477,7 +478,7 @@ test("tells two Home cards apart by their people, and shows no id but for a hous
     { id: "empty", name: "Old", members: [], people: [] },
   ];
   vi.mocked(fetchAdminHouseholds).mockResolvedValue(twoHomes);
-  render(<Admin />);
+  renderWithClient(<Admin />);
   await screen.findByRole("heading", { name: "Households" });
 
   expect(screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent)).toEqual([
@@ -498,7 +499,7 @@ test("tells two Home cards apart by their people, and shows no id but for a hous
 // admin's screen are the New household form's, each card's member form, and a
 // member's address opened in place; all three are open here at once.
 test("labels no address field Address, the change-address form included", async () => {
-  render(<Admin />);
+  renderWithClient(<Admin />);
   await screen.findByRole("heading", { name: "Households" });
   fireEvent.click(screen.getByRole("button", { name: "Edit sam@example.test" }));
 
@@ -526,7 +527,7 @@ test("lists a person without an email by name with no email, with nothing to edi
       people: [...home.people, { person: ROBIN, name: "Robin", standing: "in" }],
     },
   ]);
-  render(<Admin />);
+  renderWithClient(<Admin />);
   await screen.findByRole("heading", { name: "Households" });
 
   const homeCard = card("The test household");
@@ -551,7 +552,7 @@ test("lists a person without an email by name with no email, with nothing to edi
 
 test("adds a person without an email from a card, by name alone", async () => {
   vi.mocked(adminAddMember).mockResolvedValue({ address: null, person: ROBIN, name: "Robin" });
-  render(<Admin />);
+  renderWithClient(<Admin />);
   await screen.findByRole("heading", { name: "Households" });
 
   const homeCard = card("The test household");
@@ -565,7 +566,7 @@ test("adds a person without an email from a card, by name alone", async () => {
 });
 
 test("a new household still needs its first person's email", async () => {
-  render(<Admin />);
+  renderWithClient(<Admin />);
   await screen.findByRole("heading", { name: "Households" });
 
   const fresh = card("New household");
@@ -581,7 +582,7 @@ test("a new household still needs its first person's email", async () => {
 // lg-77: the admin renames any household from its card, as its members can.
 test("renames a household from its card, the field opening on its name alone", async () => {
   vi.mocked(adminRenameHousehold).mockResolvedValue({ id: "home", name: "Our place" });
-  render(<Admin />);
+  renderWithClient(<Admin />);
   await screen.findByRole("heading", { name: "Households" });
   const homeCard = card("The test household");
 
@@ -608,7 +609,7 @@ test("renames a household from its card, the field opening on its name alone", a
 
 test("a refused household rename shows the server's sentence on its card, and Cancel closes it", async () => {
   vi.mocked(adminRenameHousehold).mockRejectedValue(new AppError("HOUSEHOLD_NOT_FOUND"));
-  render(<Admin />);
+  renderWithClient(<Admin />);
   await screen.findByRole("heading", { name: "Households" });
   const awayCard = card("The other household");
 
@@ -641,7 +642,7 @@ test("marks an email that has never signed in, on its card and in the emails to 
       ],
     },
   ]);
-  render(<Admin />);
+  renderWithClient(<Admin />);
   await screen.findByRole("heading", { name: "Households" });
 
   const rowOf = (scope: ReturnType<typeof within>, text: string): HTMLElement => {

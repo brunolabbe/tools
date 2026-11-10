@@ -9,18 +9,20 @@
  */
 
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { AppError } from "@ledger/contract";
 import type { MortgageOwnResponse, MortgageSplit, MortgageSplitOn } from "@ledger/contract";
 import { fetchMortgageSplits, fileMortgageSplit } from "../src/api/mortgage-splits.ts";
-import { fetchPeople } from "../src/api/rules.ts";
+import { fetchPeople } from "../src/api/people.ts";
 import { fetchMortgageOwn } from "../src/api/stats.ts";
 import { MortgageSplitCard } from "../src/salaries/MortgageSplit.tsx";
 import { MortgageOwnCard } from "../src/stats/Cards.tsx";
 import { EQUAL_SPLIT, LIVE } from "./mortgage-fixtures.ts";
+import { peopleAnswer } from "./people-answer.ts";
+import { renderWithClient } from "./render-with-client.tsx";
 
 vi.mock("../src/api/stats.ts", () => ({ fetchMortgageOwn: vi.fn() }));
-vi.mock("../src/api/rules.ts", () => ({ fetchPeople: vi.fn() }));
+vi.mock("../src/api/people.ts", () => ({ fetchPeople: vi.fn() }));
 vi.mock("../src/api/mortgage-splits.ts", () => ({
   fetchMortgageSplits: vi.fn(),
   fileMortgageSplit: vi.fn(),
@@ -87,7 +89,7 @@ function record(id: number, effectiveFrom: string, split: Partial<MortgageSplit>
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(fetchMortgageOwn).mockResolvedValue(CROSSING);
-  vi.mocked(fetchPeople).mockResolvedValue(["alex", "sam"]);
+  vi.mocked(fetchPeople).mockResolvedValue(peopleAnswer(["alex", "sam"]));
   vi.mocked(fetchMortgageSplits).mockResolvedValue({
     asOf: "2026-10-03",
     splits: [],
@@ -113,7 +115,7 @@ async function ownCard(): Promise<ReturnType<typeof within>> {
 
 // Done when 7.
 test("over a range that crosses a change, the own-money card marks it and names the new split", async () => {
-  render(<MortgageOwnCard range={NO_RANGE} mortgage={LIVE} />);
+  renderWithClient(<MortgageOwnCard range={NO_RANGE} mortgage={LIVE} />);
   const card = await ownCard();
 
   expect(
@@ -144,7 +146,7 @@ test("a range that holds no change marks nothing, and its caption names the spli
     points: CROSSING.points.slice(0, 1),
     split: BEFORE_ANY_RATIO,
   });
-  render(<MortgageOwnCard range={{ from: null, to: "2026-01-31" }} mortgage={LIVE} />);
+  renderWithClient(<MortgageOwnCard range={{ from: null, to: "2026-01-31" }} mortgage={LIVE} />);
   const card = await ownCard();
 
   expect(
@@ -166,7 +168,7 @@ test("the split form says what stands, and files shares from a day as parts per 
     shares: BY_SHARES.parts,
   });
   vi.mocked(fileMortgageSplit).mockResolvedValue(filed);
-  render(<MortgageSplitCard />);
+  renderWithClient(<MortgageSplitCard />);
 
   expect(
     await screen.findByText(
@@ -195,7 +197,7 @@ test("the split form says what stands, and files shares from a day as parts per 
 });
 
 test("parts that do not make 100 % are not sent, and a refusal is said", async () => {
-  render(<MortgageSplitCard />);
+  renderWithClient(<MortgageSplitCard />);
 
   expect(
     await screen.findByText("The mortgage's payments split equally: no split has been filed."),

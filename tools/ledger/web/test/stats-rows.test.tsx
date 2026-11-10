@@ -8,7 +8,7 @@
  */
 
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { formatCents } from "@ledger/books";
 import { AppError } from "@ledger/contract";
 import type {
@@ -26,6 +26,7 @@ import {
 } from "../src/api/spending.ts";
 import { fetchSpendingStats } from "../src/api/stats.ts";
 import { SpendingCard } from "../src/stats/Cards.tsx";
+import { renderWithClient } from "./render-with-client.tsx";
 
 vi.mock("../src/api/spending.ts", () => ({
   fetchSpendingCategories: vi.fn(),
@@ -142,7 +143,7 @@ beforeEach(() => {
 afterEach(cleanup);
 
 async function chart(): Promise<void> {
-  render(<SpendingCard range={NONE} />);
+  renderWithClient(<SpendingCard range={NONE} />);
   await screen.findByRole("slider");
 }
 
@@ -394,10 +395,10 @@ test("the readout's buttons are outside its live region, and its figures inside 
   expect(live?.textContent).toContain("Groceries");
 });
 
-test("a failed read with no write before it fails the card, on a new range or back on an old one", async () => {
+test("a failed read with no write before it fails the card, and a range read within staleTime is drawn from the cache", async () => {
   const A = { from: "2026-01-01", to: "2026-02-28" };
   const B = { from: "2026-02-01", to: "2026-02-28" };
-  const { rerender } = render(<SpendingCard range={A} />);
+  const { rerender } = renderWithClient(<SpendingCard range={A} />);
   await screen.findByRole("slider");
 
   vi.mocked(fetchSpendingStats).mockRejectedValue(
@@ -407,11 +408,12 @@ test("a failed read with no write before it fails the card, on a new range or ba
   await waitFor(() => expect(screen.getByRole("alert").textContent).toBe("The books are away."));
   expect(screen.queryByRole("slider")).toBeNull();
 
-  // Back on the range read first: it was not written under, so its answer is not held.
+  // Back on the range read first, within `staleTime` (lg-98): its answer is the
+  // cache's, fresh, and drawn without asking again; the failure was another range's.
   rerender(<SpendingCard range={A} />);
-  await waitFor(() => expect(fetchSpendingStats).toHaveBeenCalledTimes(3));
-  await waitFor(() => expect(screen.getByRole("alert").textContent).toBe("The books are away."));
-  expect(screen.queryByRole("slider")).toBeNull();
+  expect(await screen.findByRole("slider")).toBeTruthy();
+  expect(screen.queryByRole("alert")).toBeNull();
+  expect(fetchSpendingStats).toHaveBeenCalledTimes(2);
 });
 
 // --- lg-19: the card lines behind a period, and correcting one ---
@@ -470,7 +472,7 @@ const CARD_BEFORE: SpendingStatsResponse = {
 };
 
 async function openClosedPeriod(): Promise<void> {
-  render(<SpendingCard range={NONE} />);
+  renderWithClient(<SpendingCard range={NONE} />);
   await screen.findByRole("slider");
   fireEvent.keyDown(screen.getByRole("slider"), { key: "Home" });
   fireEvent.click(screen.getByRole("button", { name: "Show the rows" }));
@@ -544,7 +546,7 @@ test("a slice of only card lines opens a list that has them, and no bank row is 
     lines: [line(41, { date: "2026-02-10", amountCents: 3000, spendingCategoryId: 3 })],
     total: 1,
   });
-  render(<SpendingCard range={NONE} />);
+  renderWithClient(<SpendingCard range={NONE} />);
   await screen.findByRole("slider");
 
   fireEvent.click(screen.getByRole("button", { name: "Show the rows for Household" }));

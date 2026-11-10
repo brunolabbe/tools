@@ -51,14 +51,20 @@
  * item charged to them, or to nobody yet, becomes theirs to keep (`repick`).
  */
 
-import { useEffect, useId, useState } from "react";
+import { useId, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import type { UseQueryResult } from "@tanstack/react-query";
 import { formatCents, sharedAmount } from "@ledger/books";
 import { AppError } from "@ledger/contract";
-import type { ItemShare, ReceiptMatch, SpendingCategory } from "@ledger/contract";
-import { fetchHousehold } from "../api/households.ts";
-import { fetchMe } from "../api/me.ts";
-import { fetchSpendingCategories } from "../api/spending.ts";
-import { fetchReceiptMatches, fileReceipt } from "../api/receipts.ts";
+import type {
+  HouseholdResponse,
+  ItemShare,
+  ReceiptMatch,
+  SpendingCategory,
+} from "@ledger/contract";
+import { fetchReceiptMatches } from "../api/receipts.ts";
+import { categoriesQuery, householdQuery, meQuery } from "../queries.ts";
+import { useWrite } from "../writes.ts";
 import { SpendingCategoryPicker } from "../spending/Picker.tsx";
 import { PhotoPickers } from "./PhotoPickers.tsx";
 import { PickSelects, ReceiptQueueView, entryOf, useReceiptQueue } from "./Queue.tsx";
@@ -129,47 +135,39 @@ type Loaded<T> =
   | { state: "loaded"; value: T };
 
 /**
- * One request, run on its own so that another's failure drops nothing it
- * returned (lg-39), and again on `retry`. `load` must be a stable function.
+ * One read, held on its own so that another's failure drops nothing it returned
+ * (lg-39), and asked again on `retry`, which starts from "loading". The answer is
+ * the cache's (lg-98).
  */
-function useLoad<T>(load: (signal: AbortSignal) => Promise<T>): [Loaded<T>, () => void] {
-  const [loaded, setLoaded] = useState<Loaded<T>>({ state: "loading" });
-  const [attempt, setAttempt] = useState(0);
-  // What the answer in state is for. A new `load` or a retry starts from
-  // "loading" — derived state, set during render, so the last answer is never
-  // painted for the new request — and the effect runs on this pair alone, which
-  // is how `attempt` reaches it without being read inside it.
-  const [asked, setAsked] = useState({ load, attempt });
-  if (asked.load !== load || asked.attempt !== attempt) {
-    setAsked({ load, attempt });
-    setLoaded({ state: "loading" });
+function loadedOf<T>(read: UseQueryResult<T>): [Loaded<T>, () => void] {
+  const retry = (): void => void read.refetch();
+  if (read.data !== undefined) return [{ state: "loaded", value: read.data }, retry];
+  if (read.error !== null && !read.isFetching) {
+    return [{ state: "failed", message: AppError.from(read.error).message }, retry];
   }
-  useEffect(() => {
-    const controller = new AbortController();
-    const run = async (): Promise<void> => {
-      try {
-        const value = await asked.load(controller.signal);
-        if (!controller.signal.aborted) setLoaded({ state: "loaded", value });
-      } catch (error: unknown) {
-        if (!controller.signal.aborted) {
-          setLoaded({ state: "failed", message: AppError.from(error).message });
-        }
-      }
-    };
-    void run();
-    return () => controller.abort();
-  }, [asked]);
-  return [loaded, () => setAttempt((before) => before + 1)];
+  return [{ state: "loading" }, retry];
+}
+
+/** The people in the household's record now. */
+function membersOf(household: HouseholdResponse): string[] {
+  return [...new Set(household.members.map((member) => member.person))];
 }
 
 /**
  * The current members, from the household's record (lg-30): the books'
- * `fetchPeople` holds every name ever enrolled, one who has left included.
+ * people hold every name ever enrolled, one who has left included.
  */
-async function loadMembers(signal: AbortSignal): Promise<string[]> {
-  const me = await fetchMe(signal);
-  const household = await fetchHousehold(me.person.household, signal);
-  return [...new Set(household.members.map((member) => member.person))];
+function useMembers(): [Loaded<string[]>, () => void] {
+  const me = useQuery(meQuery);
+  const household = useQuery({
+    ...householdQuery(me.data?.person.household ?? ""),
+    enabled: me.data !== undefined,
+    select: membersOf,
+  });
+  const [mine, retryMe] = loadedOf(me);
+  if (mine.state === "failed") return [{ state: "failed", message: mine.message }, retryMe];
+  if (mine.state === "loading") return [{ state: "loading" }, retryMe];
+  return loadedOf(household);
 }
 
 export function Receipts(): React.ReactElement {
@@ -177,8 +175,9 @@ export function Receipts(): React.ReactElement {
   const shown = usePeopleNames();
   const [stage, setStage] = useState<Stage>({ step: "photo" });
   const [matches, setMatches] = useState<ReceiptMatch[] | null>(null);
-  const [members, retryMembers] = useLoad(loadMembers);
-  const [loadedCategories, retryCategories] = useLoad(fetchSpendingCategories);
+  const [members, retryMembers] = useMembers();
+  const [loadedCategories, retryCategories] = loadedOf(useQuery(categoriesQuery));
+  const fileReceipt = useWrite("fileReceipt");
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const queue = useReceiptQueue();

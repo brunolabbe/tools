@@ -17,20 +17,16 @@
  * screen says a ratio without them is needed. No ratio is changed for them.
  */
 
-import { useCallback, useEffect, useId, useState } from "react";
+import { useId, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { formatCents, parseTypedAmountCents } from "@ledger/books";
 import { AppError } from "@ledger/contract";
-import type { Ratio, RatioProposal, Salary } from "@ledger/contract";
-import { fetchPeople } from "../api/rules.ts";
-import { confirmRatio, enterSalaries, fetchRatios, fetchSalaries } from "../api/salaries.ts";
+import type { RatioProposal, Salary } from "@ledger/contract";
 import { formatShare } from "../labels.ts";
 import { byShownName, inShownOrder, shownName, usePeopleNames } from "../people.tsx";
 import type { ShownNames } from "../people.tsx";
-
-type Load =
-  | { state: "loading" }
-  | { state: "failed"; message: string }
-  | { state: "ready"; people: string[]; salaries: Salary[]; inEffect: Ratio | null };
+import { failureOf, peopleIn, peopleQuery, ratiosQuery, salariesQuery } from "../queries.ts";
+import { useWrite } from "../writes.ts";
 
 function sharesLabel(shares: RatioProposal["shares"], names: ShownNames): string {
   return inShownOrder(shares, names, (share) => share.personId)
@@ -50,55 +46,42 @@ function typedFor(salaries: readonly Salary[], year: number): Record<string, str
 export function Salaries(): React.ReactElement {
   const id = useId();
   const names = usePeopleNames();
-  const [load, setLoad] = useState<Load>({ state: "loading" });
   // The year the screen opens on, read once: the year's amounts on record are
   // filled in for it when the salaries first load, and again on each change.
   const [firstYear] = useState(() => String(new Date().getFullYear()));
   const [year, setYear] = useState(firstYear);
   const [typed, setTyped] = useState<Record<string, string>>({});
+  const [filled, setFilled] = useState(false);
   const [proposal, setProposal] = useState<RatioProposal | null>(null);
   const [effectiveFrom, setEffectiveFrom] = useState("");
   const [problem, setProblem] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const asked = useQuery({ ...peopleQuery, select: peopleIn });
+  const filed = useQuery(salariesQuery);
+  const ratios = useQuery(ratiosQuery);
+  const enterSalaries = useWrite("enterSalaries");
+  const confirmRatio = useWrite("confirmRatio");
 
-  const refresh = useCallback(async (signal?: AbortSignal): Promise<Salary[] | null> => {
-    try {
-      const [people, salaries, ratios] = await Promise.all([
-        fetchPeople(signal),
-        fetchSalaries(signal),
-        fetchRatios(signal),
-      ]);
-      setLoad({ state: "ready", people, salaries, inEffect: ratios.inEffect });
-      return salaries;
-    } catch (error: unknown) {
-      if (signal?.aborted !== true) {
-        setLoad({ state: "failed", message: AppError.from(error).message });
-      }
-      return null;
-    }
-  }, []);
+  // Derived state, set during render: the first answer fills the opening year in once.
+  if (!filled && filed.data !== undefined) {
+    setFilled(true);
+    setTyped(typedFor(filed.data, Number(firstYear)));
+  }
 
-  useEffect(() => {
-    const controller = new AbortController();
-    const open = async (): Promise<void> => {
-      const salaries = await refresh(controller.signal);
-      if (salaries !== null) setTyped(typedFor(salaries, Number(firstYear)));
-    };
-    void open();
-    return () => controller.abort();
-  }, [refresh, firstYear]);
-
-  if (load.state === "loading") return <p className="muted">Loading the salaries…</p>;
-  if (load.state === "failed") {
+  const failure = failureOf(asked, filed, ratios);
+  if (failure !== null) {
     return (
       <p className="bad" role="alert">
-        {load.message}
+        {failure}
       </p>
     );
   }
+  if (asked.data === undefined || filed.data === undefined || ratios.data === undefined) {
+    return <p className="muted">Loading the salaries…</p>;
+  }
 
-  const { people, salaries, inEffect } = load;
+  const [people, salaries, inEffect] = [asked.data, filed.data, ratios.data.inEffect];
   // `people` is who is in from the open period on (lg-35), so anyone else the
   // ratio in effect names has been retired at a close.
   const retiredIn = (inEffect?.shares ?? [])
@@ -154,7 +137,6 @@ export function Salaries(): React.ReactElement {
       const answer = await enterSalaries({ year: Number(year), salaries: entries });
       setProposal(answer.proposal);
       if (answer.proposal !== null) setEffectiveFrom(answer.proposal.effectiveFrom);
-      await refresh();
     });
   };
 
@@ -168,7 +150,6 @@ export function Salaries(): React.ReactElement {
       setProposal(null);
       setProblem(null);
       setNotice(`Ratio confirmed, in effect from ${ratio.effectiveFrom}.`);
-      await refresh();
     });
   };
 

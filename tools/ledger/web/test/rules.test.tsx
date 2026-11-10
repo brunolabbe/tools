@@ -6,20 +6,24 @@
  */
 
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { AppError } from "@ledger/contract";
 import type { Rule, SpendingCategory } from "@ledger/contract";
-import { createRule, editRule, fetchPeople, fetchRules, retireRule } from "../src/api/rules.ts";
+import { fetchPeople } from "../src/api/people.ts";
+import { createRule, editRule, fetchRules, retireRule } from "../src/api/rules.ts";
 import { fetchSpendingCategories } from "../src/api/spending.ts";
 import { Rules } from "../src/rules/Rules.tsx";
+import { peopleAnswer } from "./people-answer.ts";
+import { renderWithClient } from "./render-with-client.tsx";
 
 vi.mock("../src/api/rules.ts", () => ({
   fetchRules: vi.fn(),
-  fetchPeople: vi.fn(),
   createRule: vi.fn(),
   editRule: vi.fn(),
   retireRule: vi.fn(),
 }));
+
+vi.mock("../src/api/people.ts", () => ({ fetchPeople: vi.fn() }));
 
 const rules = vi.mocked(fetchRules);
 
@@ -27,7 +31,7 @@ vi.mock("../src/api/spending.ts", () => ({ fetchSpendingCategories: vi.fn() }));
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(fetchPeople).mockResolvedValue(["alex", "sam"]);
+  vi.mocked(fetchPeople).mockResolvedValue(peopleAnswer(["alex", "sam"]));
   vi.mocked(fetchSpendingCategories).mockResolvedValue(CATEGORIES);
 });
 
@@ -64,7 +68,7 @@ const TAXES: Rule = {
 test("lists the rules in force with what each asks and what it assigns", async () => {
   rules.mockResolvedValue([TRANSFER, TAXES]);
 
-  render(<Rules />);
+  renderWithClient(<Rules />);
 
   const list = within(await screen.findByRole("list", { name: "Rules in force" }));
   expect(list.getAllByRole("listitem")).toHaveLength(2);
@@ -75,7 +79,7 @@ test("lists the rules in force with what each asks and what it assigns", async (
 test("says so when there are no rules, and nothing is seeded", async () => {
   rules.mockResolvedValue([]);
 
-  render(<Rules />);
+  renderWithClient(<Rules />);
 
   expect(await screen.findByText("There are no rules yet.")).toBeTruthy();
 });
@@ -83,7 +87,7 @@ test("says so when there are no rules, and nothing is seeded", async () => {
 test("adds a rule from the form, with an amount read the way it is typed", async () => {
   rules.mockResolvedValue([]);
   vi.mocked(createRule).mockResolvedValue(TRANSFER);
-  render(<Rules />);
+  renderWithClient(<Rules />);
   fireEvent.click(await screen.findByRole("button", { name: "Add a rule" }));
 
   fireEvent.change(screen.getByLabelText("Description"), {
@@ -111,7 +115,7 @@ test("adds a rule from the form, with an amount read the way it is typed", async
 
 test("an amount that is not an amount is refused before anything is sent", async () => {
   rules.mockResolvedValue([]);
-  render(<Rules />);
+  renderWithClient(<Rules />);
   fireEvent.click(await screen.findByRole("button", { name: "Add a rule" }));
   fireEvent.change(screen.getByLabelText("Description"), { target: { value: "Taxes*" } });
   fireEvent.change(screen.getByLabelText("Exact amount"), { target: { value: "lots" } });
@@ -125,7 +129,7 @@ test("an amount that is not an amount is refused before anything is sent", async
 test("editing a rule sends the new version for that rule's id", async () => {
   rules.mockResolvedValue([TRANSFER]);
   vi.mocked(editRule).mockResolvedValue({ ...TRANSFER, id: 9, amountCents: 42000 });
-  render(<Rules />);
+  renderWithClient(<Rules />);
 
   fireEvent.click(
     await screen.findByRole("button", { name: `Edit ${TRANSFER.descriptionPattern}` }),
@@ -149,7 +153,7 @@ test("editing a rule sends the new version for that rule's id", async () => {
 test("retiring a rule asks the API and reloads what is in force", async () => {
   rules.mockResolvedValue([TRANSFER, TAXES]);
   vi.mocked(retireRule).mockResolvedValue(TAXES);
-  render(<Rules />);
+  renderWithClient(<Rules />);
   await screen.findByRole("list", { name: "Rules in force" });
   rules.mockResolvedValue([TRANSFER]);
 
@@ -164,7 +168,7 @@ test("a rule the other person already changed is refused in the server's words, 
   const message = "There is no such rule in force. It may have been changed or retired.";
   rules.mockResolvedValue([TRANSFER]);
   vi.mocked(editRule).mockRejectedValue(new AppError("RULE_NOT_FOUND", message));
-  render(<Rules />);
+  renderWithClient(<Rules />);
   fireEvent.click(
     await screen.findByRole("button", { name: `Edit ${TRANSFER.descriptionPattern}` }),
   );
@@ -183,7 +187,7 @@ test("a rule the other person already changed is refused in the server's words, 
 test("a new rule can name a spending category, and a retired one is not offered", async () => {
   rules.mockResolvedValue([]);
   vi.mocked(createRule).mockResolvedValue({ ...TRANSFER, spendingCategoryId: 4 });
-  render(<Rules />);
+  renderWithClient(<Rules />);
   fireEvent.click(await screen.findByRole("button", { name: "Add a rule" }));
   const picker = screen.getByLabelText<HTMLSelectElement>("Spending category");
   expect(picker.value).toBe("");
@@ -207,7 +211,7 @@ test("the list says which spending category a rule gives, and editing it sends t
   const pharmacy: Rule = { ...TRANSFER, spendingCategoryId: 4 };
   rules.mockResolvedValue([pharmacy, TAXES]);
   vi.mocked(editRule).mockResolvedValue({ ...pharmacy, id: 9, spendingCategoryId: 1 });
-  render(<Rules />);
+  renderWithClient(<Rules />);
 
   const list = within(await screen.findByRole("list", { name: "Rules in force" }));
   expect(list.getByText("Spending category: Pharmacy")).toBeTruthy();
@@ -232,7 +236,7 @@ test("the list says which spending category a rule gives, and editing it sends t
 test("a rule that names a retired category still shows it while it is edited", async () => {
   const other: Rule = { ...TRANSFER, spendingCategoryId: 6 };
   rules.mockResolvedValue([other]);
-  render(<Rules />);
+  renderWithClient(<Rules />);
 
   fireEvent.click(
     await screen.findByRole("button", { name: `Edit ${TRANSFER.descriptionPattern}` }),

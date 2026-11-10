@@ -8,7 +8,7 @@
  */
 
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { formatCents } from "@ledger/books";
 import { AppError } from "@ledger/contract";
 import type {
@@ -43,6 +43,7 @@ import {
   LIVE,
   NONE,
 } from "./mortgage-fixtures.ts";
+import { renderWithClient } from "./render-with-client.tsx";
 
 vi.mock("../src/api/buckets.ts", () => ({ fetchBuckets: vi.fn() }));
 vi.mock("../src/api/mortgage.ts", () => ({ fetchMortgage: vi.fn(), saveMortgage: vi.fn() }));
@@ -150,7 +151,7 @@ afterEach(cleanup);
 
 /** Stats, once the mortgage has been read and the other cards have drawn. */
 async function stats(): Promise<void> {
-  render(<Stats />);
+  renderWithClient(<Stats />);
   await screen.findByRole("heading", { name: "Settlements" });
   await waitFor(() => expect(vi.mocked(fetchMortgage)).toHaveBeenCalled());
   // Let the answer land: the mortgage cards are held until it does.
@@ -280,7 +281,7 @@ test("a range entirely before the close charts exactly as it did", async () => {
 test("home of books ended with money left names each person's part and whose it is", async () => {
   vi.mocked(fetchMortgage).mockResolvedValue(ENDED);
 
-  render(<Home />);
+  renderWithClient(<Home />);
 
   const heading = await screen.findByRole("heading", { name: "Mortgage" });
   const mortgage = within(heading.closest("section") as HTMLElement);
@@ -303,7 +304,7 @@ test("home of books ended with the bucket at zero has no mortgage section", asyn
   vi.mocked(fetchMortgage).mockResolvedValue(ENDED_EMPTY);
   vi.mocked(fetchBuckets).mockResolvedValue(EMPTY_BUCKETS);
 
-  render(<Home />);
+  renderWithClient(<Home />);
 
   await screen.findByRole("heading", { name: "Buffer" });
   expect(screen.queryByRole("heading", { name: "Mortgage" })).toBeNull();
@@ -326,7 +327,7 @@ test("home of a household recorded as none has no mortgage section", async () =>
   vi.mocked(fetchMortgage).mockResolvedValue(NONE);
   vi.mocked(fetchBuckets).mockResolvedValue(EMPTY_BUCKETS);
 
-  render(<Home />);
+  renderWithClient(<Home />);
 
   await screen.findByRole("heading", { name: "Buffer" });
   expect(screen.queryByRole("heading", { name: "Mortgage" })).toBeNull();
@@ -348,7 +349,7 @@ test("with no record the stats and home are what they were", async () => {
   expect(await screen.findByText(LIVE_EMPTY_OWN)).toBeTruthy();
   cleanup();
 
-  render(<Home />);
+  renderWithClient(<Home />);
   const heading = await screen.findByRole("heading", { name: "Mortgage" });
   expect(
     within(heading.closest("section") as HTMLElement).getByText("alex has paid 99.99 $ more."),
@@ -358,7 +359,7 @@ test("with no record the stats and home are what they were", async () => {
 test("a mortgage that could not be read leaves the screens as they were", async () => {
   vi.mocked(fetchMortgage).mockRejectedValue(new AppError("UNREACHABLE"));
 
-  render(<Home />);
+  renderWithClient(<Home />);
 
   const heading = await screen.findByRole("heading", { name: "Mortgage" });
   expect(
@@ -393,7 +394,7 @@ test("books ended with the bucket at zero but parts that are not, draw no Own ca
   expect(screen.queryByRole("heading", { name: "Own money in the mortgage" })).toBeNull();
   cleanup();
 
-  render(<Home />);
+  renderWithClient(<Home />);
   await screen.findByRole("heading", { name: "Buffer" });
   expect(screen.queryByRole("heading", { name: "Mortgage" })).toBeNull();
 });
@@ -407,7 +408,7 @@ test("a part above zero is owed, not theirs to take back, once a part is below z
     mortgage: { balanceCents: 60000, own: ENDED_OWES.own, lead: null },
   });
 
-  render(<Home />);
+  renderWithClient(<Home />);
   const heading = await screen.findByRole("heading", { name: "Mortgage" });
   const home = within(heading.closest("section") as HTMLElement);
   expect(home.getByText(expected)).toBeTruthy();
@@ -501,7 +502,7 @@ test("the mortgage cards wait for the read, and a failed read draws them as live
       held.answer = done;
     }),
   );
-  render(<Stats />);
+  renderWithClient(<Stats />);
   await screen.findByRole("heading", { name: "Settlements" });
   expect(screen.queryByRole("heading", { name: "Mortgage payment" })).toBeNull();
   expect(vi.mocked(fetchMortgagePayments)).not.toHaveBeenCalled();
@@ -512,7 +513,7 @@ test("the mortgage cards wait for the read, and a failed read draws them as live
 
   vi.mocked(fetchMortgagePayments).mockClear();
   vi.mocked(fetchMortgage).mockRejectedValue(new AppError("UNREACHABLE"));
-  render(<Stats />);
+  renderWithClient(<Stats />);
   expect(await screen.findByRole("heading", { name: "Mortgage payment" })).toBeTruthy();
   expect(await screen.findByRole("heading", { name: "Own money in the mortgage" })).toBeTruthy();
   expect(vi.mocked(fetchMortgagePayments)).toHaveBeenCalled();
@@ -562,7 +563,7 @@ function form(): ReturnType<typeof within> {
 test("the household screen shows what stands and sets an end date", async () => {
   vi.mocked(fetchHousehold).mockResolvedValue(HOUSEHOLD);
   vi.mocked(saveMortgage).mockResolvedValue(ENDED);
-  render(<Household id="home" />);
+  renderWithClient(<Household id="home" />);
   await screen.findByRole("heading", { name: "Mortgage" });
   expect(form().getByText("The mortgage is still being paid.")).toBeTruthy();
 
@@ -581,7 +582,7 @@ test("the household screen shows what stands and sets an end date", async () => 
 test("the household screen says there is no mortgage, and takes either back", async () => {
   vi.mocked(fetchHousehold).mockResolvedValue(HOUSEHOLD);
   vi.mocked(saveMortgage).mockResolvedValueOnce(NONE).mockResolvedValueOnce(LIVE);
-  render(<Household id="home" />);
+  renderWithClient(<Household id="home" />);
   await screen.findByRole("heading", { name: "Mortgage" });
 
   fireEvent.click(form().getByLabelText("There is no mortgage"));
@@ -598,7 +599,7 @@ test("the household screen says there is no mortgage, and takes either back", as
 test("an end with no day is not sent, and a refusal from the server is shown", async () => {
   vi.mocked(fetchHousehold).mockResolvedValue(HOUSEHOLD);
   vi.mocked(saveMortgage).mockRejectedValue(new AppError("UNREACHABLE"));
-  render(<Household id="home" />);
+  renderWithClient(<Household id="home" />);
   await screen.findByRole("heading", { name: "Mortgage" });
 
   fireEvent.click(form().getByLabelText("The mortgage has ended"));

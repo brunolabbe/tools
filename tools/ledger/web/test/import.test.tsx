@@ -8,12 +8,13 @@
  */
 
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { formatCents } from "@ledger/books";
 import type { DescribeWorkbookResponse } from "@ledger/contract";
 import type * as WorkbookApi from "../src/api/workbook.ts";
 import { confirmWorkbook, describeWorkbook } from "../src/api/workbook.ts";
 import { ImportWorkbook } from "../src/import/ImportWorkbook.tsx";
+import { renderWithClient } from "./render-with-client.tsx";
 import CSV_BALANCE from "./fixtures/csv-balance-describe.json" with { type: "json" };
 import LG37 from "./fixtures/lg37-describe.json" with { type: "json" };
 
@@ -53,7 +54,7 @@ async function describeIt(): Promise<void> {
 }
 
 test("says what leaves the house before the button, and sends nothing until it is pressed", async () => {
-  render(<ImportWorkbook />);
+  renderWithClient(<ImportWorkbook />);
   await choose();
 
   const note = screen.getByRole("note", { name: "What is sent" });
@@ -68,7 +69,7 @@ test("says what leaves the house before the button, and sends nothing until it i
 });
 
 test("shows the date column's letter, its header and the 3 oldest and 3 newest dates", async () => {
-  render(<ImportWorkbook />);
+  renderWithClient(<ImportWorkbook />);
   await choose();
   await describeIt();
 
@@ -89,7 +90,7 @@ test("shows the date column's letter, its header and the 3 oldest and 3 newest d
 });
 
 test("shows each bucket label with its bucket, its row count and 3 of its rows", async () => {
-  render(<ImportWorkbook />);
+  renderWithClient(<ImportWorkbook />);
   await choose();
   await describeIt();
 
@@ -107,7 +108,7 @@ test("shows each bucket label with its bucket, its row count and 3 of its rows",
 });
 
 test("has no confirm control when a verification fails, and shows what failed", async () => {
-  render(<ImportWorkbook />);
+  renderWithClient(<ImportWorkbook />);
   await choose();
   await describeIt();
 
@@ -119,7 +120,7 @@ test("has no confirm control when a verification fails, and shows what failed", 
 
 test("has a confirm control when every verification holds, which sends the file and the description", async () => {
   vi.mocked(describeWorkbook).mockResolvedValue(HOLDS);
-  render(<ImportWorkbook />);
+  renderWithClient(<ImportWorkbook />);
   await choose();
   await describeIt();
 
@@ -136,7 +137,7 @@ test("has a confirm control when every verification holds, which sends the file 
 
 test("Cancel writes nothing and goes back to choosing a file", async () => {
   vi.mocked(describeWorkbook).mockResolvedValue(HOLDS);
-  render(<ImportWorkbook />);
+  renderWithClient(<ImportWorkbook />);
   await choose();
   await describeIt();
 
@@ -147,7 +148,7 @@ test("Cancel writes nothing and goes back to choosing a file", async () => {
 });
 
 test("a file's name decides nothing: one named .csv is sent, for the server to judge its bytes", async () => {
-  render(<ImportWorkbook />);
+  renderWithClient(<ImportWorkbook />);
   await choose("releve.csv");
   await describeIt();
   await waitFor(() => expect(describeWorkbook).toHaveBeenCalledTimes(1));
@@ -174,7 +175,7 @@ function asCsv(change: Partial<Extract<DescribeWorkbookResponse, { kind: "csv" }
 
 test("csv: the statement says a CSV is sent as statement.csv and never under its name, before the button", async () => {
   vi.mocked(describeWorkbook).mockResolvedValue(CSV);
-  render(<ImportWorkbook />);
+  renderWithClient(<ImportWorkbook />);
   await choose("zq7tok-releve.csv", csvBytes());
 
   const note = screen.getByRole("note", { name: "What is sent" });
@@ -193,7 +194,7 @@ test("csv: the statement says a CSV is sent as statement.csv and never under its
 
 test("csv: shows the date column's letter, header and 3 + 3 dates with detail and amount, and no bucket section", async () => {
   vi.mocked(describeWorkbook).mockResolvedValue(CSV);
-  render(<ImportWorkbook />);
+  renderWithClient(<ImportWorkbook />);
   await choose("releve.csv", csvBytes());
   await describeIt();
 
@@ -225,7 +226,7 @@ test("csv: the first import says so, and offers Confirm, which reports the rows 
     rowsInInbox: 33,
     tailBalanceCents: 512_345,
   });
-  render(<ImportWorkbook />);
+  renderWithClient(<ImportWorkbook />);
   await choose("releve.csv", csvBytes());
   await describeIt();
 
@@ -244,7 +245,7 @@ test("csv: rows that continue the history say from which stored balance and date
   vi.mocked(describeWorkbook).mockResolvedValue(
     asCsv({ placement: { kind: "continues", date: "2023-12-29", balanceCents: 251_210 } }),
   );
-  render(<ImportWorkbook />);
+  renderWithClient(<ImportWorkbook />);
   await choose("releve.csv", csvBytes());
   await describeIt();
 
@@ -264,7 +265,7 @@ test("csv: a placement that fails shows its reason and no Confirm", async () => 
       placement: { kind: "gap", date: "2023-12-29", balanceCents: 99_999 },
     }),
   );
-  render(<ImportWorkbook />);
+  renderWithClient(<ImportWorkbook />);
   await choose("releve.csv", csvBytes());
   await describeIt();
 
@@ -280,7 +281,7 @@ test("csv: a verification that fails shows its reason and no Confirm", async () 
   vi.mocked(describeWorkbook).mockResolvedValue(
     asCsv({ ok: false, problems: [reason], placement: null }),
   );
-  render(<ImportWorkbook />);
+  renderWithClient(<ImportWorkbook />);
   await choose("transactions.csv", csvBytes());
   await describeIt();
 
@@ -290,7 +291,7 @@ test("csv: a verification that fails shows its reason and no Confirm", async () 
 
 test("csv: a CSV named .xlsx is sent as its bytes, for the server to read as a CSV", async () => {
   vi.mocked(describeWorkbook).mockResolvedValue(CSV);
-  render(<ImportWorkbook />);
+  renderWithClient(<ImportWorkbook />);
   await choose("classeur.xlsx", csvBytes());
   await describeIt();
   expect(describeWorkbook).toHaveBeenCalledWith(btoa(String.fromCharCode(...csvBytes())));

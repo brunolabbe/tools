@@ -13,6 +13,7 @@
 
 import { useState } from "react";
 import { formatCents } from "@ledger/books";
+import { ROUTES } from "@ledger/contract";
 import type {
   BufferStatsResponse,
   ClosedPeriod,
@@ -111,7 +112,7 @@ export function MortgagePaymentCard({
   range: StatsRange;
   mortgage: MortgageResponse | null;
 }): React.ReactElement {
-  const series = useSeries(fetchMortgagePayments, range);
+  const series = useSeries(ROUTES.statsMortgagePayments, fetchMortgagePayments, range);
   const closedOn = mortgage?.state === "ended" ? mortgage.closedOn : null;
   const ended = closedOn !== null && spansClose(range, closedOn);
   return (
@@ -213,7 +214,7 @@ export function MortgageOwnCard({
   range: StatsRange;
   mortgage: MortgageResponse | null;
 }): React.ReactElement {
-  const series = useSeries(fetchMortgageOwn, range);
+  const series = useSeries(ROUTES.statsMortgageOwn, fetchMortgageOwn, range);
   const names = usePeopleNames();
   const closed = mortgage !== null && mortgage.state === "ended" ? mortgage : null;
   const left = closed !== null && closed.left && reachesClose(closed, range) ? closed : null;
@@ -294,7 +295,7 @@ export function MortgageOwnCard({
 // --- What each person has put in ---
 
 export function ContributionCards({ range }: { range: StatsRange }): React.ReactElement {
-  const series = useSeries(fetchContributions, range);
+  const series = useSeries(ROUTES.statsContributions, fetchContributions, range);
   const names = usePeopleNames();
   return (
     <Loaded title="What each person has put in" series={series}>
@@ -405,7 +406,7 @@ function BufferBody(props: { data: BufferStatsResponse; stale: boolean }): React
 }
 
 export function BufferCard({ range }: { range: StatsRange }): React.ReactElement {
-  const series = useSeries(fetchBufferStats, range);
+  const series = useSeries(ROUTES.statsBuffer, fetchBufferStats, range);
   return (
     <Loaded title="Buffer balance" series={series}>
       {(data, stale) => <BufferBody data={data} stale={stale} />}
@@ -532,7 +533,7 @@ function SalaryBody(props: {
 }
 
 export function SalaryCards({ range }: { range: StatsRange }): React.ReactElement {
-  const series = useSeries(fetchSalariesStats, range);
+  const series = useSeries(ROUTES.statsSalaries, fetchSalariesStats, range);
   return (
     <Loaded title="Salaries and the ratio" series={series}>
       {({ years, people }, stale) => <SalaryBody years={years} everyone={people} stale={stale} />}
@@ -551,8 +552,6 @@ function SpendingBody(props: {
   stale: boolean;
   /** The chart was not read again after a write, and shows the figures from before. */
   failure: string | null;
-  /** A row's category was written, so the series is out of date. */
-  onChanged: () => void;
 }): React.ReactElement {
   const { data, stale, failure } = props;
   const { periods, categories } = data;
@@ -677,7 +676,6 @@ function SpendingBody(props: {
             end: shown.end,
           }}
           category={opened.category}
-          onChanged={props.onChanged}
           onClose={() => setOpened(null)}
         />
       )}
@@ -686,19 +684,11 @@ function SpendingBody(props: {
 }
 
 export function SpendingCard({ range }: { range: StatsRange }): React.ReactElement {
-  // Bumped when a row's category is written under the chart, so it is drawn again.
-  const [reload, setReload] = useState(0);
-  const series = useSeries(fetchSpendingStats, range, reload);
+  // A row's category written under the chart marks the series stale, and it is drawn again.
+  const series = useSeries(ROUTES.statsSpending, fetchSpendingStats, range);
   return (
     <Loaded title="Spending by period" series={series}>
-      {(data, stale, failure) => (
-        <SpendingBody
-          data={data}
-          stale={stale}
-          failure={failure}
-          onChanged={() => setReload((n) => n + 1)}
-        />
-      )}
+      {(data, stale, failure) => <SpendingBody data={data} stale={stale} failure={failure} />}
     </Loaded>
   );
 }
@@ -774,7 +764,7 @@ function FixedBody(props: { data: FixedItemsResponse; stale: boolean }): React.R
 }
 
 export function FixedItemsCard({ range }: { range: StatsRange }): React.ReactElement {
-  const series = useSeries(fetchFixedItems, range);
+  const series = useSeries(ROUTES.statsFixedItems, fetchFixedItems, range);
   return (
     <Loaded title="Fixed items by month" series={series}>
       {(data, stale) => <FixedBody data={data} stale={stale} />}
@@ -832,7 +822,7 @@ function intoBufferCents(period: ClosedPeriod): number | null {
 }
 
 export function SettlementsCard({ range }: { range: StatsRange }): React.ReactElement {
-  const series = useSeries(fetchSettlementsStats, range);
+  const series = useSeries(ROUTES.statsSettlements, fetchSettlementsStats, range);
   const names = usePeopleNames();
   return (
     <Loaded title="Settlements" series={series}>

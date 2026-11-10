@@ -8,46 +8,35 @@
  * settlement; the deposit is then expected until a paste brings it in.
  */
 
-import { useCallback, useEffect, useId, useState } from "react";
+import { useId, useState } from "react";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { formatCents } from "@ledger/books";
 import { AppError } from "@ledger/contract";
-import type {
-  ClosedPeriod,
-  OpenPeriodLine,
-  OpenPeriodResponse,
-  RecurringItem,
-  SettlementFigures,
-  SpendingCategory,
-} from "@ledger/contract";
-import { fetchPeople } from "../api/rules.ts";
-import { fetchSpendingCategories } from "../api/spending.ts";
+import type { MeResponse, OpenPeriodLine, SettlementFigures } from "@ledger/contract";
 import { spendingNames } from "../spending/Picker.tsx";
-import {
-  closePeriod,
-  fetchMe,
-  fetchOpenPeriod,
-  fetchPeriods,
-  fetchRecurring,
-  retireLine,
-} from "../api/periods.ts";
 import { inShownOrder, shownName, usePeopleNames } from "../people.tsx";
 import type { ShownNames } from "../people.tsx";
+import {
+  categoriesQuery,
+  failureOf,
+  meQuery,
+  openPeriodQuery,
+  peopleIn,
+  peopleQuery,
+  periodsQuery,
+  recurringQuery,
+} from "../queries.ts";
+import { useWrite } from "../writes.ts";
 import { LineForm } from "./LineForm.tsx";
 import { Recurring } from "./Recurring.tsx";
 
-interface Loaded {
-  people: string[];
-  categories: SpendingCategory[];
-  me: string;
-  open: OpenPeriodResponse;
-  closed: ClosedPeriod[];
-  recurring: RecurringItem[];
-}
+/** What the open period is asked as of: today when empty, else the day chosen. */
+type Range = { start?: string | null; end?: string };
 
-type Load =
-  | { state: "loading" }
-  | { state: "failed"; message: string }
-  | ({ state: "ready" } & Loaded);
+/** Who is signed in: the person a new line is paid by, unless they choose another. */
+function personOf(me: MeResponse): string {
+  return me.person.id;
+}
 
 /** "a, b and c". */
 function listed(parts: readonly string[]): string {
@@ -147,56 +136,51 @@ function lineLabel(
 export function Periods(): React.ReactElement {
   const id = useId();
   const shown = usePeopleNames();
-  const [load, setLoad] = useState<Load>({ state: "loading" });
+  // `null` until a day is chosen: the open period's own end, today by the API's clock.
   const [end, setEnd] = useState<string | null>(null);
   const [since, setSince] = useState("");
+  // What the open period was last asked as of: only a whole day is sent.
+  const [asked, setAsked] = useState<Range>({});
   const [problem, setProblem] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const inBooks = useQuery({ ...peopleQuery, select: peopleIn });
+  const spending = useQuery(categoriesQuery);
+  const signedIn = useQuery({ ...meQuery, select: personOf });
+  // The figures for the last range stay on screen while the next one is read.
+  const opened = useQuery({ ...openPeriodQuery(asked), placeholderData: keepPreviousData });
+  const periods = useQuery(periodsQuery);
+  const items = useQuery(recurringQuery);
+  const closePeriod = useWrite("closePeriod");
+  const retireLine = useWrite("retireLine");
 
-  const refresh = useCallback(
-    async (range: { start?: string | null; end?: string }, signal?: AbortSignal) => {
-      try {
-        const [people, categories, me, open, closed, recurring] = await Promise.all([
-          fetchPeople(signal),
-          fetchSpendingCategories(signal),
-          fetchMe(signal),
-          fetchOpenPeriod(range, signal),
-          fetchPeriods(signal),
-          fetchRecurring(signal),
-        ]);
-        setLoad({ state: "ready", people, categories, me, open, closed, recurring });
-        return open;
-      } catch (error: unknown) {
-        if (signal?.aborted !== true) {
-          setLoad({ state: "failed", message: AppError.from(error).message });
-        }
-        return null;
-      }
-    },
-    [],
-  );
-
-  useEffect(() => {
-    const controller = new AbortController();
-    const first = async (): Promise<void> => {
-      const open = await refresh({}, controller.signal);
-      if (open !== null) setEnd(open.end);
-    };
-    void first();
-    return () => controller.abort();
-  }, [refresh]);
-
-  if (load.state === "loading") return <p className="muted">Loading the period…</p>;
-  if (load.state === "failed") {
+  const failure = failureOf(inBooks, spending, signedIn, opened, periods, items);
+  if (failure !== null) {
     return (
       <p className="bad" role="alert">
-        {load.message}
+        {failure}
       </p>
     );
   }
+  if (
+    inBooks.data === undefined ||
+    spending.data === undefined ||
+    signedIn.data === undefined ||
+    opened.data === undefined ||
+    periods.data === undefined ||
+    items.data === undefined
+  ) {
+    return <p className="muted">Loading the period…</p>;
+  }
 
-  const { people, categories, me, open, closed, recurring } = load;
+  const [people, categories, me, open, closed, recurring] = [
+    inBooks.data,
+    spending.data,
+    signedIn.data,
+    opened.data,
+    periods.data,
+    items.data,
+  ];
   // Who the open period lists: who is in, and anyone retired at a close who
   // has a line in it, one entered late into a period they were in (lg-35).
   const shownPeople = [...new Set([...people, ...open.lines.map((line) => line.personId)])];
@@ -207,19 +191,20 @@ export function Periods(): React.ReactElement {
   });
 
   /**
-   * Runs a write, then reloads; says what went wrong if it was refused. After a
-   * close the open period is a new one, so it is reloaded as of today.
+   * Runs a write, which reads the period again (`writes.ts`); says what went
+   * wrong if it was refused. After a close the open period is a new one, so it
+   * is asked for as of today.
    */
   const send = async (
     write: () => Promise<string | null>,
-    after: { start?: string | null; end?: string } = range(),
+    after: Range = range(),
   ): Promise<void> => {
     setBusy(true);
     setProblem(null);
     setNotice(null);
     try {
       const said = await write();
-      await refresh(after);
+      setAsked(after);
       if (said !== null) setNotice(said);
     } catch (error: unknown) {
       setProblem(AppError.from(error).message);
@@ -240,7 +225,7 @@ export function Periods(): React.ReactElement {
       return;
     }
     setProblem(null);
-    void refresh({
+    setAsked({
       ...(open.first && nextSince !== "" ? { start: nextSince } : {}),
       end: nextEnd,
     });

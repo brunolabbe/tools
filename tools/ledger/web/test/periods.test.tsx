@@ -8,21 +8,21 @@
  */
 
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import type {
   ClosedPeriod,
   OpenPeriodResponse,
   RecurringItem,
   SettlementFigures,
 } from "@ledger/contract";
-import { fetchPeople } from "../src/api/rules.ts";
+import { fetchMe } from "../src/api/me.ts";
+import { fetchPeople } from "../src/api/people.ts";
 import { fetchSpendingCategories } from "../src/api/spending.ts";
 import {
   addLine,
   addRecurring,
   changeRecurring,
   closePeriod,
-  fetchMe,
   fetchOpenPeriod,
   fetchPeriods,
   fetchRecurring,
@@ -30,11 +30,13 @@ import {
 } from "../src/api/periods.ts";
 import { PeopleNamesProvider } from "../src/people.tsx";
 import { Periods, settlementSentence } from "../src/periods/Periods.tsx";
+import { peopleAnswer } from "./people-answer.ts";
+import { renderWithClient } from "./render-with-client.tsx";
 
-vi.mock("../src/api/rules.ts", () => ({ fetchPeople: vi.fn() }));
+vi.mock("../src/api/people.ts", () => ({ fetchPeople: vi.fn() }));
 vi.mock("../src/api/spending.ts", () => ({ fetchSpendingCategories: vi.fn() }));
+vi.mock("../src/api/me.ts", () => ({ fetchMe: vi.fn() }));
 vi.mock("../src/api/periods.ts", () => ({
-  fetchMe: vi.fn(),
   fetchOpenPeriod: vi.fn(),
   fetchPeriods: vi.fn(),
   closePeriod: vi.fn(),
@@ -150,9 +152,12 @@ const SPENDING_CATEGORIES = [
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(fetchPeople).mockResolvedValue(["alex", "sam"]);
+  vi.mocked(fetchPeople).mockResolvedValue(peopleAnswer(["alex", "sam"]));
   vi.mocked(fetchSpendingCategories).mockResolvedValue(SPENDING_CATEGORIES);
-  vi.mocked(fetchMe).mockResolvedValue("sam");
+  vi.mocked(fetchMe).mockResolvedValue({
+    person: { id: "sam", email: "sam@example.test", household: "home" },
+    admin: false,
+  });
   vi.mocked(fetchOpenPeriod).mockResolvedValue(OPEN);
   vi.mocked(fetchPeriods).mockResolvedValue([
     closed(3, "2026-06-30", "expected"),
@@ -176,7 +181,7 @@ function section(name: string): HTMLElement {
 }
 
 test("shows the open period's lines per person, with what each paid toward shared costs", async () => {
-  render(<Periods />);
+  renderWithClient(<Periods />);
 
   const open = await screen.findByRole("heading", { name: "Open period, since 2026-07-01" });
   const card = open.closest("section") as HTMLElement;
@@ -191,7 +196,7 @@ test("shows the open period's lines per person, with what each paid toward share
 
 test("the close button shows who deposits what, and closing sends the period as seen", async () => {
   vi.mocked(closePeriod).mockResolvedValue(closed(4, "2026-10-02", "expected"));
-  render(<Periods />);
+  renderWithClient(<Periods />);
   await screen.findByRole("heading", { name: "Close the period" });
 
   const card = section("Close the period");
@@ -200,7 +205,10 @@ test("the close button shows who deposits what, and closing sends the period as 
 
   fireEvent.change(field("Last day"), { target: { value: "2026-10-02" } });
   await waitFor(() =>
-    expect(fetchOpenPeriod).toHaveBeenLastCalledWith({ end: "2026-10-02" }, undefined),
+    expect(fetchOpenPeriod).toHaveBeenLastCalledWith(
+      { end: "2026-10-02" },
+      expect.any(AbortSignal),
+    ),
   );
   fireEvent.click(within(card).getByRole("button", { name: "Close the period" }));
 
@@ -211,12 +219,12 @@ test("the close button shows who deposits what, and closing sends the period as 
     await screen.findByText("Period closed. alex deposits 40.00 $ into the buffer."),
   ).toBeTruthy();
   // Reloaded as of today: the period just closed is over.
-  expect(fetchOpenPeriod).toHaveBeenLastCalledWith({}, undefined);
+  expect(fetchOpenPeriod).toHaveBeenLastCalledWith({}, expect.any(AbortSignal));
 });
 
 test("with no ratio in effect, the period cannot be closed", async () => {
   vi.mocked(fetchOpenPeriod).mockResolvedValue({ ...OPEN, settlement: null });
-  render(<Periods />);
+  renderWithClient(<Periods />);
   await screen.findByRole("heading", { name: "Close the period" });
 
   const card = section("Close the period");
@@ -229,7 +237,7 @@ test("with no ratio in effect, the period cannot be closed", async () => {
 test("the first period asks since when the two were even", async () => {
   vi.mocked(fetchOpenPeriod).mockResolvedValue({ ...OPEN, start: null, first: true });
   vi.mocked(closePeriod).mockResolvedValue(closed(1, "2026-10-03", "expected"));
-  render(<Periods />);
+  renderWithClient(<Periods />);
   await screen.findByRole("heading", { name: "Open period" });
 
   fireEvent.change(field("Since (when the two were last even)"), {
@@ -238,7 +246,7 @@ test("the first period asks since when the two were even", async () => {
   await waitFor(() =>
     expect(fetchOpenPeriod).toHaveBeenLastCalledWith(
       { start: "2026-04-01", end: "2026-10-03" },
-      undefined,
+      expect.any(AbortSignal),
     ),
   );
 });
@@ -259,7 +267,7 @@ test("a line entered by hand, ticked as the other person's, is a charge to them"
     enteredAt: "2026-09-12T12:00:00.000Z",
     enteredBy: "sam",
   });
-  render(<Periods />);
+  renderWithClient(<Periods />);
   const form = await screen.findByRole("form", { name: "Add a line" });
 
   // Paid by whoever is signed in, unless they choose another.
@@ -285,7 +293,7 @@ test("a line entered by hand, ticked as the other person's, is a charge to them"
 });
 
 test("an amount that is not one is refused before anything is sent", async () => {
-  render(<Periods />);
+  renderWithClient(<Periods />);
   const form = await screen.findByRole("form", { name: "Add a line" });
 
   fireEvent.change(within(form).getByLabelText("Amount"), { target: { value: "lots" } });
@@ -297,7 +305,7 @@ test("an amount that is not one is refused before anything is sent", async () =>
 
 test("removing a stored line retires it", async () => {
   vi.mocked(retireLine).mockResolvedValue({} as never);
-  render(<Periods />);
+  renderWithClient(<Periods />);
 
   fireEvent.click(await screen.findByRole("button", { name: "Remove 2026-08-02 Épicerie" }));
 
@@ -308,7 +316,7 @@ test("removing a stored line retires it", async () => {
 test("the recurring items: one is added, and one is ended on a day", async () => {
   vi.mocked(addRecurring).mockResolvedValue({ ...ITEM, id: 5, label: "Assurance" });
   vi.mocked(changeRecurring).mockResolvedValue({ ...ITEM, id: 6, endDate: "2026-12-31" });
-  render(<Periods />);
+  renderWithClient(<Periods />);
   await screen.findByRole("heading", { name: "Every month" });
   const card = section("Every month");
   expect(within(card).getByText("Internet · alex")).toBeTruthy();
@@ -347,7 +355,7 @@ test("the recurring items: one is added, and one is ended on a day", async () =>
 });
 
 test("the deposits not seen yet are the expected ones, and not those matched or folded", async () => {
-  render(<Periods />);
+  renderWithClient(<Periods />);
   await screen.findByRole("heading", { name: "Deposits not seen yet" });
 
   const items = within(section("Deposits not seen yet")).getAllByRole("listitem");
@@ -364,7 +372,7 @@ test("the day a period is closed, the next one cannot be closed before it starts
     end: "2026-10-03",
     lines: [],
   });
-  render(<Periods />);
+  renderWithClient(<Periods />);
   await screen.findByRole("heading", { name: "Close the period" });
 
   const card = section("Close the period");
@@ -395,7 +403,7 @@ test("a line entered after its period closed is listed as late, and in its payer
       },
     ],
   });
-  render(<Periods />);
+  renderWithClient(<Periods />);
 
   const open = await screen.findByRole("heading", { name: "Open period, since 2026-07-01" });
   const card = open.closest("section") as HTMLElement;
@@ -438,7 +446,7 @@ test("a line is named by its spending category, and an older one shows its text 
       },
     ],
   });
-  render(<Periods />);
+  renderWithClient(<Periods />);
 
   const open = await screen.findByRole("heading", { name: "Open period, since 2026-07-01" });
   const card = open.closest("section") as HTMLElement;
@@ -462,7 +470,7 @@ test("the line form offers the list, and sends none when none is picked", async 
     enteredAt: "2026-09-12T12:00:00.000Z",
     enteredBy: "sam",
   });
-  render(<Periods />);
+  renderWithClient(<Periods />);
   const form = await screen.findByRole("form", { name: "Add a line" });
   const picker = within(form).getByLabelText<HTMLSelectElement>("Spending category");
   expect([...picker.options].map((option) => option.text)).toEqual([
@@ -502,9 +510,9 @@ const THREE: SettlementFigures = {
 };
 
 test("between three people, the close names every deposit and every transfer", async () => {
-  vi.mocked(fetchPeople).mockResolvedValue(["alex", "casey", "sam"]);
+  vi.mocked(fetchPeople).mockResolvedValue(peopleAnswer(["alex", "casey", "sam"]));
   vi.mocked(fetchOpenPeriod).mockResolvedValue({ ...OPEN, settlement: THREE });
-  render(<Periods />);
+  renderWithClient(<Periods />);
   await screen.findByRole("heading", { name: "Close the period" });
 
   const card = section("Close the period");
@@ -517,7 +525,7 @@ test("between three people, the close names every deposit and every transfer", a
 });
 
 test("between three people, a close each deposit of which is seen apart lists only the one not yet seen", async () => {
-  vi.mocked(fetchPeople).mockResolvedValue(["alex", "casey", "sam"]);
+  vi.mocked(fetchPeople).mockResolvedValue(peopleAnswer(["alex", "casey", "sam"]));
   vi.mocked(fetchPeriods).mockResolvedValue([
     {
       ...closed(5, "2027-01-31", "expected"),
@@ -531,7 +539,7 @@ test("between three people, a close each deposit of which is seen apart lists on
       },
     },
   ]);
-  render(<Periods />);
+  renderWithClient(<Periods />);
   await screen.findByRole("heading", { name: "Deposits not seen yet" });
 
   const card = section("Deposits not seen yet");
@@ -540,7 +548,7 @@ test("between three people, a close each deposit of which is seen apart lists on
 });
 
 test("between three people, a charge names whose it was", async () => {
-  vi.mocked(fetchPeople).mockResolvedValue(["alex", "casey", "sam"]);
+  vi.mocked(fetchPeople).mockResolvedValue(peopleAnswer(["alex", "casey", "sam"]));
   vi.mocked(addLine).mockResolvedValue({
     id: 21,
     personId: "sam",
@@ -556,7 +564,7 @@ test("between three people, a charge names whose it was", async () => {
     enteredAt: "2026-09-12T12:00:00.000Z",
     enteredBy: "sam",
   });
-  render(<Periods />);
+  renderWithClient(<Periods />);
   const form = await screen.findByRole("form", { name: "Add a line" });
 
   fireEvent.change(within(form).getByLabelText("Date"), { target: { value: "2026-09-12" } });
@@ -589,7 +597,7 @@ test("a charge to a renamed person is confirmed under their shown name, and send
     enteredAt: "2026-09-12T12:00:00.000Z",
     enteredBy: "sam",
   });
-  render(
+  renderWithClient(
     <PeopleNamesProvider value={{ alex: "Alex", sam: "sam" }}>
       <Periods />
     </PeopleNamesProvider>,
@@ -630,7 +638,7 @@ test("lists a retired person's late line under them, and offers only the people 
       },
     ],
   });
-  render(<Periods />);
+  renderWithClient(<Periods />);
 
   expect(await screen.findByText("Paid by casey")).toBeTruthy();
   expect(screen.getByText("Paid by alex")).toBeTruthy();
@@ -712,7 +720,7 @@ test("lists a charge to the pot apart from what each person paid, and closes on 
     enteredAt: "x",
     enteredBy: "alex",
   });
-  render(<Periods />);
+  renderWithClient(<Periods />);
 
   const open = await screen.findByRole("heading", { name: "Open period, since 2026-07-01" });
   const card = open.closest("section") as HTMLElement;

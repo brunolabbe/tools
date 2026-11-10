@@ -7,7 +7,7 @@
  */
 
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { AppError } from "@ledger/contract";
 import type {
   BufferStatsResponse,
@@ -33,6 +33,7 @@ import {
 import { fetchMortgage } from "../src/api/mortgage.ts";
 import { Stats } from "../src/stats/Stats.tsx";
 import { EQUAL_SPLIT, LIVE } from "./mortgage-fixtures.ts";
+import { renderWithClient } from "./render-with-client.tsx";
 
 vi.mock("../src/api/mortgage.ts", () => ({ fetchMortgage: vi.fn(), saveMortgage: vi.fn() }));
 vi.mock("../src/api/stats.ts", () => ({
@@ -329,7 +330,7 @@ function slider(from: ReturnType<typeof within>): HTMLElement {
 }
 
 test("draws every chart from its series, each with the figures for the latest date", async () => {
-  render(<Stats />);
+  renderWithClient(<Stats />);
 
   const payment = await card("Mortgage payment");
   expect(payment.getByText("2026-03-15")).toBeTruthy();
@@ -380,7 +381,7 @@ test("a bucket nothing was filed to in this range says so instead of drawing an 
       one.bucket === "current-expenses" ? { ...one, points: [] } : one,
     ),
   });
-  render(<Stats />);
+  renderWithClient(<Stats />);
 
   await card("Put into the mortgage");
 
@@ -388,7 +389,7 @@ test("a bucket nothing was filed to in this range says so instead of drawing an 
 });
 
 test("a larger dot marks the payment that changed, and the large drop", async () => {
-  render(<Stats />);
+  renderWithClient(<Stats />);
 
   const payment = await card("Mortgage payment");
   const buffer = await card("Buffer balance");
@@ -398,7 +399,7 @@ test("a larger dot marks the payment that changed, and the large drop", async ()
 });
 
 test("the arrow keys move the figures to another date", async () => {
-  render(<Stats />);
+  renderWithClient(<Stats />);
   const payment = await card("Mortgage payment");
 
   fireEvent.keyDown(slider(payment), { key: "ArrowLeft" });
@@ -415,7 +416,7 @@ test("the arrow keys move the figures to another date", async () => {
 });
 
 test("a ratio change inside a year is said under the year's column", async () => {
-  render(<Stats />);
+  renderWithClient(<Stats />);
   const ratio = await card("Ratio by year");
 
   expect(ratio.getByText("From 2026-03-01: alex 54.1667 %, sam 45.8333 %")).toBeTruthy();
@@ -426,7 +427,7 @@ test("a ratio change inside a year is said under the year's column", async () =>
 });
 
 test("every chart has a table twin with the same figures", async () => {
-  render(<Stats />);
+  renderWithClient(<Stats />);
   const payment = await card("Mortgage payment");
 
   fireEvent.click(payment.getByRole("button", { name: "Show as a table" }));
@@ -446,7 +447,7 @@ test("every chart has a table twin with the same figures", async () => {
 });
 
 test("the settlements table names the formula each period was settled by", async () => {
-  render(<Stats />);
+  renderWithClient(<Stats />);
   const settlements = await card("Settlements");
 
   fireEvent.click(settlements.getByRole("button", { name: "Show as a table" }));
@@ -461,7 +462,7 @@ test("the settlements table names the formula each period was settled by", async
 });
 
 test("the spending legend names each category and the grey for none, and the table totals", async () => {
-  render(<Stats />);
+  renderWithClient(<Stats />);
   const spending = await card("Spending by period");
 
   const legend = spending.getByRole("list", { name: "Legend" });
@@ -499,7 +500,7 @@ test("a category keeps its colour whatever the others in the range are", async (
       },
     ],
   });
-  render(<Stats />);
+  renderWithClient(<Stats />);
   const spending = await card("Spending by period");
 
   const swatches = spending.getByRole("list", { name: "Legend" }).querySelectorAll(".swatch");
@@ -518,7 +519,7 @@ test("an item the range drops keeps its place, so the ones after it keep their c
       { label: "Internet", cents: [7000, 7000] },
     ],
   });
-  render(<Stats />);
+  renderWithClient(<Stats />);
   const fixed = await card("Fixed items by month");
 
   // One line drawn, so no legend box; its bars carry its own slot.
@@ -532,7 +533,7 @@ test("an item the range drops keeps its place, so the ones after it keep their c
 test("a range is chosen once, above the charts, and every chart is asked for it", async () => {
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(new Date("2026-10-10T12:00:00Z"));
-  render(<Stats />);
+  renderWithClient(<Stats />);
   await card("Settlements");
   expect(vi.mocked(fetchSettlementsStats).mock.calls[0]?.[0]).toEqual({ from: null, to: null });
 
@@ -567,7 +568,7 @@ test("a range is chosen once, above the charts, and every chart is asked for it"
 });
 
 test("days picked by hand are sent, and a first day after the last is not", async () => {
-  render(<Stats />);
+  renderWithClient(<Stats />);
   await card("Settlements");
 
   fireEvent.click(screen.getByRole("button", { name: "Pick days" }));
@@ -588,7 +589,7 @@ test("days picked by hand are sent, and a first day after the last is not", asyn
 });
 
 test("while a new range loads the old charts stay, dimmed", async () => {
-  render(<Stats />);
+  renderWithClient(<Stats />);
   const payment = await card("Mortgage payment");
   const later = deferred<MortgagePaymentsResponse>();
   vi.mocked(fetchMortgagePayments).mockReturnValue(later.promise);
@@ -612,7 +613,7 @@ test("one chart failing says what the server said and leaves the others drawn", 
   vi.mocked(fetchBufferStats).mockRejectedValue(
     new AppError("UNREACHABLE", "The ledger API is not answering."),
   );
-  render(<Stats />);
+  renderWithClient(<Stats />);
 
   expect((await screen.findByRole("alert")).textContent).toBe("The ledger API is not answering.");
   await card("Mortgage payment");
@@ -629,7 +630,7 @@ test("on a 360px phone a line chart is drawn 360px wide and a long column chart 
     ),
     series: [{ label: "Internet", cents: Array<number>(24).fill(7000) }],
   });
-  render(<Stats />);
+  renderWithClient(<Stats />);
 
   const payment = await card("Mortgage payment");
   const fixed = await card("Fixed items by month");
@@ -661,7 +662,7 @@ test("a one-cent deposit with nothing to pay directly still says who owes whom",
       },
     ],
   });
-  render(<Stats />);
+  renderWithClient(<Stats />);
   const settlements = await card("Settlements");
 
   fireEvent.click(settlements.getByRole("button", { name: "Show as a table" }));
@@ -674,7 +675,7 @@ test("a one-cent deposit with nothing to pay directly still says who owes whom",
 });
 
 test("a mouse gets the figures in a tip, a finger does not, and the readout keeps its height", async () => {
-  render(<Stats />);
+  renderWithClient(<Stats />);
   const buffer = await card("Buffer balance");
   const box = slider(buffer).closest(".chart-box");
   if (box === null) throw new Error("no chart box");

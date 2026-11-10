@@ -8,12 +8,13 @@
  */
 
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, screen, within } from "@testing-library/react";
 import { AppError } from "@ledger/contract";
 import type { DescribeWorkbookResponse } from "@ledger/contract";
 import type * as WorkbookApi from "../src/api/workbook.ts";
 import { confirmWorkbook, describeWorkbook } from "../src/api/workbook.ts";
 import { ImportWorkbook } from "../src/import/ImportWorkbook.tsx";
+import { renderWithClient } from "./render-with-client.tsx";
 import LG37 from "./fixtures/lg37-describe.json" with { type: "json" };
 
 vi.mock("../src/api/workbook.ts", async (importOriginal) => ({
@@ -55,7 +56,7 @@ beforeEach(() => {
 afterEach(cleanup);
 
 async function read(): Promise<void> {
-  render(<ImportWorkbook />);
+  renderWithClient(<ImportWorkbook />);
   const input = document.querySelector<HTMLInputElement>('input[type="file"]');
   if (input === null) throw new Error("no file input");
   fireEvent.change(input, {
@@ -151,7 +152,7 @@ test("a Confirm refused with the answers applied lists what failed, and stays on
 
 test("a reading with no such name asks nothing", async () => {
   vi.mocked(describeWorkbook).mockResolvedValue({ ...NAMES, unresolved: [] });
-  render(<ImportWorkbook />);
+  renderWithClient(<ImportWorkbook />);
   const input = document.querySelector<HTMLInputElement>('input[type="file"]');
   if (input === null) throw new Error("no file input");
   fireEvent.change(input, { target: { files: [new File([new Uint8Array([1])], "c.xlsx")] } });

@@ -35,9 +35,10 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { AppError, MAX_RECEIPT_PHOTO_BYTES, MAX_RECEIPTS_PER_PHOTO } from "@ledger/contract";
 import type { CheckedProposal, FileReceiptRequest, UploadedReceipt } from "@ledger/contract";
-import { fetchReceiptMatches, fileReceipt, readReceipt, uploadReceipt } from "../api/receipts.ts";
+import { fetchReceiptMatches, readReceipt, uploadReceipt } from "../api/receipts.ts";
 import { shownName } from "../people.tsx";
 import type { ShownNames } from "../people.tsx";
+import { useWrite } from "../writes.ts";
 import {
   JOINT_CARD,
   SHARED,
@@ -182,6 +183,8 @@ export function useReceiptQueue(): ReceiptQueue {
   const current = useRef<QueuedPhoto[]>([]);
   const readingNow = useRef(false);
   const filingNow = useRef(false);
+  // A filing changes the books, so it marks them stale (lg-98); a photo kept or read does not.
+  const fileReceipt = useWrite("fileReceipt");
   const uploads = useRef<Promise<void>>(Promise.resolve());
   const alive = useRef(true);
   useEffect(() => {

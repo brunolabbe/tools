@@ -7,24 +7,26 @@
  */
 
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { AppError } from "@ledger/contract";
 import type { InboxRow } from "@ledger/contract";
 import { fetchBuckets } from "../src/api/buckets.ts";
-import { fetchAdminHouseholds, fetchHousehold } from "../src/api/households.ts";
+import { adminRenamePerson, fetchAdminHouseholds, fetchHousehold } from "../src/api/households.ts";
 import { fetchAutoFiled, fetchInbox } from "../src/api/inbox.ts";
 import { fetchMe } from "../src/api/me.ts";
 import { fetchMortgage } from "../src/api/mortgage.ts";
-import { fetchPeopleNames } from "../src/api/people.ts";
+import { fetchPeople } from "../src/api/people.ts";
 import { importStatement } from "../src/api/statements.ts";
-import { fetchPeople, fetchRules } from "../src/api/rules.ts";
+import { fetchRules } from "../src/api/rules.ts";
 import { fetchRatios, fetchSalaries } from "../src/api/salaries.ts";
 import { App } from "../src/App.tsx";
 import { LIVE } from "./mortgage-fixtures.ts";
+import { peopleAnswer } from "./people-answer.ts";
+import { renderWithClient } from "./render-with-client.tsx";
 
 vi.mock("../src/api/me.ts", () => ({ fetchMe: vi.fn() }));
 vi.mock("../src/api/mortgage.ts", () => ({ fetchMortgage: vi.fn(), saveMortgage: vi.fn() }));
-vi.mock("../src/api/people.ts", () => ({ fetchPeopleNames: vi.fn() }));
+vi.mock("../src/api/people.ts", () => ({ fetchPeople: vi.fn() }));
 vi.mock("../src/api/statements.ts", () => ({ importStatement: vi.fn() }));
 vi.mock("../src/api/buckets.ts", () => ({ fetchBuckets: vi.fn() }));
 vi.mock("../src/api/salaries.ts", () => ({
@@ -40,7 +42,6 @@ vi.mock("../src/api/inbox.ts", () => ({
 }));
 vi.mock("../src/api/rules.ts", () => ({
   fetchRules: vi.fn(),
-  fetchPeople: vi.fn(),
   createRule: vi.fn(),
   editRule: vi.fn(),
   retireRule: vi.fn(),
@@ -55,8 +56,9 @@ beforeEach(() => {
   vi.mocked(fetchMortgage).mockResolvedValue(LIVE);
   vi.mocked(fetchRules).mockResolvedValue([]);
   vi.mocked(fetchAutoFiled).mockResolvedValue([]);
-  vi.mocked(fetchPeople).mockResolvedValue(["alex", "sam"]);
-  vi.mocked(fetchPeopleNames).mockResolvedValue({ alex: "alex", sam: "sam" });
+  vi.mocked(fetchPeople).mockResolvedValue(
+    peopleAnswer(["alex", "sam"], [], { alex: "alex", sam: "sam" }),
+  );
   vi.mocked(fetchBuckets).mockResolvedValue({
     asOf: "2026-10-03",
     mortgage: { balanceCents: 0, own: [], lead: null },
@@ -86,7 +88,7 @@ test("the inbox tab carries the number of rows waiting", async () => {
     { ...WAITING, id: 2, description: "Achat /Autre Exemple", amountCents: -200 },
   ]);
 
-  render(<App />);
+  renderWithClient(<App />);
 
   expect(await screen.findByRole("button", { name: "Inbox (2)" })).toBeTruthy();
 });
@@ -94,7 +96,7 @@ test("the inbox tab carries the number of rows waiting", async () => {
 test("an empty inbox carries no number", async () => {
   vi.mocked(fetchInbox).mockResolvedValue([]);
 
-  render(<App />);
+  renderWithClient(<App />);
 
   await screen.findByRole("button", { name: "Inbox" });
   expect(screen.queryByRole("button", { name: /Inbox \(/u })).toBeNull();
@@ -102,7 +104,7 @@ test("an empty inbox carries no number", async () => {
 
 test("each tab shows its own screen, and the home screen is the first", async () => {
   vi.mocked(fetchInbox).mockResolvedValue([]);
-  render(<App />);
+  renderWithClient(<App />);
   expect(await screen.findByRole("heading", { name: "Mortgage" })).toBeTruthy();
 
   fireEvent.click(screen.getByRole("button", { name: "Paste" }));
@@ -119,7 +121,7 @@ test("each tab shows its own screen, and the home screen is the first", async ()
 
 test("the salaries tab shows the salaries screen", async () => {
   vi.mocked(fetchInbox).mockResolvedValue([]);
-  render(<App />);
+  renderWithClient(<App />);
 
   fireEvent.click(screen.getByRole("button", { name: "Salaries" }));
 
@@ -128,7 +130,6 @@ test("the salaries tab shows the salaries screen", async () => {
 
 // lg-6: the period tab. Its client is faked here like every other screen's.
 vi.mock("../src/api/periods.ts", () => ({
-  fetchMe: vi.fn().mockResolvedValue("alex"),
   fetchOpenPeriod: vi.fn().mockResolvedValue({
     start: null,
     end: "2026-10-03",
@@ -155,7 +156,7 @@ vi.mock("../src/api/rows.ts", () => ({
 
 test("the categories tab shows the spending categories screen", async () => {
   vi.mocked(fetchInbox).mockResolvedValue([]);
-  render(<App />);
+  renderWithClient(<App />);
 
   fireEvent.click(screen.getByRole("button", { name: "Categories" }));
 
@@ -165,7 +166,7 @@ test("the categories tab shows the spending categories screen", async () => {
 
 test("the period tab shows the period screen", async () => {
   vi.mocked(fetchInbox).mockResolvedValue([]);
-  render(<App />);
+  renderWithClient(<App />);
 
   fireEvent.click(screen.getByRole("button", { name: "Period" }));
 
@@ -199,7 +200,7 @@ vi.mock("../src/api/stats.ts", () => {
 
 test("the stats tab shows the history, with its one range above the charts", async () => {
   vi.mocked(fetchInbox).mockResolvedValue([]);
-  render(<App />);
+  renderWithClient(<App />);
 
   fireEvent.click(screen.getByRole("button", { name: "Stats" }));
 
@@ -214,7 +215,7 @@ test("an address in no household sees one page saying so, naming nobody, and no 
   vi.mocked(fetchInbox).mockResolvedValue([]);
   vi.mocked(fetchMe).mockRejectedValue(new AppError("FORBIDDEN"));
 
-  render(<App />);
+  renderWithClient(<App />);
 
   expect(await screen.findByRole("heading", { name: "No household" })).toBeTruthy();
   expect(screen.queryByRole("navigation", { name: "Screens" })).toBeNull();
@@ -227,7 +228,7 @@ test("any other failure of /api/me leaves the screens as they are (lg-20)", asyn
   vi.mocked(fetchInbox).mockResolvedValue([]);
   vi.mocked(fetchMe).mockRejectedValue(new AppError("UNREACHABLE"));
 
-  render(<App />);
+  renderWithClient(<App />);
 
   expect(await screen.findByRole("heading", { name: "Mortgage" })).toBeTruthy();
   expect(screen.queryByRole("heading", { name: "No household" })).toBeNull();
@@ -244,6 +245,7 @@ vi.mock("../src/api/households.ts", () => ({
   createHousehold: vi.fn(),
   adminAddMember: vi.fn(),
   adminRemoveMember: vi.fn(),
+  adminRenamePerson: vi.fn(),
 }));
 
 beforeEach(() => {
@@ -257,7 +259,7 @@ beforeEach(() => {
 
 test("a member has a household tab showing their own household, and no admin tab (lg-22)", async () => {
   vi.mocked(fetchInbox).mockResolvedValue([]);
-  render(<App />);
+  renderWithClient(<App />);
 
   fireEvent.click(await screen.findByRole("button", { name: "Household" }));
 
@@ -274,7 +276,7 @@ test("an admin who is a member has the admin tab as well (lg-22)", async () => {
     admin: true,
   });
   vi.mocked(fetchAdminHouseholds).mockResolvedValue([]);
-  render(<App />);
+  renderWithClient(<App />);
 
   fireEvent.click(await screen.findByRole("button", { name: "Admin" }));
 
@@ -287,7 +289,7 @@ test("an admin in no household sees the admin's screen alone, and no books (lg-2
   vi.mocked(fetchMe).mockRejectedValue(new AppError("FORBIDDEN"));
   vi.mocked(fetchAdminHouseholds).mockResolvedValue([]);
 
-  render(<App />);
+  renderWithClient(<App />);
 
   expect(await screen.findByRole("heading", { name: "Households" })).toBeTruthy();
   expect(screen.queryByRole("navigation", { name: "Screens" })).toBeNull();
@@ -304,7 +306,7 @@ test.each(["UNREACHABLE", "RATE_LIMITED", "INTERNAL"] as const)(
     vi.mocked(fetchMe).mockRejectedValue(new AppError("FORBIDDEN"));
     vi.mocked(fetchAdminHouseholds).mockRejectedValue(new AppError(code));
 
-    render(<App />);
+    renderWithClient(<App />);
 
     expect(await screen.findByRole("navigation", { name: "Screens" })).toBeTruthy();
     await waitFor(() => expect(vi.mocked(fetchAdminHouseholds)).toHaveBeenCalled());
@@ -314,9 +316,24 @@ test.each(["UNREACHABLE", "RATE_LIMITED", "INTERNAL"] as const)(
 );
 
 // lg-33: the shell asks how each person is shown and every screen prints it; a
-// rename made meanwhile is on the next tab opened.
-test("the shell hands every screen the shown names, asked again on a change of tab (lg-33)", async () => {
+// rename made meanwhile is on the next tab opened. Since lg-98 the shell no
+// longer asks on every change of tab: the rename marks the names stale, and
+// they are read again.
+test("the shell hands every screen the shown names, and a rename is on the next tab opened (lg-33)", async () => {
   vi.mocked(fetchInbox).mockResolvedValue([]);
+  vi.mocked(fetchMe).mockResolvedValue({
+    person: { id: "alex", email: "alex@example.test", household: "home" },
+    admin: true,
+  });
+  vi.mocked(fetchAdminHouseholds).mockResolvedValue([
+    {
+      id: "home",
+      name: "The test household",
+      members: [{ address: "alex@example.test", person: "alex", name: "alex", firstSignIn: null }],
+      people: [{ person: "alex", name: "alex", standing: "in" }],
+    },
+  ]);
+  vi.mocked(adminRenamePerson).mockResolvedValue({ person: "alex", name: "Alex" });
   vi.mocked(fetchRatios).mockResolvedValue({
     asOf: "2026-10-03",
     ratios: [],
@@ -332,10 +349,19 @@ test("the shell hands every screen the shown names, asked again on a change of t
       enteredBy: "alex",
     },
   });
-  render(<App />);
-  await waitFor(() => expect(vi.mocked(fetchPeopleNames)).toHaveBeenCalled());
+  renderWithClient(<App />);
+  await waitFor(() => expect(vi.mocked(fetchPeople)).toHaveBeenCalled());
 
-  vi.mocked(fetchPeopleNames).mockResolvedValue({ alex: "Alex", sam: "sam" });
+  // The rename, on the admin's screen; the API's names answer it from then on.
+  fireEvent.click(await screen.findByRole("button", { name: "Admin" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Rename alex" }));
+  fireEvent.change(screen.getByLabelText("New name for alex"), { target: { value: "Alex" } });
+  vi.mocked(fetchPeople).mockResolvedValue(
+    peopleAnswer(["alex", "sam"], [], { alex: "Alex", sam: "sam" }),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  await waitFor(() => expect(vi.mocked(fetchPeople)).toHaveBeenCalledTimes(2));
+
   fireEvent.click(screen.getByRole("button", { name: "Salaries" }));
 
   expect(
@@ -347,7 +373,7 @@ test("the shell hands every screen the shown names, asked again on a change of t
 // lg-41: after Period, a screen listing every bank row.
 test("the history tab follows the period tab and shows the history screen (lg-41)", async () => {
   vi.mocked(fetchInbox).mockResolvedValue([]);
-  render(<App />);
+  renderWithClient(<App />);
 
   const tabs = within(screen.getByRole("navigation", { name: "Screens" }))
     .getAllByRole("button")
@@ -359,10 +385,10 @@ test("the history tab follows the period tab and shows the history screen (lg-41
   expect(await screen.findByText("0 rows match.")).toBeTruthy();
 });
 
-// lg-54: the count is asked again when a paste is stored, not only on the next tab.
+// lg-54: the count is asked again when a paste is stored, with no change of tab.
 test("the inbox tab's count changes when a paste is stored, with no change of tab (lg-54)", async () => {
   vi.mocked(fetchInbox).mockResolvedValue([]);
-  render(<App />);
+  renderWithClient(<App />);
   await screen.findByRole("button", { name: "Inbox" });
   fireEvent.click(screen.getByRole("button", { name: "Paste" }));
   fireEvent.change(screen.getByLabelText("Transactions copied from AccèsD"), {
@@ -407,7 +433,7 @@ const HOUSEHOLD_TAGLINE = "The household’s shared account.";
 
 test("the household's own screen has the shared header and footer, and asks nothing of /health", async () => {
   vi.mocked(fetchInbox).mockResolvedValue([]);
-  render(<App />);
+  renderWithClient(<App />);
   await screen.findByRole("heading", { name: "Mortgage" });
 
   const banner = screen.getByRole("banner");
@@ -427,7 +453,7 @@ test("the no-household screen has the header with the household's tagline, and t
   vi.mocked(fetchInbox).mockResolvedValue([]);
   vi.mocked(fetchMe).mockRejectedValue(new AppError("FORBIDDEN"));
 
-  render(<App />);
+  renderWithClient(<App />);
   await screen.findByRole("heading", { name: "No household" });
 
   const banner = screen.getByRole("banner");
@@ -441,7 +467,7 @@ test("the admin's screen has the header tagged Admin, and the footer", async () 
   vi.mocked(fetchMe).mockRejectedValue(new AppError("FORBIDDEN"));
   vi.mocked(fetchAdminHouseholds).mockResolvedValue([]);
 
-  render(<App />);
+  renderWithClient(<App />);
   await screen.findByRole("heading", { name: "Households" });
 
   const banner = screen.getByRole("banner");

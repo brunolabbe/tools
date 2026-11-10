@@ -15,16 +15,18 @@
  */
 
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import type { QueryClient } from "@tanstack/react-query";
 import { AppError } from "@ledger/contract";
 import type { ImportStatementReport } from "@ledger/contract";
 import { importStatement } from "../src/api/statements.ts";
+import { inboxQuery } from "../src/queries.ts";
 import { StatementPaste } from "../src/statements/StatementPaste.tsx";
+import { renderWithClient, testQueryClient } from "./render-with-client.tsx";
 
 vi.mock("../src/api/statements.ts", () => ({ importStatement: vi.fn() }));
 
 const stored = vi.mocked(importStatement);
-const onStored = vi.fn();
 const onOpenInbox = vi.fn();
 
 beforeEach(() => {
@@ -54,11 +56,15 @@ const PASTE = [
   "",
 ].join("\n");
 
-function paste(text: string): void {
-  render(<StatementPaste onStored={onStored} onOpenInbox={onOpenInbox} />);
+/** Pastes `text`, over a cache that holds the inbox's count as the shell read it. */
+function paste(text: string): QueryClient {
+  const client = testQueryClient();
+  client.setQueryData(inboxQuery.queryKey, []);
+  renderWithClient(<StatementPaste onOpenInbox={onOpenInbox} />, { client });
   fireEvent.change(screen.getByLabelText("Transactions copied from AccèsD"), {
     target: { value: text },
   });
+  return client;
 }
 
 test("previews the parsed rows, newest first, and stores nothing until confirmed", () => {
@@ -212,30 +218,35 @@ test("a paste that added no rows says nothing about filing (lg-54)", async () =>
   expect(screen.queryByRole("button", { name: "Open the inbox" })).toBeNull();
 });
 
-test("the shell is told once the paste is stored, and not before (lg-54)", async () => {
+/** Whether the shell's read of the inbox has been marked stale, so its count is read again. */
+function inboxStale(client: QueryClient): boolean | undefined {
+  return client.getQueryState(inboxQuery.queryKey)?.isInvalidated;
+}
+
+test("the shell's inbox count is made stale once the paste is stored, and not before (lg-54)", async () => {
   stored.mockResolvedValue({
     rowsAdded: 1,
     rowsAlreadyPresent: 0,
     tailBalanceCents: 210_000,
     rowsInInbox: 1,
   });
-  paste(PASTE);
+  const client = paste(PASTE);
   fireEvent.click(screen.getByRole("button", { name: "Preview" }));
-  expect(onStored).not.toHaveBeenCalled();
+  expect(inboxStale(client)).toBe(false);
 
   fireEvent.click(screen.getByRole("button", { name: "Confirm and store" }));
-  await waitFor(() => expect(onStored).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(inboxStale(client)).toBe(true));
 });
 
 test("a refused paste does not tell the shell anything was stored (lg-54)", async () => {
   stored.mockRejectedValue(new AppError("STATEMENT_CHAIN_BROKEN", "Not stored."));
-  paste(PASTE);
+  const client = paste(PASTE);
   fireEvent.click(screen.getByRole("button", { name: "Preview" }));
 
   fireEvent.click(screen.getByRole("button", { name: "Confirm and store" }));
 
   await waitFor(() => expect(screen.getByRole("alert")).toBeTruthy());
-  expect(onStored).not.toHaveBeenCalled();
+  expect(inboxStale(client)).toBe(false);
 });
 
 test("one row added and waiting says the row waits, not '1 of the 1 rows' (lg-54)", async () => {

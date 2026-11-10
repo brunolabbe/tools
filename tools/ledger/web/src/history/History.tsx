@@ -17,6 +17,7 @@
  */
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatCents, parseTypedAmountCents } from "@ledger/books";
 import { AppError, BUCKETS, JOINT_PERSON_FILTER } from "@ledger/contract";
 import type {
@@ -26,14 +27,9 @@ import type {
   RowOrder,
   RowSort,
   RowsQuery,
-  SpendingCategory,
   StoredRow,
 } from "@ledger/contract";
-import { classifyRow } from "../api/inbox.ts";
-import { fetchPeriods } from "../api/periods.ts";
 import { fetchRows } from "../api/rows.ts";
-import { fetchPeople } from "../api/rules.ts";
-import { fetchSpendingCategories } from "../api/spending.ts";
 import {
   BUCKET_LABELS,
   CLASSIFICATION_SOURCE_LABELS,
@@ -43,6 +39,17 @@ import {
 import { AnswerControls } from "../inbox/AnswerControls.tsx";
 import { byShownName, usePeopleNames } from "../people.tsx";
 import { spendingNames } from "../spending/Picker.tsx";
+import {
+  categoriesQuery,
+  everyone,
+  failureOf,
+  historyRowsQuery,
+  peopleIn,
+  peopleQuery,
+  periodsQuery,
+  settledRead,
+} from "../queries.ts";
+import { useWrite } from "../writes.ts";
 
 /** How many rows one request brings. */
 const PAGE = 50;
@@ -154,16 +161,24 @@ export function History(): React.ReactElement {
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState<Filters>(NO_FILTERS);
   const [open, setOpen] = useState(false);
-  const [people, setPeople] = useState<string[]>([]);
+  const client = useQueryClient();
+  // The history names everyone it ever held, retired at a close or not (lg-35).
+  const named = useQuery({ ...peopleQuery, select: everyone });
+  const people = named.data ?? [];
   // Who a change may file a row to: the members now, not everyone the books held (lg-95).
-  const [members, setMembers] = useState<string[]>([]);
-  const [categories, setCategories] = useState<SpendingCategory[]>([]);
-  const [load, setLoad] = useState<Load>({ state: "loading" });
-  const [more, setMore] = useState(false);
-  const [problem, setProblem] = useState<string | null>(null);
+  const inNow = useQuery({ ...peopleQuery, select: peopleIn });
+  const members = inNow.data ?? [];
+  const listed = useQuery(categoriesQuery);
+  const categories = listed.data ?? [];
+  // Its own read: a failure here must not take the names and the categories with it.
   // `null` until read, and for good if the read failed: then no row is said to be in
   // a closed period or in the open one.
-  const [periods, setPeriods] = useState<ClosedPeriod[] | null>(null);
+  const closedRead = useQuery(periodsQuery);
+  const periods: ClosedPeriod[] | null = closedRead.data ?? null;
+  // The list's own write: it resolves once stored, and the list is read again below.
+  const classifyRow = useWrite("classifyRow", { wait: false });
+  const [more, setMore] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
   // The row whose person and bucket are open to change, and what the last change said.
   const [changing, setChanging] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
@@ -180,35 +195,6 @@ export function History(): React.ReactElement {
     return () => clearTimeout(timer);
   }, [text]);
 
-  useEffect(() => {
-    const controller = new AbortController();
-    void (async (): Promise<void> => {
-      try {
-        const [who, current, spending] = await Promise.all([
-          // The history names everyone it ever held, retired at a close or not (lg-35).
-          fetchPeople(controller.signal, "everyone"),
-          fetchPeople(controller.signal, "in"),
-          fetchSpendingCategories(controller.signal),
-        ]);
-        setPeople(who);
-        setMembers(current);
-        setCategories(spending);
-      } catch (error: unknown) {
-        if (!controller.signal.aborted) setProblem(AppError.from(error).message);
-      }
-    })();
-    // Its own read: a failure here must not take the names and the categories with it.
-    void (async (): Promise<void> => {
-      try {
-        const closed = await fetchPeriods(controller.signal);
-        setPeriods(closed);
-      } catch {
-        // The control says the periods are unknown; the list itself is unaffected.
-      }
-    })();
-    return () => controller.abort();
-  }, []);
-
   const asked = useMemo(() => queryOf(search, filters), [search, filters]);
   const badFilter = "problem" in asked ? asked.problem : null;
   // One string stands for the query, so an unrelated render never reads again.
@@ -217,41 +203,45 @@ export function History(): React.ReactElement {
   // A new query starts from "loading" with no problem shown, not from the list
   // the last one drew. Derived state, set during render, so that list is never
   // painted under the new filters — an effect would paint it first.
+  // The last query a list was asked for: a filter that cannot be sent leaves it shown.
   const [askedKey, setAskedKey] = useState(key);
+  const [listedKey, setListedKey] = useState(key);
   if (askedKey !== key) {
     setAskedKey(key);
     if (key !== null) {
-      setLoad({ state: "loading" });
+      setListedKey(key);
       setProblem(null);
+      setUnread(new Set());
     }
   }
 
-  useEffect(() => {
-    if (key === null) return;
-    const controller = new AbortController();
-    void (async (): Promise<void> => {
-      try {
-        const answer = await fetchRows(
-          { ...(JSON.parse(key) as RowsQuery), offset: 0, limit: PAGE },
-          controller.signal,
-        );
-        // A request that was dropped may still answer; its list is not the one asked for now.
-        if (controller.signal.aborted) return;
-        setLoad({ state: "ready", rows: answer.rows, total: answer.total });
-        setUnread(new Set());
-      } catch (error: unknown) {
-        if (!controller.signal.aborted) {
-          setLoad({ state: "failed", message: AppError.from(error).message });
-        }
-      }
-    })();
-    return () => {
-      controller.abort();
+  // Each list is one entry in the cache: a filter asked for again within `staleTime`
+  // is drawn from it, and a request dropped for a newer filter never lands (lg-98).
+  const rowsQuery = historyRowsQuery(
+    listedKey === null ? {} : (JSON.parse(listedKey) as RowsQuery),
+    PAGE,
+  );
+  const rowsRead = useQuery({ ...rowsQuery, enabled: listedKey !== null });
+  const rowsFailure = failureOf(rowsRead);
+  const load: Load =
+    rowsFailure !== null
+      ? { state: "failed", message: rowsFailure }
+      : rowsRead.data === undefined
+        ? { state: "loading" }
+        : { state: "ready", rows: rowsRead.data.rows, total: rowsRead.data.total };
+  const listsFailure = failureOf(named, inNow, listed);
+
+  // A further page in flight is dropped with the list it was for.
+  useEffect(
+    () => () => {
       moreRequest.current?.abort();
       moreRequest.current = null;
       setMore(false);
-    };
-  }, [key]);
+    },
+    // `key` is a trigger: the cleanup runs when the query changes, and reads nothing of it.
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies
+    [key],
+  );
 
   const showMore = async (): Promise<void> => {
     if (load.state !== "ready" || key === null) return;
@@ -265,7 +255,10 @@ export function History(): React.ReactElement {
         controller.signal,
       );
       if (controller.signal.aborted) return;
-      setLoad({ state: "ready", rows: [...load.rows, ...answer.rows], total: answer.total });
+      client.setQueryData(rowsQuery.queryKey, {
+        rows: [...load.rows, ...answer.rows],
+        total: answer.total,
+      });
     } catch (error: unknown) {
       if (!controller.signal.aborted) setProblem(AppError.from(error).message);
     } finally {
@@ -301,12 +294,10 @@ export function History(): React.ReactElement {
           : " The next close will carry this correction.";
     setNotice(`${row.description} is now ${answerLabel({ personId, bucket }, names)}.${carried}`);
     try {
-      const answer = await fetchRows({
-        ...(JSON.parse(key) as RowsQuery),
-        offset: 0,
-        limit: Math.max(PAGE, load.rows.length),
-      });
-      setLoad({ state: "ready", rows: answer.rows, total: answer.total });
+      // As many rows as are shown, so a page the person opened stays open
+      // (`historyRowsQuery`). The write has asked already, and this waits on that read.
+      const reread = await settledRead(client, rowsQuery.queryKey);
+      if (reread?.status === "error") throw AppError.from(reread.error);
       setUnread(new Set());
       // The button was enabled while the re-read ran, so this row's control may have been
       // reopened on the answer the list has just replaced (it keeps the answer it opened with).
@@ -472,9 +463,9 @@ export function History(): React.ReactElement {
           {badFilter}
         </p>
       )}
-      {problem !== null && (
+      {(problem ?? listsFailure) !== null && (
         <p className="bad" role="alert">
-          {problem}
+          {problem ?? listsFailure}
         </p>
       )}
       {notice !== null && <output>{notice}</output>}
