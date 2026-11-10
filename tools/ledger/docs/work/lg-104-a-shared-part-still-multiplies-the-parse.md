@@ -943,3 +943,41 @@ built (both exit 0). The code is commit `08c22e7a`.
   `readSheets`. Listed once with 20,000 relationships: `bookSheets` 148 ms, `readSheets`
   220 ms, +38.1 MB. Listed 50 times: `bookSheets` 4,829 ms, `readSheets` 13,565 ms,
   +68.6 MB.
+
+### 2026-11-10, the external-link listing, built (Claude Opus 5.5)
+
+- **The refusal, commit `07a1471f`.** `eachPartListedOnce` in `workbook-parts.ts` reads
+  `[Content_Types].xml` with the ported tag reader. It refuses a workbook in which two
+  `Override` tags name one part. Names are compared as `safegetzipfile` finds a part:
+  case does not count, `/` and `\` count as one, and a leading `/` is stripped as
+  `strip_front_slash` does. It also refuses two names whose `.rels` would be one part.
+  - It applies to every content type, not only external links. The package format gives
+    a part one `Override`, and no workbook Excel saves lists one twice.
+  - A content-types part that exists and cannot be read is refused.
+  - `refuseUnlessEachSheetIsItsOwn` calls it right after `workbookEntries`, before the
+    `bookSheets` read. The error is `WORKBOOK_NOT_XLSX`, with the message "lists one of
+    its parts more than once". That code fits as it does for the other refusals: the
+    file is not a workbook a household saves.
+- **Tests,** built by the new helper `listedLinkWorkbook`. Six new tests, all passing at
+  `07a1471f`: 204 of 204 across the four spec files.
+  - `xlsx.test.ts`, the describe block "a part the content types list more than once is
+    refused before SheetJS reads the workbook": a link listed once is read; a link listed
+    50 times, in another case, with backslashes, or without the leading `/` is refused.
+  - `workbook-describe.test.ts`, "… through the route": refused by Describe and by
+    Confirm, nothing asked or written.
+  - My first backslash case was wrong, not the code. It turned every `/` into `\`, leading
+    one included, and SheetJS strips only a leading `/`, so it would not find that part
+    either. The case now drops the leading slash first.
+- **Mutation.** With the `eachPartListedOnce` refusal disabled in `xlsx.ts`, 5 of 204
+  tests fail: the four refusal cases and the route test. Restored from `07a1471f`, and
+  `git status` was clean.
+- **`links.mts` on the head (`07a1471f`).** One process at a time, under
+  `--max-old-space-size=900`, with nothing else running.
+  - Listed once, 20,000 relationships: `bookSheets` 131 ms; `readSheets` read 1 sheet in
+    196 ms; +42.6 MB; exit 0.
+  - Listed 50 times: `readSheets` refused `WORKBOOK_NOT_XLSX` in 2 ms; exit 0. The probe
+    calls `XLSX.read` with `bookSheets` itself before `readSheets`, and that direct call
+    still took 4,054 ms. The line's +63.3 MB is that call's too. `readSheets` reaches no
+    SheetJS read on this file.
+- **The real workbook at `07a1471f`.** Read in place, counts only: 14 sheets and 3,513
+  cells, as at the base.
