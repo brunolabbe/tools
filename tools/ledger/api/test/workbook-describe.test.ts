@@ -57,6 +57,7 @@ import {
   SheetWriter,
   commentsPart,
   entriesOf,
+  listedLinkWorkbook,
   localNameWorkbook,
   paddedDeflate,
   rawZip,
@@ -1196,4 +1197,29 @@ describe("a part SheetJS would read for many sheets, through the route (lg-104)"
       expect(counts(started)).toEqual(before);
     },
   );
+});
+
+// lg-104, the owner's answer of 2026-11-10: an external link listed 50 times in the content
+// types, whose `.rels` SheetJS would parse 50 times, through the route.
+describe("a part the content types list more than once, through the route (lg-104)", () => {
+  test("is WORKBOOK_NOT_XLSX by Describe and by Confirm, and nothing is asked or written", async () => {
+    const listed = listedLinkWorkbook(
+      Array.from({ length: 50 }, () => "/xl/externalLinks/externalLink1.xml"),
+      10,
+    );
+    const model = fake(answering(fixture("lg7").layout));
+    const started = await start({ ask: model.ask });
+    const before = counts(started);
+
+    const described = await describeFile(started, listed);
+    const confirmed = await confirmFile(started, listed, validLayout());
+
+    for (const response of [described, confirmed]) {
+      expect(response.statusCode).toBe(415);
+      expect(errorOf(response).code).toBe("WORKBOOK_NOT_XLSX");
+    }
+    expect(started.reader.calls).toBe(2);
+    expect(model.requests).toHaveLength(0);
+    expect(counts(started)).toEqual(before);
+  });
 });

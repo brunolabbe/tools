@@ -571,3 +571,38 @@ export function localNameWorkbook(count: number, part: Buffer, honest = false): 
     [{ name: big, data: part }, ...decoys],
   );
 }
+
+const EXTERNAL_LINK =
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.externalLink+xml";
+
+/**
+ * A one-sheet workbook (`A1` = `P1`) with one external-link part, whose `.rels` holds
+ * `relationships` relationships, listed in `[Content_Types].xml` once for each name in
+ * `names` (lg-104): SheetJS parses the link's `.rels` once for each listing, before even
+ * a `bookSheets` read returns.
+ */
+export function listedLinkWorkbook(names: readonly string[], relationships: number): Buffer {
+  const sheet = new SheetWriter("S");
+  sheet.set("A1", "P1");
+  const overrides = names
+    .map((name) => `<Override PartName="${name}" ContentType="${EXTERNAL_LINK}"/>`)
+    .join("");
+  const rels = Array.from(
+    { length: relationships },
+    (_, i) => `<Relationship Id="r${String(i)}" Type="t" Target="x${String(i)}"/>`,
+  ).join("");
+  return zipOf([
+    ...entriesOf(workbookOf([sheet])).map((entry) =>
+      entry.name === "[Content_Types].xml" && entry.data !== undefined
+        ? {
+            name: entry.name,
+            data: Buffer.from(
+              entry.data.toString("utf8").replace("</Types>", `${overrides}</Types>`),
+            ),
+          }
+        : entry,
+    ),
+    { name: "xl/externalLinks/externalLink1.xml", data: Buffer.from("<externalLink/>") },
+    { name: "xl/externalLinks/_rels/externalLink1.xml.rels", data: relationshipsPart(rels) },
+  ]);
+}

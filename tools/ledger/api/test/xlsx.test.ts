@@ -13,6 +13,7 @@ import {
   SheetWriter,
   commentsPart,
   entriesOf,
+  listedLinkWorkbook,
   localNameWorkbook,
   packaged,
   relatedWorkbook,
@@ -988,5 +989,42 @@ describe("a part SheetJS would read more than once for the sheets is refused bef
     const [sheet] = await readSheets(bytes);
 
     expect(sheet?.rows[0]?.[0]?.value).toEqual({ kind: "text", text: "P1" });
+  });
+});
+
+// lg-104, the owner's answer of 2026-11-10: SheetJS parses an external link's `.rels`
+// once for every time the content types list the link, before a `bookSheets` read
+// returns, so a part listed twice is refused before that read.
+describe("a part the content types list more than once is refused before SheetJS reads the workbook (lg-104)", () => {
+  const LINK = "/xl/externalLinks/externalLink1.xml";
+  const LISTED_TWICE = "lists one of its parts more than once";
+
+  async function refusal(data: Buffer): Promise<AppError | undefined> {
+    try {
+      await readSheets(data);
+    } catch (error: unknown) {
+      if (error instanceof AppError) return error;
+      throw error;
+    }
+    return undefined;
+  }
+
+  test("an external link listed once is read", async () => {
+    const [sheet] = await readSheets(listedLinkWorkbook([LINK], 10));
+
+    expect(sheet?.rows[0]?.[0]?.value).toEqual({ kind: "text", text: "P1" });
+  });
+
+  test.each([
+    ["the same name 50 times", Array.from({ length: 50 }, () => LINK)],
+    ["the same part in another case", [LINK, LINK.toUpperCase()]],
+    // SheetJS strips a leading `/`, never a leading `\`, so the backslashed name has none.
+    ["the same part with backslashes", [LINK, LINK.slice(1).replaceAll("/", "\\")]],
+    ["the same part without the leading slash", [LINK, LINK.slice(1)]],
+  ])("an external link listed as %s is WORKBOOK_NOT_XLSX", async (_what, names) => {
+    const error = await refusal(listedLinkWorkbook(names, 10));
+
+    expect(error?.code).toBe("WORKBOOK_NOT_XLSX");
+    expect(error?.message).toContain(LISTED_TWICE);
   });
 });

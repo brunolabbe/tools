@@ -14,7 +14,7 @@ import * as XLSX from "xlsx";
 import type { Cell, CellValue, Sheet } from "@ledger/books";
 import { AppError } from "@ledger/contract";
 import { MAX_WORKBOOK_ROWS, MAX_WORKBOOK_SLOTS } from "./workbook-bounds.ts";
-import { eachPartReadOnce, sheetPartsOf } from "./workbook-parts.ts";
+import { eachPartListedOnce, eachPartReadOnce, sheetPartsOf } from "./workbook-parts.ts";
 import { workbookEntries } from "./workbook-zip.ts";
 
 /** The one `SSF` call this file makes; SheetJS types the whole namespace `any`. */
@@ -227,7 +227,9 @@ export function rowsOf(
  *
  * The shape of the zip comes first, whatever the caller: whatever `workbookEntries`
  * refuses is refused here, so the import command meets the refusal the route does
- * (gate 2). Then the sheets are counted by SheetJS itself, with `bookSheets`, which
+ * (gate 2). Then a part listed twice in the content types is refused, since even a
+ * `bookSheets` read parses each listed external link's `.rels` (lg-104). Then the
+ * sheets are counted by SheetJS itself, with `bookSheets`, which
  * reads the workbook part and parses no sheet, and the workbook is refused unless
  * `workbook-parts.ts` finds the same number, each in a part that exists, no two in
  * one. Then every other part SheetJS reads for a sheet, its `.rels` and what they name
@@ -246,6 +248,13 @@ export function rowsOf(
  */
 function refuseUnlessEachSheetIsItsOwn(data: Buffer): void {
   const entries = workbookEntries(data);
+  // Before the `bookSheets` read, which parses each listed external link's `.rels`.
+  if (!eachPartListedOnce(data, entries)) {
+    throw new AppError(
+      "WORKBOOK_NOT_XLSX",
+      "That workbook lists one of its parts more than once; this import reads a workbook that lists each once.",
+    );
+  }
   let listed: unknown;
   try {
     listed = XLSX.read(data, { type: "buffer", bookSheets: true }).SheetNames;

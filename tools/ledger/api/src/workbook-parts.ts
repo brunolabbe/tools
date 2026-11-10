@@ -358,6 +358,41 @@ export function sheetPartsOf(bytes: Buffer, entries: readonly ZipEntry[]): numbe
   return sheetReadsOf(zipOf(bytes, entries))?.map((sheet) => sheet.part);
 }
 
+/** A part's name as `safegetzipfile` matches it: two names alike here may find one part. */
+function partKey(name: string): string {
+  return name.toLowerCase().replaceAll("\\", "/");
+}
+
+/**
+ * Whether `[Content_Types].xml` lists each part once (lg-104, the owner's answer of
+ * 2026-11-10). SheetJS's `parse_ct` keeps every `Override` of an external-link type, and
+ * `parse_zip` parses each listed link's `.rels` in turn, before even a `bookSheets` read
+ * returns: one link's `.rels` of 20 000 relationships listed 50 times took 4.8 s of
+ * `bookSheets` and 13.6 s of `readSheets` at `a100f429`, and was read. So a `PartName`
+ * listed twice, or two whose `.rels` would be one part, is refused, whatever the content
+ * type: the package format allows a part one `Override`, and no workbook Excel saves
+ * lists one twice. Names are compared as SheetJS finds a part, without regard to case
+ * or to `/` against `\`. `false` too when the content types exist and cannot be read.
+ */
+export function eachPartListedOnce(bytes: Buffer, entries: readonly ZipEntry[]): boolean {
+  const types = zipOf(bytes, entries).textOf("[Content_Types].xml");
+  if (types === undefined) return false;
+  const listed = new Set<string>();
+  for (const tag of types?.match(TAG) ?? []) {
+    const { root, attributes } = parseTag(tag);
+    if (root.replace(/<\w*:/u, "<") !== "<Override") continue;
+    const name = attributes.get("PartName");
+    // No name throws in SheetJS before anything is read.
+    if (name === undefined) continue;
+    const part = name.startsWith("/") ? name.slice(1) : name;
+    for (const key of [`part ${partKey(part)}`, `rels ${partKey(relationshipsOf(part))}`]) {
+      if (listed.has(key)) return false;
+      listed.add(key);
+    }
+  }
+  return true;
+}
+
 /**
  * Whether every part SheetJS reads for the workbook's sheets is read once (lg-104): for
  * each sheet, its part, its `.rels`, every part a relationship there names, and for a
