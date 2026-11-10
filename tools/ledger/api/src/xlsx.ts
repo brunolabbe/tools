@@ -15,7 +15,7 @@ import type { Cell, CellValue, Sheet } from "@ledger/books";
 import { AppError } from "@ledger/contract";
 import { MAX_WORKBOOK_ROWS, MAX_WORKBOOK_SLOTS } from "./workbook-bounds.ts";
 import { eachPartListedOnce, eachPartReadOnce, sheetPartsOf } from "./workbook-parts.ts";
-import { workbookEntries } from "./workbook-zip.ts";
+import { countInflated, workbookEntries } from "./workbook-zip.ts";
 
 /** The one `SSF` call this file makes; SheetJS types the whole namespace `any`. */
 const SSF = XLSX.SSF as { is_date: (format: string) => boolean };
@@ -246,8 +246,14 @@ export function rowsOf(
  * 1 400 by 100 part 14 times, +379.0 MB (peak 462.0 MB), since SheetJS names an
  * entry by the first and the copy found parts by the second.
  */
-function refuseUnlessEachSheetIsItsOwn(data: Buffer): void {
+async function refuseUnlessEachSheetIsItsOwn(data: Buffer): Promise<void> {
   const entries = workbookEntries(data);
+  // Every deflate stream through node's zlib first, keeping nothing (lg-104, the owner's
+  // answer of 2026-11-10): SheetJS's own inflate, which runs on any read, `bookSheets`
+  // included, spun at full CPU past 30 s on a corrupt `.rels` stream that zlib refuses in
+  // 3 ms. The route has counted these already, against its bound; the import command has
+  // not, and gets no bound here, only the refusal of a stream that does not inflate.
+  await countInflated(data, entries, Number.MAX_SAFE_INTEGER);
   // Before the `bookSheets` read, which parses each listed external link's `.rels`.
   if (!eachPartListedOnce(data, entries)) {
     throw new AppError(
@@ -283,7 +289,7 @@ function refuseUnlessEachSheetIsItsOwn(data: Buffer): void {
 
 /** Every sheet of the workbook in `data`, in the workbook's order. */
 export async function readSheets(data: Buffer): Promise<Sheet[]> {
-  refuseUnlessEachSheetIsItsOwn(data);
+  await refuseUnlessEachSheetIsItsOwn(data);
   let workbook: XLSX.WorkBook;
   try {
     // `sheetStubs`, or a formula saved with no value is dropped, formula and all:

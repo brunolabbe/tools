@@ -606,3 +606,31 @@ export function listedLinkWorkbook(names: readonly string[], relationships: numb
     { name: "xl/externalLinks/_rels/externalLink1.xml.rels", data: relationshipsPart(rels) },
   ]);
 }
+
+/**
+ * Gate 1's sheet-part variant of lg-104's F1: `part` stored first as
+ * `xl//worksheets/b.xml`, which SheetJS's `cfb_add` keeps as `xl/worksheets/b.xml`, and
+ * sheets whose targets SheetJS's first lookup (`xl/` and the target without its first
+ * `xl/`) finds it under: `worksheets/b.xml`, `/xl/worksheets/b.xml` and
+ * `xl/worksheets/b.xml`. Each has a decoy under the name the next lookup tries (the
+ * target, or `xl/` and the target), which a copy that keys the part as stored finds
+ * instead. With `more`, a target for each place in `worksheets/b.xml`, not after a `/`,
+ * that `xl/` can be put in and still be taken out by that first lookup.
+ */
+export function storedSlashWorkbook(part: Buffer, more = false): Buffer {
+  const plain = "worksheets/b.xml";
+  const targets = [plain, `/xl/${plain}`, `xl/${plain}`];
+  if (more) {
+    for (let at = 1; at <= plain.length; at += 1) {
+      if (plain[at - 1] !== "/") targets.push(`${plain.slice(0, at)}xl/${plain.slice(at)}`);
+    }
+  }
+  const decoys = targets.map((target, i) => ({
+    name: target.toLowerCase() === `xl/${plain}` ? `xl/${target}` : target,
+    data: textPart(`decoy${String(i + 1)}`),
+  }));
+  return packaged(
+    targets.map((target) => ({ target })),
+    [{ name: `xl//${plain}`, data: part }, ...decoys],
+  );
+}

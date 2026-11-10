@@ -21,6 +21,7 @@ import {
   relationshipsPart,
   rewiredWorkbook,
   sharedPartWorkbook,
+  storedSlashWorkbook,
   textPart,
   workbookOf,
   worksheetRelationship,
@@ -1026,5 +1027,110 @@ describe("a part the content types list more than once is refused before SheetJS
 
     expect(error?.code).toBe("WORKBOOK_NOT_XLSX");
     expect(error?.message).toContain(LISTED_TWICE);
+  });
+});
+
+// lg-104, gate 1's F1: SheetJS's CFB keeps an entry under `("Root Entry/" + name)` with its
+// first `//` made one `/`, so `/xl/a.xml` and `xl//a.xml` are `xl/a.xml` to it. A copy that
+// keyed the name as stored found no such part, and counted it as not read.
+describe("a part stored under a name SheetJS's CFB normalises is found as SheetJS finds it (lg-104, gate 1)", () => {
+  async function refusal(data: Buffer): Promise<AppError | undefined> {
+    try {
+      await readSheets(data);
+    } catch (error: unknown) {
+      if (error instanceof AppError) return error;
+      throw error;
+    }
+    return undefined;
+  }
+
+  /** How many of SheetJS's own sheets hang a comment on `A1`, and hold `text` there. */
+  function sheetJs(bytes: Buffer, text?: string): number {
+    const book = XLSX.read(bytes, { type: "buffer", dense: true });
+    return book.SheetNames.filter((name) => {
+      const cell = (book.Sheets[name] as XLSX.DenseSheet | undefined)?.["!data"]?.[0]?.[0];
+      return text === undefined ? (cell?.c?.length ?? 0) > 0 : cell?.v === text;
+    }).length;
+  }
+
+  test.each([["xl//comments1.xml"], ["/xl/comments1.xml"]])(
+    "one comments part stored as %s, named by 14 sheets' .rels, is refused",
+    async (stored) => {
+      const bytes = relatedWorkbook(
+        14,
+        () =>
+          `<Relationship Id="c1" Type="${relationshipType("comments")}" Target="../comments1.xml"/>`,
+        [{ name: stored, data: commentsPart(200) }],
+      );
+
+      expect(sheetJs(bytes)).toBe(14);
+      const error = await refusal(bytes);
+
+      expect(error?.code).toBe("WORKBOOK_NOT_XLSX");
+      expect(error?.message).toContain("names one of its parts from more than one place");
+    },
+  );
+
+  test("a content types part stored as /[Content_Types].xml, before a plain one, is the one read", async () => {
+    // SheetJS reads the first, which lists the link 50 times; the plain one lists it once.
+    const LINK = "/xl/externalLinks/externalLink1.xml";
+    const listed = entriesOf(
+      listedLinkWorkbook(
+        Array.from({ length: 50 }, () => LINK),
+        10,
+      ),
+    );
+    const once = entriesOf(listedLinkWorkbook([LINK], 10)).find(
+      (entry) => entry.name === "[Content_Types].xml",
+    );
+    if (once === undefined) throw new Error("no content types");
+    const bytes = zipOf([
+      ...listed.map((entry) =>
+        entry.name === "[Content_Types].xml" ? { ...entry, name: "/[Content_Types].xml" } : entry,
+      ),
+      once,
+    ]);
+
+    const error = await refusal(bytes);
+
+    expect(error?.code).toBe("WORKBOOK_NOT_XLSX");
+    expect(error?.message).toContain("lists one of its parts more than once");
+  });
+
+  test("one sheet part stored as xl//worksheets/b.xml, which SheetJS reads for three sheets, is refused", async () => {
+    const bytes = storedSlashWorkbook(textPart("BIG"));
+
+    expect(sheetJs(bytes, "BIG")).toBe(3);
+    expect((await refusal(bytes))?.code).toBe("WORKBOOK_NOT_XLSX");
+  });
+});
+
+// lg-104, the owner's answer of 2026-11-10 on gate 1's dropped item: SheetJS's own inflate
+// spun past 30 s on a corrupt deflate stream, on any read, before any check here could run.
+describe("a deflate stream that does not inflate is refused before SheetJS reads it (lg-104)", () => {
+  test("a workbook .rels whose stream is corrupt is WORKBOOK_NOT_XLSX, at once", async () => {
+    const bytes = zipOf(
+      entriesOf(
+        packaged(
+          [{ target: "worksheets/sheet1.xml" }],
+          [{ name: "xl/worksheets/sheet1.xml", data: textPart("P1") }],
+        ),
+      ).map((entry) =>
+        entry.name === "xl/_rels/workbook.xml.rels"
+          ? {
+              name: entry.name,
+              deflated: {
+                bytes: Buffer.from([0xff, 0xff, 0xff, 0xff]),
+                crc: 0,
+                size: entry.data?.length ?? 0,
+              },
+            }
+          : entry,
+      ),
+    );
+    const started = performance.now();
+
+    await expect(readSheets(bytes)).rejects.toMatchObject({ code: "WORKBOOK_NOT_XLSX" });
+    expect(performance.now() - started).toBeLessThan(5_000);
   });
 });

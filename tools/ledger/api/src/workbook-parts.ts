@@ -34,15 +34,22 @@
  * (entities and `_x0031_` in a target, a `>` inside a quoted name, an empty `r:id`
  * beside `strRelID`, a sheet with no id beside a relationship `Id="undefined"`, a tab
  * after a tag name); gate 3 found a local-header name (`workbook-zip.ts` now refuses
- * it), and lg-104's build a `<![CDATA[` section in a target and a `.rels` part saved as
- * UTF-16. Patching the next difference only reopens it. So the check that `xlsx.ts`
+ * it), lg-104's build a `<![CDATA[` section in a target and a `.rels` part saved as
+ * UTF-16, and lg-104's gate 1 a stored name such as `/xl/comments1.xml` or
+ * `xl//comments1.xml`, which SheetJS keeps as `xl/comments1.xml` and the copy, keying
+ * the name as stored, found under no name a relationship asks for: 14 sheets' comments
+ * read +329.5 MB that way. Patching the next difference only reopens it, and a part
+ * the copy cannot find is counted as not read, so the count of reads is as exact as the
+ * lookup and no more. So the check that `xlsx.ts`
  * makes is one SheetJS's own sheet list can contradict: it reads the list with
  * `bookSheets`, which parses no sheet, and refuses unless this copy finds the same
  * number of sheets, each resolved to a part that exists, and no two to the same one.
  * What this file does on top is to be as exact as it can be where a difference would
  * let two reads look distinct to the copy and the same to SheetJS: the tag and
  * attribute reading is `parsexmltag` and `tagregex` ported, the zip is searched as
- * `safegetzipfile` does, by each name a byte to a character as SheetJS's CFB reads it,
+ * `safegetzipfile` searches SheetJS's container: each name a byte to a character as
+ * its CFB reads it, under the path `cfb_add` keeps for it, after the two entries
+ * `init_cfb` seeds,
  * text is decoded a byte to a character as its `cc2str` does (so two different bytes
  * are never the same character here), and a part that `cc2str` would decode as UTF-16
  * is "cannot tell", a relationship is looked up as `hash[id]` is (an absent id is
@@ -185,12 +192,34 @@ function parseTag(tag: string): Tag {
   return { root, attributes };
 }
 
+/** The root of SheetJS's CFB container, which every path it keeps starts from. */
+const ROOT = "Root Entry/";
+
 /**
- * The zip as SheetJS's `safegetzipfile` searches it: no regard to case, `/` and `\`
- * alike, a `Root Entry/` prefix on a stored name ignored, the first stored name that
- * matches. Names are compared a byte to a character, as SheetJS's CFB reads them from
- * the local header (`workbook-zip.ts` refuses one the directory does not repeat). The
- * index is the part's identity.
+ * The entries SheetJS's `init_cfb` and `seed_cfb` put before the zip's own, by the key
+ * `safegetzipfile` matches: the root (`Root Entry/`, so the empty name, which
+ * `getzipdata` never looks up) and a four-byte seed. A zip entry under either name is
+ * never found, so neither is a part here (`-1`: nothing worth counting is read).
+ */
+const SEEDED = ["", "\u0001sh33tj5"];
+
+/**
+ * The path SheetJS's `cfb_add` keeps for an entry stored as `name`: the name itself
+ * when it starts with `Root Entry/`, else the root and the name joined, with the first
+ * `//` in the result made one `/` (lg-104, gate 1's F1). So `/xl/a.xml` and
+ * `xl//a.xml` are both `xl/a.xml` to SheetJS.
+ */
+function cfbPathOf(name: string): string {
+  return name.startsWith(ROOT) ? name : `${ROOT}${name}`.replace("//", "/");
+}
+
+/**
+ * The zip as SheetJS's `safegetzipfile` searches it: by the path `cfb_add` keeps for
+ * each entry, with its `Root Entry/` prefix taken off, after the entries `init_cfb`
+ * seeds; no regard to case, `/` and `\` alike, the first that matches. Names are
+ * compared a byte to a character, as SheetJS's CFB reads them from the local header
+ * (`workbook-zip.ts` refuses one the directory does not repeat). The index is the
+ * part's identity.
  */
 interface Zip {
   /** The index of the part `file` names, or -1. */
@@ -203,9 +232,12 @@ interface Zip {
 
 function zipOf(bytes: Buffer, entries: readonly ZipEntry[]): Zip {
   // The first index of each name, so a lookup is one step and not a walk of the entries.
-  const first = new Map<string, number>();
+  // The seeded entries come first, so a zip entry under one of their names is never found.
+  const first = new Map<string, number>(SEEDED.map((name) => [name, -1]));
   for (const [index, entry] of entries.entries()) {
-    const name = entry.rawName.replace(/^Root Entry\//u, "").toLowerCase();
+    const name = cfbPathOf(entry.rawName)
+      .replace(/^Root Entry\//u, "")
+      .toLowerCase();
     if (!first.has(name)) first.set(name, index);
   }
   const find = (file: string): number => {
