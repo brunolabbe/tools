@@ -97,8 +97,8 @@ reports `expected 0`.
 workbook-describe, seed 4: the log test runs seventh, with six tests before it.
 Those six logged more than twenty lines, so the `toBeGreaterThan(20)` at line
 791 passes. The `a workbook was described` line is logged at
-`tools/ledger/api/src/routes/workbook.ts:85`, on each describe request that
-reaches the route's handler, whether its answer is ok or a refusal. None of the
+`tools/ledger/api/src/routes/workbook.ts:85`, when the route answers a describe
+with a body, `ok` either way, and not when it refuses the request. None of the
 six logged it, which the assertion at line 807 shows, and the `describing a
 workbook (Done when 5)` describe, which sends describe requests, runs after the
 log test.
@@ -195,13 +195,13 @@ order is only ever shuffled by the flag on the command line.
 ## Done when
 
 1. `npx vitest run tools/ledger/api/test/csv-import.test.ts --sequence.shuffle --sequence.seed=N` reports every test passing for each N from 1 to 10, and the same for `tools/ledger/api/test/workbook-describe.test.ts`. The sweep output, with its counts, goes in the Log.
-2. Each log test passes when it is the only test selected by name: `npx vitest run tools/ledger/api/test/csv-import.test.ts -t "no line of any request above holds a CSV"` ends `Tests 1 passed | 62 skipped (63)`, and `npx vitest run tools/ledger/api/test/workbook-describe.test.ts -t "no line of any request above holds the upload"` ends `Tests 1 passed | 44 skipped (45)`. At the base the same commands exit 1 with `1 failed | 62 skipped (63)` and `1 failed | 44 skipped (45)`, so the counts are what discriminate.
+2. Each log test passes when it is the only test selected by name: `npx vitest run tools/ledger/api/test/csv-import.test.ts -t "no line of any request above holds a CSV"` exits 0 and reads `Tests  1 passed` with every other test skipped, and `npx vitest run tools/ledger/api/test/workbook-describe.test.ts -t "no line of any request above holds the upload"` does the same. The total is not pinned, so a fix that adds a test or splits a log test in two does not fail the line. At the base the same commands exit 1 and read `1 failed`, and a pattern that matches nothing reads no `passed` at all, so `1 passed` is what discriminates.
 3. No `LOGGED` precondition in either file is satisfied by an empty array: the `toBeGreaterThan(20)` and each `LOGGED.some(...)` assert against lines the test's own run produced.
 4. Unshuffled, both files pass in full: `npx vitest run tools/ledger/api/test/csv-import.test.ts` and `npx vitest run tools/ledger/api/test/workbook-describe.test.ts`, with the counts in the Log.
 5. `grep -n "tests in order\|Last: it reads" tools/ledger/api/test/csv-import.test.ts tools/ledger/api/test/workbook-describe.test.ts` prints nothing. At the base it prints one line per file (`workbook-describe.test.ts:790` and `csv-import.test.ts:1110`), so it fails there.
 6. `git diff --name-only origin/main...HEAD` lists only the two spec files and this ticket. Nothing under `tools/ledger/api/src` or `tools/ledger/contract` changes.
 7. `npm run check` exits 0, and `npm test -- --project ledger` passes through the test gate, both at the fix's head.
-8. A filtered run of an unrelated test passes, so a file-level hook cannot hide: `npx vitest run tools/ledger/api/test/csv-import.test.ts -t "the fake is called once on describe and never on confirm"` exits 0 with `Tests 1 passed | 62 skipped (63)`, and `npx vitest run tools/ledger/api/test/workbook-describe.test.ts -t "lg37: a fake answering its correct description"` exits 0 with `Tests 1 passed | 44 skipped (45)`. Both exit 0 at the base, measured 2026-11-10 (Reproduction 7).
+8. A filtered run of an unrelated test passes, so a file-level hook cannot hide: `npx vitest run tools/ledger/api/test/csv-import.test.ts -t "the fake is called once on describe and never on confirm"` exits 0 and reads `Tests  1 passed` with every other test skipped, and `npx vitest run tools/ledger/api/test/workbook-describe.test.ts -t "lg37: a fake answering its correct description"` does the same, without pinning the total. Both exit 0 at the base, measured 2026-11-10 (Reproduction 7).
 
 ## Log
 
@@ -253,6 +253,37 @@ gate's findings, each with what this round did:
   is not a Done when line.
 - F6, the seed-4 workbook log test runs seventh, not sixth, and the module comment
   is quoted as written. The claim that `a workbook was described` comes only from
-  the describing describe was wrong, since the route logs every describe that
-  reaches its handler; the Reproduction now says what the assertion at line 807
+  the describing describe was wrong, since the route logs the line when it
+  answers a describe with a body, `ok` either way, and not when it refuses the
+  request; the Reproduction now says what the assertion at line 807
   shows.
+
+**2026-11-10, the owner's answer on gate 2's two lows, recorded by the lander
+before the fixes.**
+
+- Question: gate 2 passed this filing and left two low findings, F6's remaining
+  clause (the route's `a workbook was described` line is not logged for a
+  refused describe) and N1 (`Done when 2` and `8` pin the files' totals, `(63)`
+  and `(45)`). Neither a `Done when` line depends on the first. Fix both at the
+  landing with no re-gate, fix F6 only, or fix neither?
+- Options: (1) fix both at the landing, with no re-gate (recommended); (2) fix
+  F6 only; (3) fix neither.
+- Choice: (1), fix both at the landing, with no re-gate. The recommended option.
+- Provenance: the owner, 2026-11-10, at tools-86 checkpoint 10. The
+  orchestrator relayed the answer in the lander's dispatch; the lander records
+  it as relayed and did not verify it against the owner directly.
+
+- 2026-11-10 — Gate 1's and gate 2's full reports are on the pull request
+  thread, #789; status unchanged.
+- 2026-11-10 — Fixed at landing by owner choice: gate 2, F6 remaining clause —
+  "false text, in the safe direction". The Reproduction and the gate 1 entry
+  above now say the line is logged when the route answers with a body, `ok`
+  either way, and not when it refuses the request. Proof, run after the commit:
+  `git diff 64c2d9a6 HEAD -- <this file> | grep -c '^-.*<fragment>'` → `1` for
+  each removed fragment, `whether its answer is ok or a refusal` and
+  `reaches its handler; the Reproduction`.
+- 2026-11-10 — Fixed at landing by owner choice: gate 2, N1 — "Done when 2 and 8
+  pin the files' totals". Both lines now require `Tests  1 passed` with every
+  other test skipped and exit 0, without pinning the total. Proof, the same
+  command: → `1` for `so the counts are what discriminate` (Done when 2) and `1`
+  for `never on confirm.*exits 0 with` (Done when 8).
