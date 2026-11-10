@@ -101,7 +101,8 @@ where it holds; (b) not now. **Chosen: (a).**
     (`resolveSingleProjectEntry`: "file-based projects own all of their values"),
     so `splitProject` sets repo-99's `maxWorkers: 4` itself under the same `isCi`;
     unproven here, because the gate sets `VITEST_MAX_WORKERS` locally and CI is
-    the only place `isCi` is true.
+    the only place `isCi` is true (gate 1 has since read it from vitest's config
+    resolution: the `maxWorkers: 4` entry below).
   - **Selection is by reading the file, not by a list.** `splitProject`
     (`vitest.isolation.ts`) puts a file in the isolated half when it matches
     `\bvi\.(?:mock|doMock|unmock|doUnmock|stubGlobal|stubEnv|resetModules)\b`, or
@@ -122,15 +123,17 @@ where it holds; (b) not now. **Chosen: (a).**
     a file as well as files, and ledger has two files whose tests depend on the
     ones above them: seeds 3 and 4 failed `csv-import.test.ts › no line of any
     request above holds a CSV's content…` and `workbook-describe.test.ts › no line of
-    any request above holds the upload's content…` (`expected 0 to be greater than
-    20`). Both fail with `--isolate` too (`npx vitest run
+    any request above holds the upload's content…` (`csv-import.test.ts` seed 3: `expected 0 to be greater than 20`;
+    `workbook-describe.test.ts` seed 4: `expected false to be true`). Both fail with `--isolate` too (`npx vitest run
     tools/ledger/api/test/csv-import.test.ts --sequence.shuffle --sequence.seed=3
     --isolate` → `1 failed | 62 passed`; `workbook-describe.test.ts` seed 4 → `1
     failed | 44 passed`), so they are not leaks between files. Ledger's five
     readings use `--sequence.shuffle.files`; planner's and downloader's use plain
-    `--sequence.shuffle`, which they pass. The two ledger files are a defect to
-    file for the ledger, not folded in: each needs its tests made independent of
-    their order, which is ledger test design and not this ticket's.
+    `--sequence.shuffle`, which they pass. The two ledger files are filed as lg-106
+    (pull request #789, branch `ledger-file-shuffle-order`, open) and the preflight
+    ghshim case as repo-144 (pull request #788, open), not folded in: each needs its
+    tests made independent of their order, which is test design and not this
+    ticket's.
   - **Core and `repo` are left unchanged.** Core: `--project core --isolate` 2.15,
     2.22, 1.79 s against 3.85, 1.97, 1.99 s split (three alternating pairs): no
     gain, so no container file in `packages/`. `repo`: 14.1 s with import at 3 %
@@ -196,7 +199,7 @@ where it holds; (b) not now. **Chosen: (a).**
   - **Done when 2 cannot be read in seconds.** The comparison run `40210503276`
     was vitest 4 and printed `import 144.65s, tests 814.81s`; vitest 5.0.5, which
     `main` runs now, prints each as a share of the summed time and no seconds. The
-    nearest `main` push run with its matrix executed is `42525621981` (`d7137816`,
+    nearest green `main` push run with its matrix executed is `42525621981` (`d7137816`,
     two docs commits and one ledger change before this base): ubuntu `341 passed | 1
     skipped (342)`, `Duration 229.18s (tests 83%, import 11%, environment 4%,
     transform 2%)`; windows `322.30s`, `import 11%`. So **ubuntu import went from
@@ -205,10 +208,15 @@ where it holds; (b) not now. **Chosen: (a).**
     wall time moves with its runner). In seconds that is a derived estimate and not
     a reading: with the old run's 815 s of tests held fixed, 11 % is about 108 s
     and 4 % about 36 s. The 145 s figure is not comparable to either, which the
-    brief could not have known; the Done when wants rewording to the share.
-  - **Not proven by anything run here:** that a file project's `maxWorkers: 4` took
-    effect on CI (vitest prints no worker count). The wall clock fell, which is
-    consistent with it and does not show it.
+    brief could not have known; the Done when wants rewording to the share. A nearer
+    `main` push run ran its matrix, `42536853653` at `7a1ad282` (ubuntu `269.18s`,
+    import 14 %; windows `379.57s`, import 14 %), and was red on one
+    `history.test.tsx` focus case; it is not the baseline used here, and against it
+    the fall is larger, so no conclusion changes (gate 1's F5).
+  - **`maxWorkers: 4`, read from vitest's own config resolution (gate 1's):** a
+    `createVitest` probe printing `project.config.maxWorkers` gives 4 for all eight
+    head projects and all five base projects under `CI=true`; with `CI` unset or
+    `false` it gives 11 (`nproc` is 12).
 - 2026-11-10, **the owner's answers at the gate checkpoint** (tools-86, checkpoint
   4, relayed by the orchestrator; each was the recommended option and none was
   overridden), recorded by the lander.
@@ -232,3 +240,38 @@ where it holds; (b) not now. **Chosen: (a).**
     `tools/planner/docs/work/pl-64-planner-tests-load-the-contract-twice-and-scan-archived-runs.md`:
     the planner project is now `tools/planner/vitest.config.ts`, and `splitProject`
     has no `exclude` option.
+- 2026-11-10 — Fixed at landing by owner choice: gate 1, F1 — "Build 2 and Done
+  when 1 name `--sequence.shuffle`; for ledger the Log used
+  `--sequence.shuffle.files`". The Log's "a defect to file" sentence now cites
+  lg-106 and repo-144 (Build 2's own wording is the
+  brief's). `git diff 5bee293c HEAD -- docs/work/repo-129-every-test-file-reimports-its-module-graph.md | grep -c '^-.*are a defect to$'` → `1`.
+- 2026-11-10 — Fixed at landing by owner choice: gate 1, F3 — "the header of
+  `no-model-environment.ts` says `setupFiles` is in the root `vitest.config.ts`,
+  and the opening of `testing.md` and the root `CLAUDE.md` still say the projects
+  are configured once in the root file". The owner authorised the wording of all
+  three, and nothing else in the two pages; landing edit, not gated. `git diff 5bee293c HEAD -- .claude/rules/testing.md | grep -c '^-.*configured once in the root'` → `1`;
+  `git diff 5bee293c HEAD -- CLAUDE.md | grep -c '^-.*configured in the root$'` → `1`;
+  `git diff 5bee293c HEAD -- tools/ledger/api/test/helpers/no-model-environment.ts | grep -c '^-.*in the root$'` → `1`.
+- 2026-11-10 — Fixed at landing by owner choice: gate 1, F4 — "the new test's
+  `MOCKS` regex omits `unmock` and `doUnmock`". Both are in `MOCKS` now. Proof, on
+  the fix's commit with a throwaway `tools/planner/api/test/zz-unmock-probe.test.ts`
+  holding one `vi.unmock("node:fs")` call and `unmock|doUnmock` taken out of
+  `NEEDS_ISOLATION`: the gated test (`git checkout 5bee293c -- scripts/test/vitest-projects.test.ts`)
+  → `Tests  2 passed (2)`, green under the mutation; the fixed test
+  `npx vitest run scripts/test/vitest-projects.test.ts` → `1 failed | 1 passed (2)`,
+  `planner: expected [ …(13) ] to deeply equal ArrayContaining{…}` naming the
+  probe. Restored with `git checkout 11d693a6 -- vitest.isolation.ts`, probe
+  removed. `doUnmock` was removed in the same mutation as `unmock` and the probe
+  calls only `unmock`, so `doUnmock` is covered by being in the same pattern and not
+  by a call of its own.
+- 2026-11-10 — Fixed at landing by owner choice: gate 1, F5 — "the Log's baseline
+  sentence calls `d7137816` 'the nearest `main` push run with its matrix
+  executed'". It now reads "nearest green" and names run `42536853653`, the nearer
+  red one, with its figures. `git diff 5bee293c HEAD -- docs/work/repo-129-every-test-file-reimports-its-module-graph.md | grep -c '^-.*nearest `main` push run with its matrix executed'` → `1`.
+- 2026-11-10 — Fixed at landing by owner choice: gate 1, F6 — "the Log gives
+  `expected 0 to be greater than 20` for both ledger files". Each file now carries
+  its own message. `git diff 5bee293c HEAD -- docs/work/repo-129-every-test-file-reimports-its-module-graph.md | grep -c '^-.*(`expected 0 to be greater than$'`→`1`.
+- 2026-11-10 — Fixed at landing by owner choice: gate 1's note — "the Log's 'Not
+  proven by anything run here: that a file project's `maxWorkers: 4` took effect
+  on CI' can be proven and now is". The Log's last reading is replaced by the gate's
+  probe and the earlier "unproven here" clause points to it. `git diff 5bee293c HEAD -- docs/work/repo-129-every-test-file-reimports-its-module-graph.md | grep -c '^-.*Not proven by anything run here'` → `1`.
