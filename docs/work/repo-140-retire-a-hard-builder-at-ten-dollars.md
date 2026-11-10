@@ -45,7 +45,12 @@ Three of eight first builds passed $15; none of the five under $10.40 needed a
 round. The fresh agents that finished the three expensive tickets cost $0.53 to
 $15.33 each, and every one that was a fixer cost under $1.40.
 
-## Decision — open
+## Decision — answered 2026-11-10 by the owner
+
+The owner answered at the tools-86 batch checkpoint 1, on 2026-11-10; the
+orchestrator relayed the answer in this build's dispatch. The question put:
+"repo-140: at what cost should a long-lived hard builder be retired?" The
+options offered, the recommended one first:
 
 - **(a) Lower the bar to about $10**, read at the first report: a builder past
   it is not resumed for a round; the round goes to a fresh `builder-hard`
@@ -59,17 +64,9 @@ $15.33 each, and every one that was a fixer cost under $1.40.
   whose first builds were the work.
 - **(c) Both.**
 
-## Decision — answered 2026-11-10 by the owner
-
-The owner answered at the tools-86 batch checkpoint 1, on 2026-11-10, and the
-orchestrator relayed the answer in this build's dispatch. The question put:
-"repo-140: at what cost should a long-lived hard builder be retired?" The
-options offered, the recommended one first: (a) lower the bar to about $10,
-read at the first report, which is this ticket's own recommendation; (b) keep
-$15 and add a dispatch split; (c) both.
-
-**Chosen: (a)**, the option above as written. No recommendation was overridden.
-Build 2 applies only to (b) or (c), so it is not built.
+**Chosen: (a)**, the option above as written, which is this ticket's own
+recommendation. No recommendation was overridden. Build 2 applies only to (b)
+or (c), so it is not built.
 
 ## Build
 
@@ -91,3 +88,74 @@ Build 2 applies only to (b) or (c), so it is not built.
 - 2026-11-01 — Filed from the 2026-11-01 review's reading of the eight
   batches' accounting tables (session tools-5d); figures copied from the
   entries, not re-run.
+- 2026-11-10 — Built on `repo-140-retire-at-ten` from `a100f429`, on the
+  owner's answer (a) recorded above. Commit 1 records the answer and sets
+  `status: ready`, and left the open heading beside it: `npm run status --
+  --show repo-140` then failed on the ticket. Commit 2 rewords that heading as
+  answered, which `docs/01-TICKETS.md` (_Decision — open_) requires, edits
+  `SKILL.md` step 6's paragraph, and writes this Log, and nothing else. Build 2
+  is not built: it applies only to (b) or (c).
+  - **Change.** The paragraph now reads the bar as about $10, read at the
+    builder's first report, and sends the round to a fresh `builder-hard`. The
+    pl-60 and pl-62 sentence is replaced by this ticket's measurement, which the
+    paragraph states in the figures below.
+  - **Done when 1.** `grep -n '\$15' .claude/skills/orchestrate-tickets/SKILL.md`
+    → no output, exit 1. The paragraph names $10 and repo-140.
+  - **Done when 2** is not met by this build. It binds the next `hard` ticket's
+    `reference/history.md` entry, which does not exist yet; unproven until then.
+  - **Figures, re-derived.** Each row is named by its agent id in the batch
+    sections of `reference/history.md`: "Batch 2026-10-25 (tools-a2)" (#669,
+    #670, #672), "Batch 2026-10-31 (tools-54)" (#680, #681), "(tools-54
+    second)" (#685, #686), "(tools-54 third)" (#692). A script in scratch summed
+    the Cost column per ticket; its output:
+
+    ```
+    lg-66     first 19.2996  gates 9.4466  fixers+maint 0.5322  later 25.3119  total 44.6115
+    lg-76     first 20.1357  gates 5.2842  fixers+maint 2.3594  later 7.6436  total 27.7793
+    repo-131  first 15.8642  gates 5.7254  fixers+maint 1.3106  later 7.0360  total 22.9002
+    lg-67     first 10.3909  gates 3.2843  fixers+maint 1.0484  later 4.3327  total 14.7236
+    lg-71     first 9.4208  gates 4.6064  fixers+maint 1.0994  later 5.7058  total 15.1266
+    lg-74     first 6.5995  gates 3.0590  fixers+maint 0.5376  later 3.5966  total 10.1961
+    lg-78     first 6.3919  gates 2.5242  fixers+maint 0.4941  later 3.0183  total 9.4102
+    lg-77     first 7.1676  gates 2.7725  fixers+maint 0.4572  later 3.2297  total 10.3973
+    three expensive tickets, later agents: min 0.4800 max 15.3331
+    all fixers: min 0.4572 max 1.3106 count 11
+    ```
+
+    The rows behind the paragraph's figures: `builder-hard` first builds
+    `a8050d856d258c4cc` (lg-78, $6.39) to `a57335d72eb728e06` (lg-76, $20.14);
+    above fifteen dollars `a7c7a6062d2340117` (lg-66, $19.30),
+    `a57335d72eb728e06` (lg-76, $20.14, one resume inside the row) and
+    `ae48dca7c340d2bed` (repo-131, $15.86, round 1 inside the row). Later agents
+    on those three: `a5ab66271eba5897a` ($0.48, the lowest) and `a66da0ebde99bea6d`
+    ($4.41, the highest gate or fixer) bound "$0.48 to $4.41"; `ae9dcdfc18ca12a88`,
+    the fresh builder for rounds 1 and 2 on lg-66, is the one figure above it.
+
+  - **The brief's figures, against the rows.** The Reproduction table's lg-66,
+    repo-131, lg-67, lg-71, lg-74, lg-78 and lg-77 rows all re-derive. Four
+    statements do not:
+    1. lg-76's ticket total reads **$27.73**; its rows (`a57335d72eb728e06`,
+       `a7a3f5dcbd410ee08`, `a52cae48916102a77`, `aefaf3b0221841f4b`,
+       `a5ab66271eba5897a`, `ac0a1372f85bb12fa`) sum to **$27.78**. The fixers
+       cell ($2.36) is right only with the merge-of-main fixer
+       (`ac0a1372f85bb12fa`, $0.63) counted.
+    2. The Why's "fresh agents ... cost $0.53 to $15.33": $0.53 is lg-66's
+       fixer (`af0fd0e77546ab5de`). The lowest later agent on the three is
+       lg-76's landing fixer, `a5ab66271eba5897a`, at $0.48.
+    3. The Why's "reached $15 to $20 on their first build, before any round":
+       three of the eight first-build rows passed $15, and two of those three
+       carry a round or a resume inside the row (lg-76, repo-131). The other
+       five were $6.39 to $10.39.
+    4. "None of the five under $10.40 needed a round": none of the five had a
+       builder round, but each had a fresh fixer for owner answers or landing
+       (`a632eb598726a1564`, `afa7141de4a8bf99d`, `ae23f1b723c5ae207`,
+       `af85f863831fd99cf`, `aa90fbde84ac03c93`). And lg-67's $10.39 sits
+       just above the new bar, so "changes nothing for the five" holds only
+       because it had no builder round.
+
+    The Why and the Reproduction table are the brief and were not edited (the
+    Build names only the skill page); these four are the record.
+
+  - **Fold-in.** None. No other small, already-specified piece came free from
+    this change. The brief's figures are corrected here, not in the table,
+    because the Build does not name the ticket's own text.
