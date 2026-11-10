@@ -198,3 +198,24 @@ Commands, from the worktree root:
   desktop (dl-133)" among them. Its screenshots at 360 px and 1280 px were
   opened: two boxes, each with its long address wrapped, its bar and its line.
 - `npm run check` → exit 0.
+
+**2026-11-10, answered by the owner** (relayed by the orchestrator), on gate
+1's open decisions at `dfdc5258`. Each took the gate's recommendation.
+
+1. **F1: a dismissed analysis frees the page's probe slot at once, while the
+   server holds its own until the POST settles.** Options: count an abandoned
+   probe until its POST settles (client only); give `ApiClient.probe` an abort
+   signal and abort on dismiss; record it, no round. **Chosen: count abandoned
+   probes until their POST settles.**
+2. **"Stop waiting" on a waiting Download.** Options: (A) close the box, as
+   built; (B) return the box to its options, with Download and Dismiss
+   available. **Chosen: (B), return to options.** This supersedes the build's
+   reading above that "a waiting box can be closed" covers both waits.
+3. **A refused queued job counts against the job slots.** Options: (A) as
+   built; (A) with a waiting line naming what it waits on; (B) exclude refused
+   jobs. **Chosen: (A), as built.** No change.
+4. **The build's added behaviours are confirmed:** an analysed box's Dismiss, a
+   failed analysis showing its address, an invalid address making no box, and
+   "Analyse and retry" no longer refilling the field. Gate 1's F2, F3 and F5
+   are folded into this round; F4 (pre-existing) is filed separately and not
+   fixed here.
