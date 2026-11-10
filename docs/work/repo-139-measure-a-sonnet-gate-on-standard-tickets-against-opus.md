@@ -161,9 +161,30 @@ different tickets, different builders — which is why this is a ticket.
   | `med`                        | 1 of 3 (repo-143 F1)       | 1 of 10 (lg-80)                 |
   | Refuted afterwards           | 0                          | 0                               |
 
+  The cost row by depth (round 1 of the gate, re-derived from the ten costs in
+  Table 2; all three Sonnet gates ran `medium`, so the depth-matched Opus
+  figure is the one to read a saving against):
+
+  | Opus gates, by the depth the section names           | n   | Mean cost | Sonnet mean as a share | Saving per gate (Sonnet mean $1.85) |
+  | ---------------------------------------------------- | --- | --------- | ---------------------- | ----------------------------------- |
+  | all ten, pooled                                      | 10  | $3.35     | 55 %                   | $1.50                               |
+  | `full` (repo-130, 133, 120, 72, 128)                 | 5   | $3.62     | 51 %                   | $1.77                               |
+  | `medium` (lg-80, lg-75)                              | 2   | $2.90     | 64 %                   | $1.05                               |
+  | `medium` plus `standard` (adding repo-121, repo-124) | 4   | $2.82     | 66 %                   | $0.97                               |
+
+  lg-69's "standard, full" gate ($4.14) is in the pooled row and in neither
+  depth row. "Standard" is not a depth name any more (the gate on lg-80 read it
+  as `medium`); the last row treats it as `medium`, and its n is 4 and the
+  `medium` row's is 2, so these are two ways of reading the same four numbers,
+  not four readings. Four of the five `full` gates cost more than every gate
+  that was not `full` and not lg-69's (the fifth, repo-133 at $2.65, sits below
+  three of the four, lg-80, lg-75 and repo-121, and above repo-124).
+
   What the numbers show: on these tickets a Sonnet gate cost about 55 % of an
-  Opus gate on average ($1.85 against $3.35; the cheapest Opus gate, $2.26,
-  is below the dearest Sonnet one, $2.74, so the ranges overlap), and
+  Opus gate on average pooled ($1.85 against $3.35), and 64 % to 66 % of the
+  Opus gates that ran at the depth the Sonnet ones did ($2.82 to $2.90). The
+  cheapest Opus gate, $2.26, is below the dearest Sonnet one, $2.74, so the
+  ranges overlap. A Sonnet gate also
   carried about as many findings, 4.0 a gate against 4.2. Neither population
   had a finding shown false afterwards. The Sonnet gates graded one `med`,
   repo-143's F1, which the round fixed and an Opus gate 2 confirmed fixed.
@@ -172,7 +193,7 @@ different tickets, different builders — which is why this is a ticket.
   - **The rate of a `high`.** Three gates is enough to see cost, not enough to
     see how often a gate finds a `high`. Had a Sonnet gate the Opus rate of 2
     in 10, the chance of 0 in 3 is 0.8^3, 51 %: the absence of a `high` among
-    the three tells nothing. The ticket's own note that Sonnet xhigh found
+    the three tells little. The ticket's own note that Sonnet xhigh found
     highs on `hard` tickets (lg-66 gate 2, repo-131 gate 1) is copied from the
     ticket, not re-read here.
   - **Misses.** "Refuted" counts false findings. A finding a gate never made
@@ -182,7 +203,12 @@ different tickets, different builders — which is why this is a ticket.
   - **Like for like.** The tickets differ (a status script, a Cloudflare
     Worker, a vitest split against Opus's ten), as do the depths and the
     builders' costs; the cost of one repo-129 gate, $2.74, is already above
-    three of the Opus gates. `agent-cost.mjs` was run the same way on all
+    three of the Opus gates. **The depth difference runs in the direction of
+    the gap**: the three Sonnet gates ran `medium`, and five of the ten Opus
+    gates ran `full` and cost more ($3.62 against $2.82 to $2.90 at `medium`),
+    so the pooled 55 % and $1.50 overstate what a Sonnet gate saves against an
+    Opus gate of the same depth, by about half: the matched saving is about
+    $1.00 a gate (64 % to 66 %). `agent-cost.mjs` was run the same way on all
     thirteen, so the ratio of means is not a reading artefact; whether the
     absolute figures are low is repo-112's question, not this one's.
   - **The pairing rule.** A `standard` build is `builder-standard`, Sonnet 5.5,
@@ -230,3 +256,35 @@ different tickets, different builders — which is why this is a ticket.
   the 2026-11-08 history entry's sentence "The third is repo-126's gate 1" is
   stale (it is an entry, not a page of rules; the batch log is the place for
   it). No other already-specified piece became free.
+
+- 2026-11-10 — **Round 1, gate 1 (Opus, depth medium) on `a72e9c53`: FAIL, one
+  high.** The gate verified the measurement (every cost, verdict and count in
+  the Log) and failed repo-145's pricing. Each finding, reproduced before it
+  was changed:
+  - **F1 (high), reproduced.** `node depth.mjs` (scratch, over the ten Opus
+    costs and the three Sonnet ones) prints: Sonnet mean 1.8493; pooled n 10
+    mean 3.3525, share 0.552, saving 1.5032; `full` n 5 mean 3.6236, 0.510,
+    1.7742; `medium` n 2 mean 2.8953, 0.639, 1.0460; `medium` plus `standard`
+    n 4 mean 2.8158, 0.657, 0.9665. They equal the gate's figures ($2.90,
+    $2.82, $3.62; 64 % to 66 %). Fixed: the comparison above carries a by-depth
+    table and its _Like for like_ bullet says the depth difference runs in the
+    direction of the gap; repo-145 gives every option pooled and depth-matched
+    ((b) about $15 or $10 over ten, (c) $10.50 or about $7) and no longer says
+    the cost "does not sort by depth".
+  - **F2 (med), reproduced.** `.claude/agents/fixer.md` and
+    `ticket-reviewer-sonnet.md` both pin `claude-sonnet-5-5`
+    (`git grep -n -E '^model'` on `origin/main`), and `SKILL.md`'s `fixer` row
+    sends gate 2 to "the ticket's own gate row", which is
+    `ticket-reviewer-sonnet` on `mechanical` and `hard`. Not resolved here:
+    repo-145 states it in the Why as a fact, puts it as Question 2 with three
+    options, and rewords its Done when 1 so it is met under every option.
+  - **F3 (low), reproduced.** `git diff origin/main origin/repo-138-filing-row
+    -- .claude/skills/orchestrate-tickets/SKILL.md` moves two gate cells to
+    `ticket-reviewer-opus`: the filing row and the docs-only chore row.
+    repo-145's Why names both.
+  - **F4 (low), reproduced.** The first `history-rows.md` lacked the Opus rows'
+    depth, carried and dropped columns, and Table 1 as a table. It now carries
+    the Log's columns.
+  - Also changed: "the absence of a `high` among the three tells nothing" now
+    reads "tells little" (a dropped note of the gate: at the Opus rate P(0 of 3)
+    is 0.51, against 1 at a zero rate).
