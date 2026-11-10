@@ -132,6 +132,19 @@ let rogueOrigin: TlsOrigin;
 let intercept: TlsInterception;
 let proxy: EgressProxy;
 let rejections: TlsRejectionLog;
+/**
+ * dl-130. What the proxy did with each `CONNECT`, kept only to be read into the
+ * Done-when 2 test's failure message. That test failed once in ten isolated runs
+ * (`UNREACHABLE` where `TLS_VERIFICATION_FAILED` was due) and has not failed
+ * since, so the next failure has to name its own branch: no refusal recorded
+ * for its `CONNECT` and which other hook fired instead, a refusal recorded
+ * before the call's window opened, or a `CONNECT` the proxy never saw. Nothing
+ * here touches the `TlsRejectionLog`, so what `since` reads is unchanged.
+ */
+const proxyEvents: { at: number; what: string }[] = [];
+function noteProxyEvent(what: string): void {
+  proxyEvents.push({ at: Date.now(), what });
+}
 /** The dl-37 arrangement. */
 let wired: RegistryBuild;
 /** The same tier with nothing done for it — every red below. */
@@ -160,12 +173,30 @@ beforeAll(async () => {
     operatorCa: operatorCert.ca,
     verifyOrigins: true,
   });
+  const guard = createSsrfGuard({ allowHosts: ["127.0.0.1"], allowPrivateAddresses: true });
   proxy = await startEgressProxy({
-    guard: createSsrfGuard({ allowHosts: ["127.0.0.1"], allowPrivateAddresses: true }),
+    guard: {
+      ...guard,
+      // The first thing the proxy does with a `CONNECT`, so a navigation the
+      // proxy never saw shows as no line at all (dl-130).
+      assertAllowed: async (rawUrl) => {
+        noteProxyEvent(`assertAllowed ${rawUrl}`);
+        return await guard.assertAllowed(rawUrl);
+      },
+    },
     logger: NOOP_LOGGER,
     interceptTls: intercept,
     onCertificateRejected: (host, code) => {
+      noteProxyEvent(`onCertificateRejected ${host} ${code}`);
       rejections.record(host, code);
+    },
+    // Recorded and not forwarded: passing either on to `rejections` would
+    // change what `since` reads, which is the verdict under test (dl-130).
+    onOtherConnectFailure: (host, port) => {
+      noteProxyEvent(`onOtherConnectFailure ${host}:${String(port)}`);
+    },
+    onConnectEstablished: (host, port) => {
+      noteProxyEvent(`onConnectEstablished ${host}:${String(port)}`);
     },
   });
 
@@ -244,17 +275,42 @@ describe("the browser tier behind a proxy that terminates its TLS", () => {
     "still refuses a certificate the proxy could not verify — dl-37 Done-when 2",
     { timeout: TEST_TIMEOUT_MS },
     async () => {
-      const error = await resolveError(
-        wired,
-        new URL(`https://127.0.0.1:${String(rogueOrigin.port)}/watch`),
-        proxy.url,
-      );
+      // dl-130: the `since` read this call's verdict turned on, recorded and
+      // passed through unchanged, so a failure can say what it returned.
+      const reads: string[] = [];
+      const since = rejections.since.bind(rejections);
+      rejections.since = (host, port, at) => {
+        const code = since(host, port, at);
+        reads.push(
+          `since(${host}, ${String(port)}, at ${String(at)}) returned ${code ?? "undefined"}`,
+        );
+        return code;
+      };
+      const startedAt = Date.now();
+      let error: AppError;
+      try {
+        error = await resolveError(
+          wired,
+          new URL(`https://127.0.0.1:${String(rogueOrigin.port)}/watch`),
+          proxy.url,
+        );
+      } finally {
+        rejections.since = since;
+      }
+      // Times are milliseconds from just before the resolve; an event below
+      // zero came from an earlier test in this file.
+      const diagnosis = [
+        `dl-130 diagnosis, times relative to ${String(startedAt)}:`,
+        `reason: ${String(error.details?.["reason"])}`,
+        ...(reads.length === 0 ? ["since: never read"] : reads),
+        ...proxyEvents.map(({ at, what }) => `${String(at - startedAt)} ms: ${what}`),
+      ].join("\n");
 
-      expect(error.code).toBe("TLS_VERIFICATION_FAILED");
+      expect(error.code, diagnosis).toBe("TLS_VERIFICATION_FAILED");
       expect(error.retryable).toBe(false);
       // OpenSSL's verdict, reached here and reattached, rather than a Chromium
       // token: the browser never saw this certificate.
-      expect(error.details?.["reason"]).toBe("DEPTH_ZERO_SELF_SIGNED_CERT");
+      expect(error.details?.["reason"], diagnosis).toBe("DEPTH_ZERO_SELF_SIGNED_CERT");
       // The operator-facing half, in `details` where the log gets it and the
       // client does not — `hint` is absent from `CLIENT_SAFE_DETAIL_KEYS`.
       expect(String(error.details?.["hint"])).toContain("EGRESS_CA_FILE");
