@@ -7,6 +7,7 @@ status: ready
 milestone: null
 depends_on: []
 difficulty: mechanical
+awaiting: Done when 2 — the first batch entry in reference/history.md after this merge whose table has a builder-hard row names the bar ($10) its builder was read against in its Tickets line
 ---
 
 # repo-140 — Retire a hard builder at about ten dollars, not fifteen
