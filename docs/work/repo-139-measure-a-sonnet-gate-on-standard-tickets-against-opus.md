@@ -322,3 +322,12 @@ different tickets, different builders — which is why this is a ticket.
     four rows at a depth cannot price an option" beside matched prices drawn from
     those rows. Now: the depth-matched figures "rest on two to four gates, so they
     are indicative and not measured", and an unread depth has no figure.
+
+- 2026-11-10 — Owner's answer at the tools-86 checkpoint 11 (relayed in the
+  lander's dispatch from the orchestrator; the owner's own reply, not a gate's):
+  gate 3 (CONCERNS, `80fc0631`) left one `med` (F2, fixed in part) and one low
+  (P1). Question: how to fix them. Options: fix at the landing with no fourth
+  gate, or fix and then run a narrow gate 4. Chosen: fix at the landing, no
+  fourth gate, which was the orchestrator's recommendation. For F2 the owner's
+  remedy is to put the fixer sentence in Build 4 and Done when 2 under every
+  option.
