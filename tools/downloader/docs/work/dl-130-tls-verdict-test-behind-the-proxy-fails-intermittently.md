@@ -7,6 +7,7 @@ status: ready
 milestone: null
 depends_on: []
 difficulty: hard
+awaiting: Done when 1, 2, 3 and 5 — a failing run of the dl-37 Done-when 2 test, in CI, a gate or a whole-project run, whose `dl-130 diagnosis` message names the branch
 ---
 
 # dl-130 — The dl-37 Done-when 2 browser test behind the terminating proxy fails intermittently
@@ -291,3 +292,56 @@ options:
 recommendation. No `Done when` line is reworded: lines 1, 2, 3 and 5 are parked
 behind the `awaiting` line until a failing run's message names the branch, and
 Build 3 to 5 then apply to that run as written.
+
+**2026-11-10 — option (A) built: the test names its own branch when it fails**
+(builder, Opus 5.5). Test-side only, in
+`tools/downloader/api/test/tiers-on-the-terminating-proxy.test.ts`; nothing
+under `src/` changed. What the test asserts, and when it passes, are unchanged:
+the diagnosis is the second argument to `expect` on the `code` and `reason`
+assertions, which vitest prints only on a failure.
+
+_Which form, and why not the smallest one._ The smallest form the option names
+(`error.details.reason` and the `since` read) cannot tell this ticket's two
+readings apart: Chromium reports `net::ERR_TUNNEL_CONNECTION_FAILED` for every
+non-200 `CONNECT`, and `since` returns `undefined` both when no refusal was
+recorded and when one was recorded before the window. Build 3 also asks which
+other hook fired, and Build 4 stops on a navigation the proxy never saw. So the
+message carries, on one clock, in milliseconds from just before the resolve:
+
+- `reason:` — the returned error's `details.reason`, Chromium's own line;
+- every `assertAllowed` the proxy's guard was asked (the first thing the proxy
+  does with a `CONNECT`, so a navigation it never saw shows as no line);
+- every `onCertificateRejected`, `onOtherConnectFailure` and
+  `onConnectEstablished` the proxy called — the last two are recorded and
+  forwarded to nothing, since passing them to `rejections` would change what
+  `since` reads;
+- the `since` call with its arguments and return value, or `since: never read`.
+
+Events below zero ms came from an earlier test in the file. The record is an
+in-memory array: unlike the sweep's instrumentation above, it writes no file
+and reads no environment variable.
+
+_The planted failure_, never committed: the `rejections.record(host, code)` line
+in the test's `onCertificateRejected` hook replaced by a comment, at `6d988632`,
+then
+`npx vitest run tools/downloader/api/test/tiers-on-the-terminating-proxy.test.ts -t "still refuses a certificate the proxy could not verify"`,
+exit 1, `Tests  1 failed | 4 skipped (5)`:
+
+```
+AssertionError: dl-130 diagnosis, times relative to 1794270333617:
+reason: page.goto: net::ERR_TUNNEL_CONNECTION_FAILED at https://127.0.0.1:46025/watch
+130 ms: assertAllowed https://127.0.0.1:46025
+147 ms: onCertificateRejected 127.0.0.1 DEPTH_ZERO_SELF_SIGNED_CERT
+165 ms: since(127.0.0.1, 46025, at 1794270333618) returned undefined
+verdict: expected 'UNREACHABLE' to be 'TLS_VERIFICATION_FAILED' // Object.is equality
+```
+
+Restored with `git checkout 6d988632 -- <the test file>` (`grep -c PLANT` → 0),
+then the whole file alone, `npx vitest run
+tools/downloader/api/test/tiers-on-the-terminating-proxy.test.ts`:
+`Tests  5 passed (5)`.
+
+_Parked_: the frontmatter's `awaiting` line holds Done when 1, 2, 3 and 5
+until a failing run's message names the branch. Whoever reads that message
+records it here as Done when 1's proof, and Build 3 to 5 then apply to it as
+written; Done when 4 is met above.
