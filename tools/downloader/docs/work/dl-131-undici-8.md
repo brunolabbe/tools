@@ -3,7 +3,7 @@ id: dl-131
 tool: downloader
 title: Move the API's undici from 7 to 8
 kind: chore
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -35,6 +35,25 @@ change even with no advisory against 7.
 
 - `@downloader/api` resolves undici 8.x, the downloader's suites pass, and the Log
   names the tests that would fail if pinning or the redirect SSRF check broke.
+
+## Review
+
+**Gate: PASS** — 2026-11-10 · `a100f429..e5a039a8` · Opus 5.5, depth full
+
+| Done when                                                                           | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@downloader/api` resolves undici 8.x                                               | **verified** — `api/package.json` declares `^8.12.3` and the lockfile's `node_modules/undici` is 8.12.3; the gate linked the 8.12.3 tarball (its integrity matches the lockfile) into its own tree, and `createRequire` from `api/package.json` resolved 8.12.3; CI `check` (which runs `check-lockfile-sync`) passed at `e5a039a8`                                                                                                                                                                                                                                                                                                                                                                                    |
+| the downloader's suites pass                                                        | **proven** — on 8.12.3 the gate measured `npm test -- --project downloader` exit 0: 126 files passed, 1 skipped (127); 2610 tests passed, 2 skipped (2612). At `e5a039a8`, CI's `test (ubuntu-latest)`, downloader `e2e (direct)`, `e2e (sniffer)` and `docker` all passed                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| the Log names the tests that would fail if pinning or the redirect SSRF check broke | **verified** — the gate planted each mutation the Log names. Removing pinning turned five `dispatcher.test.ts` tests red: the three in "a rebind between the check and the connection" and the two in "a redirect on the pinned dispatcher". Removing `assertAllowed` turned `ssrf.test.ts` › "re-checks after a redirect, which is how a naive guard is defeated", `embedded-ipv4.test.ts` › "a redirect hop in guarded-fetch, with no dispatcher behind it" and `dispatcher.test.ts` › "is judged again by the guard before the second hop opens a socket" red. Setting `"follow"` in `guarded-fetch.ts` turned "is judged again…" red. After the gate restored the source, all 64 tests in the 3 files passed again |
+
+- **F1 · low** · `nfr:maintainability` · no live call site · `egressFetch` in `api/src/dispatcher.ts` casts undici 8's `fetch` to the platform type. That type accepts two inputs undici 8 mishandles. A platform `FormData` body goes out as the literal text `[object FormData]` (`text/plain`), with no error. A platform `Request` passed straight to `egress.fetch` throws `Failed to parse URL from [object Request]`. Also, the `Response` and `Headers` it returns are not `instanceof` the global classes. No caller is affected today: `createGuardedFetch` reduces its input to a URL string, nothing POSTs through it, and `src` has no `instanceof` check. The doc comment presents the cast as a declaration-set difference only, which is wrong in the safe direction.
+- **F2 · low** · Log, false in the safe direction · "No test failed if undici itself began following redirects" is not true of the mutation the Log ran. With `redirect: "follow"` in `guarded-fetch.ts`, `embedded-ipv4.test.ts` › "a redirect hop in guarded-fetch, with no dispatcher behind it" already goes red without the new test.
+- **F3 · low** · Log, false in the safe direction · "the paths only e2e reaches are the whole server booted by `createApp`" is wrong. With `server.ts` paired back to `globalThis.fetch`, 23 of 853 api unit tests fail in 7 files, among them `pipeline`, `routes`, `stream-link` and `thumbnails`. Unit tests already cover the server's own pairing.
+- **dropped** · `egress.fetch` follows redirects when the caller passes no `redirect` option. Its only production caller is `createGuardedFetch`, which forces `"manual"`, and the platform fetch it replaced had the same default. Nothing new.
+- **dropped** · GHSA-mqg3-3v4r-cm32 does cover 8.12.3 (`>= 8.12.2, < 8.12.4`). It is about `compose(redirect(), cache())` on an `Agent`, which this tree does not use. `npm audit --package-lock-only` prints `found 0 vulnerabilities`, so the seven-day exemption does not apply. Not a defect.
+- **dropped** · `dispatcher.ts`'s note says Node bundles undici 6.x "on Node 22". The image runs Node 24, and the gate did not measure Node 24's bundled undici. The code uses undici's own `fetch` either way, and the `docker` job passed. Not a defect.
+- **findings** · the hunt returned 6; 3 carried, 3 dropped.
+- NFR: security ✓ (pinning `lookup` is still read by 8's connector, the per-hop check runs on every hop, `"manual"` is honoured) · performance n/a · reliability ✓ (aborts still surface as `TimeoutError` / `AbortError`) · maintainability — F1 above.
 
 ## Log
 
