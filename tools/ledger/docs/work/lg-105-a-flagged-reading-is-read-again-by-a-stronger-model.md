@@ -245,8 +245,9 @@ dispatch.
 - **F2** (`left <= 0`). A first reader that answers a flagged reading after
   120 ms against a 50 ms deadline: the second reader is called 0 times, the
   first reading is answered, and the one `was not read again` line carries
-  `outOfTime: true` and no `code`. Deleting the branch fails it (1 of 15): the
-  second reader is then asked.
+  `outOfTime: true` and no `code`. Deleting the branch fails it (1 of 15) on the
+  log's `outOfTime`, `false` where `true` is asserted: the negative delay is
+  refused inside the `try`, so the second reader is still never called.
 - **F4** (stale headers). `Receipts.tsx` and `receipts/src/reader.ts` no longer
   say the screen names one model or that Haiku reads alone. The
   `@ledger/contract` comments are untouched, as the owner's answer of
@@ -267,3 +268,4 @@ dispatch.
 - 2026-11-10 — Fixed at landing by owner choice: the Layout line of `tools/ledger/CLAUDE.md`
   naming Sonnet 5.5 for a flagged reading. `git diff c7767dd8 HEAD -- tools/ledger/CLAUDE.md | grep -v 'Fixed at landing' | grep -c '^+.*Sonnet 5.5 for a flagged reading'` → 1.
 - 2026-11-10 — Fixed at landing by owner choice: gate 2, F4 remainder — "the doc comment on `ReceiptReader.model` in `receipts/src/reader.ts`". It now says the screen names Anthropic and Claude, not the model. `git diff c7767dd8 HEAD -- tools/ledger/receipts/src/reader.ts | grep -c '^-.*which the screen names before the photo is sent'` → 1.
+- 2026-11-10 — Fixed at landing by owner choice: gate 2, N1 — "the Log's F2 entry says deleting the branch fails the test because the second reader is then asked". The F2 entry now names the log's `outOfTime` as what fails. `git diff c7767dd8 HEAD -- tools/ledger/docs/work/lg-105-a-flagged-reading-is-read-again-by-a-stronger-model.md | grep -c '^-.*second reader is then asked'` → 1.
