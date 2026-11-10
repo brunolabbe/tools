@@ -353,3 +353,22 @@ times in the CI log unless marked measured.
   **164.2 s lower** (the bar was 90 s). That job's whole run (the projects the
   change reaches, 156 files) took 154.55 s wall. Every check on that head was
   green, the informational Windows leg included.
+- 2026-11-10: Three owner answers after gate 1 (graded CONCERNS at `60306eb9`),
+  relayed by the orchestrator, recorded before the round's work.
+  1. **F1, two deletions that left a clause with no test.** Step 6's deleted
+     stream-link case was the only api test of `createApp` handing
+     `config.stageTimeoutMs` to `createEngine`; step 10's dropped spawned row was
+     the only check that the boot output omits the site key when it is set.
+     Options: (a) restore both clauses cheaply / (b) accept both as losses, as
+     step 13's `NO_MEDIA_FOUND` is. The owner chose **(a) restore both clauses**,
+     the gate's recommendation.
+  2. **Step 3, re-asked on a measurement.** The owner first chose "export
+     `BrowserPool` and build it". The re-ask carried the measurement that
+     `tools/downloader/resolvers/package.json` `exports` has only `"."` and
+     `src/index.ts` exports only `type { BrowserPoolStats }`, and the gate's
+     point that the SPKI pin is a Chromium launch flag riding on the pool.
+     Options: keep it (export and build) / drop step 3. The owner chose **drop
+     step 3**. Step 3 stays **not done**, for that reason.
+  3. **Lows.** Options: F2 and F4 in the round / F2, F3 and F4 / record all. The
+     owner chose **F2 and F4 in the round**. F3 and F5 stay recorded and are not
+     touched here.
