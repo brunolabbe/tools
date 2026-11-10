@@ -86,3 +86,100 @@ where it holds; (b) not now. **Chosen: (a).**
   `AssertionError: expected 0 to be greater than or equal to 3`
   (`scripts/test/preflight.test.ts:2521`). Done when 1's shuffled runs will hit it: fix it
   or exclude it, with a reason, before taking those readings.
+- 2026-11-10, built by a Sonnet 5.5 builder on `repo-129-split-isolation` from
+  `a100f429`. **What the brief had wrong, and what was done about it.**
+  - **`--project <name>` matches a project's name exactly** (vitest 5.0.5,
+    `wildcardPatternToRegExp`: `^name$`, case-insensitive), so two inline projects
+    `planner` and `planner (isolated)` would have made `npm test -- --project
+    planner`, `ci.yml`'s matrix, `preflight.mjs`'s plan and `npm run test:planner`
+    run half the files and say nothing. A glob in the docs is not enough: those four
+    pass the literal name. What vitest 5 does give is the container: a config
+    _file_ that declares `projects`; its children are named `<name> (<child>)` and
+    `--project <name>` matches the container by ancestry (`matchesEntryFilter`).
+    So each split tool has `tools/<tool>/vitest.config.ts`, and the root config
+    lists the three paths. **A file project inherits nothing from the root config**
+    (`resolveSingleProjectEntry`: "file-based projects own all of their values"),
+    so `splitProject` sets repo-99's `maxWorkers: 4` itself under the same `isCi`;
+    unproven here, because the gate sets `VITEST_MAX_WORKERS` locally and CI is
+    the only place `isCi` is true.
+  - **Selection is by reading the file, not by a list.** `splitProject`
+    (`vitest.isolation.ts`) puts a file in the isolated half when it matches
+    `\bvi\.(?:mock|doMock|unmock|doUnmock|stubGlobal|stubEnv|resetModules)\b`, or
+    when a container names it in `stayIsolated` with a reason. The count the brief
+    gave (35) omitted `resetModules` and `doMock`; the pattern above finds **50**
+    files at `a100f429`: core 1, downloader 9, planner 13, ledger 24, `scripts/test`
+    3 (`grep -rlE '<pattern>' tools packages scripts --include=*.test.ts
+    --include=*.test.tsx`). A new file that mocks goes isolated the day it is written.
+  - **The preflight shuffle failure is not what the Log took it for.**
+    `npx vitest run scripts/test/preflight.test.ts --sequence.seed=2` fails with
+    `--sequence.shuffle.tests` (`1 failed | 120 passed`, the ghshim case, now near
+    line 3038) and passes with `--sequence.shuffle.files` (`121 passed | 1
+    skipped`). It is an order the file depends on, inside one file, and it fails
+    under `isolate: true` all the same; seed 1 passing was not "half stale", it
+    only did not draw the order. `repo` is not split (below), so no reading here
+    shuffles it and it was left alone.
+  - **`--sequence.shuffle` is the wrong flag for ledger.** It reorders tests inside
+    a file as well as files, and ledger has two files whose tests depend on the
+    ones above them: seeds 3 and 4 failed `csv-import.test.ts › no line of any
+    request above holds a CSV's content…` and `workbook-describe.test.ts › no line of
+    any request above holds the upload's content…` (`expected 0 to be greater than
+    20`). Both fail with `--isolate` too (`npx vitest run
+    tools/ledger/api/test/csv-import.test.ts --sequence.shuffle --sequence.seed=3
+    --isolate` → `1 failed | 62 passed`; `workbook-describe.test.ts` seed 4 → `1
+    failed | 44 passed`), so they are not leaks between files. Ledger's five
+    readings use `--sequence.shuffle.files`; planner's and downloader's use plain
+    `--sequence.shuffle`, which they pass. The two ledger files are a defect to
+    file for the ledger, not folded in: each needs its tests made independent of
+    their order, which is ledger test design and not this ticket's.
+  - **Core and `repo` are left unchanged.** Core: `--project core --isolate` 2.15,
+    2.22, 1.79 s against 3.85, 1.97, 1.99 s split (three alternating pairs): no
+    gain, so no container file in `packages/`. `repo`: 14.1 s with import at 3 %
+    of it (`npm test -- --project repo`); the cost is spawning `git` and `node`.
+- 2026-11-10, **the readings.** Each is one gated `npm test -- --project <tool>
+  <flags>` on the branch, serially; correctness only, the machine was shared with
+  two peer sessions. All passed, 2608/2610 and 2 skipped in the downloader (the
+  same one file and two tests skip under `--isolate`).
+  - planner, `--sequence.shuffle --sequence.seed=<n>`, seeds 1 2 3 4 5: `Test
+    Files 86 passed (86)`, `Tests 1944 passed (1944)` each.
+  - ledger, `--sequence.shuffle.files --sequence.seed=<n>`, seeds 1 2 3 4 5:
+    `Test Files 99 passed (99)`, `Tests 2300 passed (2300)` each. (Plain
+    `--sequence.shuffle`: seeds 1, 2 and 5 pass, 3 and 4 fail as above.)
+  - downloader, `--sequence.shuffle --sequence.seed=<n>`, seeds 1 2 3 4 5: `Test
+    Files 126 passed | 1 skipped (127)` each.
+  - **Files, before and after (Done when 3):** `vitest list --filesOnly --project
+    <p> | grep -c test` at `a100f429`: core 15, repo 16, downloader 127, planner
+    86, ledger 99. On the branch: core 15, repo 17 (its own new test),
+    downloader 27 isolated + 100 shared = 127, planner 13 + 73 = 86, ledger 24 +
+    75 = 99; 343 in all either way. `scripts/test/vitest-projects.test.ts` holds
+    it: each split tool's `--project` lists exactly the test files on disk, none
+    twice, and every file matching the pattern is in an isolated half.
+  - **The files that stay isolated:** every file matching the pattern (downloader
+    9, planner 13, ledger 24), and the whole of
+    `tools/downloader/resolvers/test/browser/` (20 files, 2 of them already
+    matching) for Build 3: Chromium through `BrowserPool`, and prototype patches
+    (`provoke.test.ts` patches `Frame.click`). No file needed to move out of the
+    shared half after a failure, and no list was grown by hand: the ledger rate
+    limiter, `no-model-environment.ts` and the downloader's recorders held through
+    five shuffled passes. The one non-shuffled downloader run that failed
+    (`resolvers.test.ts › a rejection recorded before the caller's own window does
+    not reach it`, `TLS_VERIFICATION_FAILED` for `UNREACHABLE`, run during a 125 s
+    load) did not recur in the six runs after it (one more unshuffled, five shuffled), and its cause is
+    unproven: it needs `Date.now()` not to have advanced past a 20 ms timer.
+  - **Local wall times (not a reading: a shared machine, noisy to 2x):** alternating
+    `--isolate` and the split, planner 10.2 s and 8.4 s against 6.8 s and 6.6 s,
+    with `import` at 38-44 % of the summed time against 27 %; ledger 22.8 s and
+    36.7 s against 19.8 s (the second split run hit a `history.test.tsx` focus
+    failure in the _isolated_ half under that load: `the button reports whether
+    its control is open, and takes focus back when it closes (lg-95)`); downloader
+    147 s and 71 s against 66 s (and one run, 125 s, with the failure above).
+    `import` fell from 9-10 % of the summed time to 3-5 %; the downloader's wall time is
+    its browser files, which stay isolated, so it moves least.
+  - **Build 5, planner's alternatives, kept `isolate: false`.** A scratch config
+    (not committed) with the planner project isolated and `@planner/*` aliased to
+    `src/index.ts`, or `server.deps.external` over `tools/planner/*/dist`, three
+    alternating rounds against the plain project: duration 22.7, 21.0 and 15.0 s
+    plain; 32.8, 18.5 and 21.3 s aliased; 27.3, 11.7 and 16.6 s externalised;
+    `import` 37-48 % in all three. Neither beats the 6.6-6.8 s of the split, and
+    neither separates from the plain project beyond the machine's noise.
+  - **Pending:** Done when 2 and the CI pass for Done when 1 are read from this
+    pull request's run, below, once it has one.

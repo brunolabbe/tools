@@ -1,12 +1,8 @@
 import { defineConfig } from "vitest/config";
-
-// The same test scripts/test-gate.mjs applies to `env.CI`, so the two never
-// disagree about whether a run is CI.
-const isCi = (value: string | undefined): boolean =>
-  value !== undefined && value !== "" && value !== "false" && value !== "0";
+import { isCi } from "./vitest.isolation.ts";
 
 /**
- * One project per tool, plus one for the shared packages.
+ * One project per tool, plus one for the shared packages, plus `repo`.
  *
  * The split is not cosmetic: it is what lets an agent working on one tool run
  * `vitest --project <tool>` and get an answer about its own code in seconds,
@@ -14,6 +10,21 @@ const isCi = (value: string | undefined): boolean =>
  * keeps per-tool settings from leaking; the downloader needs a minute-long
  * timeout because its browser sniffer really does take that long, and nothing
  * else should inherit that patience.
+ *
+ * **A tool's project is a file of its own, and two projects (repo-129).** The
+ * downloader, planner and ledger are listed below as paths to
+ * `tools/<tool>/vitest.config.ts`, each a container that `splitProject`
+ * (`vitest.isolation.ts`) turns into `<tool> (shared)`, which runs with
+ * `isolate: false`, and `<tool> (isolated)`, the files that mock a module, stub
+ * a global or an environment variable, or reset modules, plus any a container
+ * names. `--project <tool>` selects both halves. Per-tool settings (timeouts,
+ * setup files) live in that file, beside the reason for them. `core` and `repo`
+ * stay inline and isolated: they finish in seconds, and what they spend it on is
+ * not importing.
+ *
+ * A file project owns its values and inherits nothing from this config, which
+ * is why `splitProject` sets repo-99's `maxWorkers` itself, from the same
+ * `isCi`.
  *
  * No globals anywhere: tests import `test`/`expect` explicitly, so oxlint's
  * no-undef stays meaningful and the imports document the runner.
@@ -78,56 +89,9 @@ export default defineConfig({
           globals: false,
         },
       },
-      {
-        test: {
-          name: "downloader",
-          include: ["tools/downloader/*/test/**/*.test.{ts,tsx}"],
-          environment: "node",
-          // Browser-sniffer probes launch Chromium and wait for network quiet,
-          // which legitimately takes tens of seconds. A short default would
-          // fail honest tests.
-          testTimeout: 60_000,
-          hookTimeout: 60_000,
-          globals: false,
-        },
-      },
-      {
-        test: {
-          name: "planner",
-          include: ["tools/planner/*/test/**/*.test.{ts,tsx}"],
-          environment: "node",
-          // No browser, no ffmpeg, and a suite that talks to a model provider
-          // uses a fake rather than waiting on one. The timeout is not about
-          // any of that: it is about SQLite (repo-93). `migrate` sets
-          // `busy_timeout = 5000`, the same number as vitest's default, so a
-          // test opening a fresh database *file* that something else on the
-          // host briefly holds — two did, on windows-latest, each running
-          // past 5 s where its whole file usually takes under one — is killed at the instant SQLite would have
-          // answered, and the log says "timed out" instead of SQLITE_BUSY or
-          // how long it really took. 20 s outlasts three 5 s busy waits back to
-          // back — grounding-cache's "on boot" opens the same file twice — and
-          // is still a third of the downloader's minute: a case that needs all
-          // of it is hung, not slow.
-          testTimeout: 20_000,
-          globals: false,
-        },
-      },
-      {
-        test: {
-          name: "ledger",
-          include: ["tools/ledger/*/test/**/*.test.{ts,tsx}"],
-          environment: "node",
-          // No browser and no network in any unit suite. The receipt reader
-          // that talks to a model gets a fake here, as the planner's does, and
-          // the host's Anthropic variables are cleared before every file
-          // (lg-8's gate 1, F6), so none reaches `loadApiConfig`.
-          setupFiles: ["tools/ledger/api/test/helpers/no-model-environment.ts"],
-          // The timeout is the planner's, for the planner's reason: the same
-          // `busy_timeout = 5000` in `migrate` against a database file (repo-93).
-          testTimeout: 20_000,
-          globals: false,
-        },
-      },
+      "tools/downloader/vitest.config.ts",
+      "tools/planner/vitest.config.ts",
+      "tools/ledger/vitest.config.ts",
     ],
   },
 });

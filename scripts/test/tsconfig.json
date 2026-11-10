@@ -33,7 +33,8 @@
     "../preflight.mjs",
     "../test-gate.mjs",
     "../check-lockfile-sync.mjs",
-    "../../.claude/scripts/check-farm-freshness.mjs"
+    "../../.claude/scripts/check-farm-freshness.mjs",
+    "../../vitest.isolation.ts"
   ],
   // Restated, not inherited — the root's exclude is about the root's program.
   "exclude": []

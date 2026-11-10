@@ -2593,9 +2593,22 @@ test("projectsFor runs every project for packages/, root config, .github/ and an
 test("allProjects is exactly the projects vitest.config.ts declares (repo-127)", () => {
   // The full set CI runs is read off `tools/`, so this is what keeps a renamed
   // or split project (repo-129) from silently leaving the matrix.
-  const config = fs.readFileSync(path.join(REPO_ROOT, "vitest.config.ts"), "utf8");
-  const declared = [...config.matchAll(/^\s+name: "([^"]+)",$/gmu)].map((match) => match[1]);
+  //
+  // A split project (repo-129) is a container file, `tools/<tool>/vitest.config.ts`,
+  // named in the root config's `projects` as a path: its `name:` is the one
+  // `--project <tool>` selects, and the halves it declares answer to that name.
+  const read = (file: string) => fs.readFileSync(path.join(REPO_ROOT, file), "utf8");
+  const config = read("vitest.config.ts");
+  const inline = [...config.matchAll(/^\s+name: "([^"]+)",$/gmu)].map((match) => match[1]);
+  const containers = [...config.matchAll(/^\s+"(tools\/[^"/]+\/vitest\.config\.ts)",$/gmu)].map(
+    (match) => match[1] ?? "",
+  );
+  const named = containers.map(
+    (file) => /splitProject\(\{\s+name: "([^"]+)",/u.exec(read(file))?.[1],
+  );
+  const declared = [...inline, ...named];
   expect(declared.length).toBeGreaterThanOrEqual(5);
+  expect(declared).not.toContain(undefined);
   expect(allProjects(REPO_ROOT).toSorted()).toEqual(declared.toSorted());
 });
 
