@@ -350,9 +350,16 @@ times in the CI log unless marked measured.
   head `91278e41`, run `42734531994`, job `test (ubuntu-latest)` `129560446626`),
   by the sum described above: **466.6 s** over 126 downloader files and 2596
   tests, against run `40210503276`'s **630.8 s** over 126 files and 2594 tests,
-  **164.2 s lower** (the bar was 90 s). That job's whole run (the projects the
-  change reaches, 156 files) took 154.55 s wall. Every check on that head was
-  green, the informational Windows leg included.
+  **164.2 s lower than that run, which is the bar's reference** (the bar was
+  90 s, and the ticket words it against run `40210503276`). **That is not what
+  the branch saves:** run `40210503276` is from 2026-10-25, and `main` has moved
+  since. Against this branch's own base, `e44644ad` (#777's run `42731587914`,
+  the same sum: 577.2 s over 126 files and 2608 tests), the branch saves
+  **110.7 s** (577.231 - 466.579), which also clears 90 s; the other 53.6 s is
+  `main`'s drift. (Corrected in round 1: this entry first read 164.2 s as the
+  saving, and one commit subject carries the same wording.) That job's whole run
+  (the projects the change reaches, 156 files) took 154.55 s wall. Every check
+  on that head was green, the informational Windows leg included.
 - 2026-11-10: Three owner answers after gate 1 (graded CONCERNS at `60306eb9`),
   relayed by the orchestrator, recorded before the round's work.
   1. **F1, two deletions that left a clause with no test.** Step 6's deleted
@@ -372,3 +379,30 @@ times in the CI log unless marked measured.
   3. **Lows.** Options: F2 and F4 in the round / F2, F3 and F4 / record all. The
      owner chose **F2 and F4 in the round**. F3 and F5 stay recorded and are not
      touched here.
+- 2026-11-10: Round 1, after gate 1 and the three answers above.
+  - **F1, step 6 restored.** `stream-link.test.ts` "the job timeout reaches the
+    engine as its stage timeout": `realApp({ stageTimeoutMs: 2_000 })` and
+    `app.context.engine.config.stageTimeoutMs` is `2000`. It ends before any
+    byte and boots no stream; both defaults are 3 600 000, so the non-default
+    value is the test. Red with `stageTimeoutMs: config.stageTimeoutMs` removed
+    from `createEngine`'s call in `api/src/server.ts` (`AssertionError: expected
+    3600000 to be 2000`, `Tests 1 failed | 16 skipped (17)`), green restored
+    (`Tests 1 passed | 16 skipped (17)`). `realApp` took its `stageTimeoutMs`
+    option back.
+  - **F1, step 10 restored.** `human-check.test.ts` "the thrown refusal under
+    REQUIRE_HUMAN_CHECK carries variable names and no key value" now also
+    refuses `{ REQUIRE_HUMAN_CHECK, TURNSTILE_SITE_KEY: PASS_SITE_KEY }`, checks
+    it names `TURNSTILE_SECRET_KEY`, and checks the refusal carries neither key.
+    Red with `(${siteKey})` planted into the message in `api/src/config.ts`
+    (`expected '{"error":"TURNSTILE_SECRET_KEY is not…' not to contain
+    '1x00000000000000000000AA'`, `Tests 1 failed | 19 passed (20)`), green
+    restored (`Tests 20 passed (20)`). The kept spawned row still carries the
+    secret; the site key is now read in-process, where it costs nothing.
+  - **F2.** The Log's reading of the saving is corrected above; the history is
+    not rewritten.
+  - **F4.** The comment on the faststart-only row in
+    `engine/test/parallel-ranges.test.ts` now says the first test runs at a
+    different throttle (500 KB/s against 2 MB/s) with the variant's own
+    duration, and that the dropped row also counted more than 100 digests.
+  - **Step 3** stays not done, on the owner's answer above. **F3 and F5** are
+    recorded by the gate and not touched.
