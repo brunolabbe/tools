@@ -30,15 +30,26 @@ model, not a cheaper one"). PR #778 (repo-138) applies that rule by the owner's
 answer of 2026-11-10 to two rows: it moves both the filing row's gate and the
 docs-only chore row's gate (builder `builder-standard`) to `ticket-reviewer-opus`.
 
-**The table already carries one same-model pairing, which is a fact and not a
-finding of this ticket.** The `fixer` row (Sonnet 5.5, `.claude/agents/fixer.md`)
+**The table already carries two same-model pairings, which are facts and not
+findings of this ticket.** The `fixer` row (Sonnet 5.5, `.claude/agents/fixer.md`)
 sends gate 2 to "the ticket's own gate row, dispatched fresh". For `mechanical`
 and `hard` tickets that row is `ticket-reviewer-sonnet` (Sonnet 5.5,
 `.claude/agents/ticket-reviewer-sonnet.md`), so where a `fixer` wrote the round,
 a Sonnet gate reads Sonnet's fixes. `grep -n -E '^model'
 .claude/agents/fixer.md .claude/agents/ticket-reviewer-sonnet.md` prints
 `claude-sonnet-5-5` for both. On `standard` tickets that gate 2 is Opus and
-does not pair. Whether the rule is meant to cover the fixer is Question 2 below.
+does not pair. The `builder-web` row (Sonnet 5.5) is the second: its gate is
+also "the ticket's own gate row", so a `builder-web` step on a `hard` ticket is
+Sonnet under Sonnet as well, and that one is a build step, not a `fixer`'s
+round. `history.md` records two `builder-web` dispatches (lg-93, repo-143),
+both `standard`, so none has paired yet.
+
+A sentence already says the opposite of the first. `review-ticket/SKILL.md`'s
+_A different model reviews_ says a mechanical last round is landed by its
+`fixer`, which "is a different model from the gate"
+(`grep -n 'different model' .claude/skills/review-ticket/SKILL.md` prints it).
+On `mechanical` and `hard` tickets it is not. Whether the rule is meant to
+cover the `fixer`, and the `builder-web` step, is Question 2 below.
 
 ## Reproduction
 
@@ -133,26 +144,43 @@ the means above, not a forecast; the matched one is the nearer to what a
 
 Raised by repo-139's gate; the table has carried it since before this ticket
 (see the Why). It is the owner's to decide whether "a different model" covers a
-gate over a `fixer`'s round, and nothing in Question 1 settles it.
+gate over a `fixer`'s round, and nothing in Question 1 settles it. There are two
+same-model pairings, a `fixer`'s round and a `builder-web` step on a `hard`
+ticket, and each option below says which of them it reaches.
 
 - **(i) Leave it.** The `fixer`'s work is mechanical and a landing, gate 2 reads
-  a narrow range, and the rule is written about a ticket's build. Costs nothing.
-  Risk: the rule's sentence says more than the table does, and a later row
-  change reads it as binding.
+  a narrow range, and the rule is written about a ticket's build. Reaches
+  neither pairing. Costs nothing in dispatch. Risk: the rule's sentence says
+  more than the table does, and a later row change reads it as binding; and
+  `review-ticket/SKILL.md`'s "is a different model from the gate" stays false
+  on `mechanical` and `hard` tickets, unless Build 4 corrects that one sentence.
 - **(ii) Put gate 2 over a `fixer`'s round on `ticket-reviewer-opus` on
-  `mechanical` and `hard` tickets.** Not priced here: no gate-2 population was
-  read for this ticket, and an Opus gate 2 narrow ran $2.26 to $2.66 in the
-  rows repo-139 read (repo-124, repo-143, lg-72). Risk: it adds that cost to
-  every such round.
+  `mechanical` and `hard` tickets.** A swap: the round already pays a gate 2 on
+  `ticket-reviewer-sonnet`, and this replaces it. Priced as the difference
+  between two populations in `history.md`, each re-read with
+  `node scripts/agent-cost.mjs`: 16 narrow `ticket-reviewer-sonnet` gate 2s ran
+  $1.03 to $2.93, mean $1.62; three Opus gate 2s ran $2.26 to $2.66, mean $2.44
+  (repo-124 and repo-143 narrow, lg-72 depth `medium` scoped to the round). The
+  swap adds about $0.64 to $1.04 a round, mean $0.82. The Sonnet 16 were not
+  filtered to a `fixer`'s rounds or to `mechanical` and `hard` tickets, and the
+  Opus three are three, so read $0.82 as "about $0.80", not a measured one.
+  Reaches the `fixer`'s round and makes the `review-ticket/SKILL.md` fixer
+  sentence true. Does not reach `builder-web`: that row's gate is "the ticket's
+  own gate row" and stays Sonnet on a `hard` ticket unless its cell changes too.
 - **(iii) Say in the rule that it covers a ticket's build and not a `fixer`'s
   round.** One sentence in `SKILL.md` and `review-ticket/SKILL.md`, no change in
-  cost or dispatch. Risk: it writes down an exception the owner never chose.
+  cost or dispatch. Risk: it writes down an exception the owner never chose;
+  and a `builder-web` step is a ticket's build, so as worded the sentence would
+  still be broken there, and it would have to name that step as well. The
+  `review-ticket/SKILL.md` fixer sentence is false under it unless Build 4
+  corrects it.
 
 Not offered because it was not measured: Opus at a lower effort or a narrower
 depth. The ten Opus gates ran `full`, `standard` and `medium` depths, and by
 mean the cost does sort by depth ($3.62 `full`, $2.82 to $2.90 `medium`), which
-is why every figure above is given twice; but two to four rows at a depth
-cannot price an option.
+is why every figure above is given twice. The depth-matched figures rest on two
+to four gates, so they are indicative and not measured; a depth not read at all
+(Opus at a lower effort, or `narrow`) has no figure to give.
 
 ## Build
 
@@ -169,8 +197,14 @@ By option; the one answered is the whole of the build.
    of `main` before editing, not this ticket's text.
 3. (d): the next batch's dispatch is the build; the batch log carries the
    second table.
-4. Question 2: (i) none; (ii) the `fixer` row's gate column in `SKILL.md`;
-   (iii) the same sentences as step 2.
+4. Question 2: (i) the table: none; (ii) the `fixer` row's gate column in
+   `SKILL.md`; (iii) the same sentences as step 2. Under (i) and (iii) also the
+   fixer sentence in `review-ticket/SKILL.md`'s _A different model reviews_
+   ("a mechanical last round is landed by its fixer instead, … and is a
+   different model from the gate"), which is false on `mechanical` and `hard`
+   tickets: edit it to say what the table does. Under (ii) it becomes true and
+   needs no edit. A `builder-web` step is in scope only if the owner's answer
+   names it.
 
 ## Done when
 
@@ -183,7 +217,9 @@ By option; the one answered is the whole of the build.
    needed and the Log says so.
 2. The answer to Question 2 is recorded under _Decision_, with the options it
    was chosen from. If it is (ii) or (iii), the `fixer` row or the same
-   sentences read it, as in Done when 1.
+   sentences read it, as in Done when 1. Under (i) and (iii) the fixer sentence
+   in `review-ticket/SKILL.md` (`grep -n 'different model'`) no longer says a
+   different model from the gate where the table pairs Sonnet with Sonnet.
 3. For (d): the batch's `reference/history.md` entry carries both gates'
    rows for each of the three tickets, and this ticket's Log states what the
    Opus gate found that the Sonnet gate did not.
@@ -201,3 +237,11 @@ By option; the one answered is the whole of the build.
   already pairs Sonnet with Sonnet) is reworded, and the `fixer` pairing is
   stated in the Why and put as Question 2 instead of being resolved here. The
   Why names #778's two rows.
+- 2026-11-10 — Round 2 of repo-139's gate 2 (FAIL, one high). Question 2's
+  option (ii) is restated as a swap and priced as a difference (about $0.82 a
+  round, $0.64 to $1.04, re-derived with `agent-cost.mjs`), where it had said
+  the Opus gate 2 "adds" $2.26 to $2.66; the Why and Question 2 now name the
+  `builder-web` pairing and the `review-ticket/SKILL.md` fixer sentence, and
+  Build 4 and Done when 2 carry that sentence. The last paragraph no longer says
+  two to four rows cannot price an option. Question 2 is still open and carries
+  no recommendation.

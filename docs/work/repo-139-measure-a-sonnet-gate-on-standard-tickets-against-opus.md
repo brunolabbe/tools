@@ -288,3 +288,37 @@ different tickets, different builders — which is why this is a ticket.
   - Also changed: "the absence of a `high` among the three tells nothing" now
     reads "tells little" (a dropped note of the gate: at the Opus rate P(0 of 3)
     is 0.51, against 1 at a zero rate).
+
+- 2026-11-10 — **Round 2, gate 2 (Opus, depth narrow, scoped to the round) on
+  `3020bc6e`: FAIL, one high.** The gate verified the 13 costs and the by-depth
+  table and left Done when 1, 2 and 4 met. Each finding, reproduced before it was
+  changed (fixer, Sonnet 5.5):
+  - **N1 (high), reproduced.** repo-145's option (ii) said an Opus gate 2 "adds"
+    $2.26 to $2.66 to every such round, but the round already pays a gate 2 on
+    `ticket-reviewer-sonnet`. `node scripts/agent-cost.mjs`, one `--agent` per
+    id, on the 16 narrow Sonnet gate 2s from the gate's report: $1.0337 to
+    $2.9263, mean $1.6221 (sum $25.9532); on the three Opus gate 2s
+    (`a53678c8df440f471` $2.2648, `a844f810d7cd154e7` $2.3999,
+    `a00afc8ed2491174a` $2.6604): mean $2.4417. The difference is $0.82 a round,
+    $0.64 to $1.04, which equals the gate's. Fixed: (ii) is a swap with that
+    difference, the populations named as unfiltered and lg-72's depth given as
+    `medium` scoped to the round, and the figure read as "about $0.80".
+  - **F2 remainder (med), reproduced.** `grep -n 'different model'
+    .claude/skills/review-ticket/SKILL.md` prints the sentence that a mechanical
+    last round's `fixer` "is a different model from the gate", false on
+    `mechanical` and `hard`; `SKILL.md`'s `builder-web` row gates on "the ticket's
+    own gate row", Sonnet under Sonnet on a `hard` ticket (`history.md` records
+    only lg-93 and repo-143, both `standard`). Fixed in repo-145: the Why names
+    both pairings and the sentence, Question 2 says which pairing each option
+    reaches (none of them reaches `builder-web` as worded), Build 4 and Done when
+    2 put the fixer sentence in scope under (i) and (iii). Nothing in Question 2
+    is resolved and it carries no recommendation.
+  - **N2 (low), reproduced.** The build's scratch `history-rows.md` (tickets
+    line) said "a saving of about $1.00 a gate, not $1.50" with no n. Fixed in
+    that file, which is not on the branch: it now says the figure is from two to
+    four Opus gates at the depth, so indicative and not measured, for the batch
+    log's close-out.
+  - **F1 remainder (low), reproduced.** repo-145's last paragraph said "two to
+    four rows at a depth cannot price an option" beside matched prices drawn from
+    those rows. Now: the depth-matched figures "rest on two to four gates, so they
+    are indicative and not measured", and an unread depth has no figure.
