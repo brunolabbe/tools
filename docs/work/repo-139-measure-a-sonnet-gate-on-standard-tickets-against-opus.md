@@ -7,6 +7,7 @@ status: ready
 milestone: null
 depends_on: []
 difficulty: standard
+awaiting: Done when 3 — the tools-86 batch close-log PR merges to main, and its reference/history.md entry names repo-139 and carries Table 1, Table 2 and the comparison rows of this Log
 ---
 
 # repo-139 — Measure a Sonnet gate on standard tickets against the Opus gates in the log
