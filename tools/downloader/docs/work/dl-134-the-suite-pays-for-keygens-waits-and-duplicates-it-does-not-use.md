@@ -346,3 +346,10 @@ times in the CI log unless marked measured.
     `stream-link.test.ts` "a stream that passes MAX_FILE_SIZE_MB is cut ...".
     Three further runs of that file and the whole downloader project run had
     none. Whether it predates this branch is unmeasured.
+- 2026-11-10: Done when 1, read from this pull request's own CI run (#787,
+  head `91278e41`, run `42734531994`, job `test (ubuntu-latest)` `129560446626`),
+  by the sum described above: **466.6 s** over 126 downloader files and 2596
+  tests, against run `40210503276`'s **630.8 s** over 126 files and 2594 tests,
+  **164.2 s lower** (the bar was 90 s). That job's whole run (the projects the
+  change reaches, 156 files) took 154.55 s wall. Every check on that head was
+  green, the informational Windows leg included.
