@@ -805,3 +805,126 @@ builder.
   worktree or a fixture (real bank data never enters the repository), and record only its
   application, its part counts and its sheet and cell counts. If it is gone at build time,
   ask the owner for it.
+
+### 2026-11-10, build (Claude Opus 5.5)
+
+Built option 1 on `lg-104-refuse-shared-parts` from `origin/main` `a100f429`, farmed and
+built (both exit 0). The code is commit `08c22e7a`.
+
+- **Build 1, shape (a).** `workbookEntries` compares each entry's local-header name with
+  its directory name, byte for byte, at the local header's offset, and refuses a mismatch
+  or a header that does not fit as `WORKBOOK_NOT_XLSX`. `compressedOf` compares them again.
+  `ZipEntry` gains `rawName`, the name with one character per byte, which is how SheetJS's
+  CFB reads it.
+- **Build 1, shape (b).** `eachPartReadOnce` in `workbook-parts.ts` is called by
+  `refuseUnlessEachSheetIsItsOwn` after the shared-sheet check, before any sheet is
+  parsed. For each sheet it counts the sheet's part, its `.rels`, and every part a
+  relationship there names. For a chartsheet it also counts each named part's `.rels`,
+  what those name, and their `.rels`. It refuses when one part is counted twice, whether
+  by two sheets or twice by one. It counts every relationship type, not only comments,
+  VML, drawing and chart, so it reads more than SheetJS does. The extra counting can only
+  add refusals, and only in a file where two sheets name one part. The refusal message is
+  its own: "names one of its parts from more than one place in its sheets".
+- **What the brief had wrong, or did not say.** "Two sheets' `.rels` name one part" is not
+  the whole shape. SheetJS keys a sheet's relationships by their raw target, so one
+  sheet's `.rels` naming one comments part twice in two cases (`../comments1.xml`,
+  `../COMMENTS1.xml`) parses it twice. The check counts within a sheet too. A test covers
+  it (SheetJS hangs 2 comments on `A1`).
+- **The copy was made exact where the new count depends on it, and that found two more
+  ways past lg-96's check.** Both are folded in because the new count needs the same
+  fixes to be sound:
+  - **Part names.** The finder compared targets, which SheetJS decodes one character per
+    byte, with directory names decoded as UTF-8. A part whose name is not ASCII was never
+    found. For a sheet that meant a refusal, but in the new count it would have been a
+    miss. Names are now compared one character per byte, and a `Map` gives each lookup in
+    one step.
+  - **UTF-16 parts.** SheetJS's `cc2str` reads a part that opens with a UTF-16
+    byte-order mark as UTF-16. The copy read it one byte per character, found no tags,
+    and treated a UTF-16 workbook `.rels` as empty, so it read the sheets by position.
+    Probe `bom.mts` on the base (`a100f429`): SheetJS read `["BIG","BIG"]`,
+    `sheetPartsOf` gave `[4,5]`, and `readSheets` read both sheets from the one part. Such
+    a part is now "cannot tell". `[Content_Types].xml` and a workbook `.rels` that exist
+    and cannot be read are refused, no longer read as empty.
+  - **CDATA in a target.** `unescapexml` turns `sheet<![CDATA[1]]>.xml` into `sheet1.xml`,
+    and lg-96's `ESCAPED` test did not see it. Probe `cdata.mts` on the base: SheetJS read
+    `["P1","P1"]`, `sheetPartsOf` gave `[3,10]`, and `readSheets` read both sheets.
+    `unescapexml` and `resolve_path` are now ported. A workbook target is refused when
+    the port would change it, which replaces `ESCAPED`. A sheet relationship's target is
+    decoded and resolved as SheetJS does, so a hyperlink with `&amp;` is not refused.
+- **Tests.** There are 23 new tests in four files, plus two existing tests changed.
+  - `xlsx.test.ts`, the describe block "a part SheetJS would read more than once for the
+    sheets…": the decoy at 14 sheets and its honest control; comments named by 14 sheets
+    and their control; one sheet naming comments twice; five two-sheet variants (an
+    entity, a non-ASCII name, VML through `legacyDrawing`, threaded comments, a drawing);
+    two chartsheets sharing a chart, with the control; CDATA; UTF-16 `.rels`; a non-ASCII
+    sheet part that is read.
+  - `workbook-zip.test.ts`, "the name an entry's local header carries": the control, three
+    mismatches, and `compressedOf`.
+  - `workbook-describe.test.ts`, "a part SheetJS would read for many sheets, through the
+    route": both shapes, through Describe and Confirm.
+  - `workbook-import.test.ts`, "… through the command": both shapes.
+  - Changed: the two existing "forty directory entries over one stored block" tests
+    (`workbook-zip.test.ts`, `workbook-describe.test.ts`). Their forty directory names
+    over one local header are now refused as shape (a), so all forty now carry the
+    header's name. The test still checks the count.
+  - The tests use the two shapes at 14 sheets with a small part. The 3.84 MB part and the
+    50,000 comments are the probes' to measure (below).
+- **Red runs.**
+  - The head's four spec files and helper, copied over the base source in a second tree
+    at `a100f429`: 20 of 198 failed, every one of them a new test. The three controls
+    passed.
+  - On the head, with `localNameIs` answering `true`: 7 of 198 failed (the four zip
+    tests and the decoy through `readSheets`, the route and the command).
+  - With the `eachPartReadOnce` call disabled: 10 of 198 failed (every shape (b) test).
+    Each mutation was restored from `08c22e7a`, and `git status` was clean after.
+- **Done when 1 and 5, the probes at the head.** The six pasted files were extracted from
+  this ticket. `localname.sh <head> <out> 2 14` exit 0. `comments.sh <head> <out> 50000 1 14`
+  exit 0. Both `inspect.mts` runs and the comments route run exit 0. All ran under
+  `--max-old-space-size=900`, one at a time.
+
+  | File                           | At the head                                          |
+  | ------------------------------ | ---------------------------------------------------- |
+  | `localname-decoy-2`, reader    | `WORKBOOK_NOT_XLSX`; +0.4 MB; 1 ms                   |
+  | `localname-control-2`, reader  | 2 sheets, 140,001 cells; +60.2 MB                    |
+  | `localname-decoy-14`, reader   | `WORKBOOK_NOT_XLSX`; +0.0 MB (peak 86.9); 1 ms       |
+  | `localname-control-14`, reader | 14 sheets, 140,013 cells; +58.7 MB (peak 143.5)      |
+  | `localname-decoy-14`, route    | `WORKBOOK_NOT_XLSX`; +0.0 MB; 5 ms                   |
+  | `comments-comments-1`, reader  | 1 sheet, 1 cell; +48.6 MB (one sheet names it: read) |
+  | `comments-comments-14`, reader | `WORKBOOK_NOT_XLSX`; +4.7 MB (peak 90.8); 35 ms      |
+  | `comments-distinct-14`, reader | 14 sheets, 14 cells; +53.3 MB (peak 134.1)           |
+  | `comments-comments-14`, route  | `WORKBOOK_NOT_XLSX`; +6.6 MB (peak 132.4); 74 ms     |
+
+  On the decoy, `inspect.mts` gives `sheetPartsOf threw WORKBOOK_NOT_XLSX`, and SheetJS's
+  own full read still makes 14 of 14 sheets the big part. The controls read as the
+  Reproduction has them: 140,013 cells and 14 cells.
+
+- **Done when 1, the real workbook.** `/workspaces/tools/workbook.xlsx` was read in place
+  and never copied. Only counts were taken; no cell was read into this record. My own
+  measurements: `docProps/app.xml` names `Microsoft Excel Online`, AppVersion `16.0300`.
+  It has 32 entries, and no local name differs from its directory name (0 of 32). It has
+  14 worksheet parts and 0 chartsheets. Parts: 0 comments, 0 threaded comments, 0 VML,
+  1 drawing, 1 chart. One sheet has a `.rels`, which names one part, the drawing. The
+  drawing's `.rels` names the chart.
+  - With both refusals in place, `readSheets` on the head reads 14 sheets and 3,513
+    cells. On the base tree at `a100f429` it also reads 14 sheets and 3,513 cells.
+  - The second refusal had one part to decide, the drawing, and it passed. The chart is
+    reached only through a worksheet's drawing, which the check follows only for a
+    chartsheet. So the chartsheet branch is unproven on a real file. Comments and VML are
+    unproven on a real file too, since this one has none.
+- **Done when 4.** PR #758 merged as `050ce1a4`, an ancestor of the base. On the head,
+  `git grep -n "cannot multiply" -- tools/ledger/api/src` exits 1. Build 4 is met by
+  #758, and the header is rewritten here to name what lg-104 refuses.
+- **Done when 6.** `npm run check` exit 0. `npm test -- --project ledger` exit 0: 2,323 of
+  2,323 tests, 99 files, 48 s.
+- **Fold-in.** The two copy defects above are folded in. Nothing else was folded. A
+  workbook-level multiplier was found and left out: see the next entry.
+- **Found, not fixed: one external-link part listed many times.** SheetJS's `parse_ct`
+  keeps every `Override` of an external-link type, without removing repeats. `parse_zip`
+  then parses each listed link's `.rels`, before even a `bookSheets` read returns. This
+  costs time, not memory, since nothing is kept between the parses. Probe `links.mts` on
+  the head ran while the ledger suite ran beside it, so the times are high: one link
+  `.rels` of 20,000 relationships listed once took 148 ms for `bookSheets` and 229 ms for
+  `readSheets`, +40.9 MB. Listed 50 times, it took 10,408 ms and 22,046 ms, +64.7 MB, and
+  `readSheets` read the file. It is not a sheet's part, so it falls outside this ticket's
+  population. Whether to fix it here or file it is an open decision, handed to the
+  orchestrator.
