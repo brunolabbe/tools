@@ -3,7 +3,7 @@ id: repo-140
 tool: repo
 title: Retire a hard builder at about ten dollars, not fifteen
 kind: chore
-status: needs-decision
+status: ready
 milestone: null
 depends_on: []
 difficulty: mechanical
@@ -58,6 +58,18 @@ $15.33 each, and every one that was a fixer cost under $1.40.
   first build) without touching the bar; does nothing for lg-76 and repo-131,
   whose first builds were the work.
 - **(c) Both.**
+
+## Decision — answered 2026-11-10 by the owner
+
+The owner answered at the tools-86 batch checkpoint 1, on 2026-11-10, and the
+orchestrator relayed the answer in this build's dispatch. The question put:
+"repo-140: at what cost should a long-lived hard builder be retired?" The
+options offered, the recommended one first: (a) lower the bar to about $10,
+read at the first report, which is this ticket's own recommendation; (b) keep
+$15 and add a dispatch split; (c) both.
+
+**Chosen: (a)**, the option above as written. No recommendation was overridden.
+Build 2 applies only to (b) or (c), so it is not built.
 
 ## Build
 
