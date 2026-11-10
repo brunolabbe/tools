@@ -102,7 +102,12 @@ export function ProbePanel({
         <p className="stage" aria-live="polite" aria-atomic="true">
           {JOB_WAITING}
         </p>
-        <div className="card__actions">
+        {/* Keys that differ from the options row's: both branches return the same
+            section with an actions row in the same place, so without them React
+            kept the pressed Stop waiting button and turned it into Download, and
+            a held Enter or a second quick press started the wait over (dl-133
+            gate 2, N4). */}
+        <div key="waiting-actions" className="card__actions">
           <button type="button" className="button" onClick={onStopWaiting}>
             Stop waiting
           </button>
@@ -179,7 +184,7 @@ export function ProbePanel({
         )}
       </fieldset>
 
-      <div className="card__actions">
+      <div key="options-actions" className="card__actions">
         <button type="button" className="button button--primary" onClick={submit} disabled={busy}>
           {busy ? "Starting…" : "Download"}
         </button>

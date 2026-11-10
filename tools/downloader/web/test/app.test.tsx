@@ -1322,3 +1322,119 @@ test("a waiting box's bar does not announce work in progress (F5)", async () => 
   expect(label).not.toContain("in progress");
   expect(label).toBe("Waiting to download: not started yet");
 });
+
+// ---------------------------------------------------------------------------
+// dl-133 gate 2, N1 and N4
+// ---------------------------------------------------------------------------
+
+/**
+ * The server's per-client rule as `routes/probe.ts` holds it, as the F1 case
+ * above models it: a slot per unsettled POST, a third refused. Handed back with
+ * the POSTs in the order they were made and a count of the slots held.
+ */
+function capped(errors: () => AppErrorClass): {
+  overrides: Partial<ApiClient>;
+  posts: Deferred<ProbeResponse>[];
+  held: () => number;
+} {
+  let held = 0;
+  const posts: Deferred<ProbeResponse>[] = [];
+  const overrides: Partial<ApiClient> = {
+    probe: vi.fn(() => {
+      if (held >= 2) {
+        return Promise.reject(
+          new (errors())(
+            "RATE_LIMITED",
+            "You already have as many analyses running as this server allows per client.",
+          ),
+        );
+      }
+      held += 1;
+      const next = deferred<ProbeResponse>();
+      posts.push(next);
+      const free = (): void => {
+        held -= 1;
+      };
+      next.promise.then(free, free);
+      return next.promise;
+    }),
+  };
+  return { overrides, posts, held: () => held };
+}
+
+test("a closed analysis's POST that fails gives its slot back as well (gate 2, N1)", async () => {
+  // The F1 case above ends the abandoned POST with an answer. A rejection is a
+  // second way out, and a count released only on an answer leaves the next
+  // analysis waiting for a slot that nothing will free.
+  let Errors: AppErrorClass | undefined;
+  const server = capped(() => Errors as AppErrorClass);
+  const fake = await mountApp(false, server.overrides);
+  Errors = fake.AppError;
+
+  for (const name of ["first", "second", "third"]) {
+    analyse(`https://videos.example.com/watch/${name}`);
+    await settle();
+  }
+  fireEvent.click(within(box(2)).getByRole("button", { name: "Stop waiting" }));
+  await settle();
+  expect(fake.client.probe).toHaveBeenCalledTimes(2);
+
+  await act(async () => {
+    server.posts[0]?.reject(new fake.AppError("UNREACHABLE", "The page could not be reached."));
+    await Promise.resolve();
+  });
+  await settle();
+
+  expect(fake.client.probe).toHaveBeenCalledTimes(3);
+  expect(within(box(0)).getByRole("heading", { name: "Analysing" })).toBeDefined();
+  expect(within(box(0)).queryByRole("alert")).toBeNull();
+});
+
+test("dismissing an answered box leaves no slot held, so two analyses start at once (gate 2, N1)", async () => {
+  // An answered box's POST is over. Left in the page's record of what is out,
+  // it would count as a slot the server no longer holds, and nothing would
+  // ever release it.
+  let Errors: AppErrorClass | undefined;
+  const server = capped(() => Errors as AppErrorClass);
+  const fake = await mountApp(false, server.overrides);
+  Errors = fake.AppError;
+
+  analyse("https://videos.example.com/watch/first");
+  await settle();
+  await act(async () => {
+    server.posts[0]?.resolve({ probe: probe({ title: "First" }), cached: false });
+    await Promise.resolve();
+  });
+  await settle();
+  fireEvent.click(within(box(0)).getByRole("button", { name: "Dismiss" }));
+  await settle();
+  expect(boxes()).toHaveLength(0);
+
+  for (const name of ["second", "third", "fourth"]) {
+    analyse(`https://videos.example.com/watch/${name}`);
+    await settle();
+  }
+
+  // One call before, then two at once, the fourth waiting.
+  expect(fake.client.probe).toHaveBeenCalledTimes(3);
+  expect(server.held()).toBe(2);
+});
+
+test("the node pressed as Stop waiting is not Download when pressed again (gate 2, N4)", async () => {
+  // Waiting and options return the same section with the actions row in the
+  // same place, so React kept the button that was pressed and turned it into
+  // Download. A held Enter or a quick second press then started the wait over.
+  const { third } = await waitingDownload();
+
+  const stop = within(third).getByRole("button", { name: "Stop waiting" });
+  fireEvent.click(stop);
+  await settle();
+  expect(within(third).getByRole("table")).toBeDefined();
+
+  fireEvent.click(stop);
+  await settle();
+
+  expect(within(third).getByRole("table")).toBeDefined();
+  expect(lineIn(third)).toBe("");
+  expect(within(third).queryByRole("button", { name: "Stop waiting" })).toBeNull();
+});
