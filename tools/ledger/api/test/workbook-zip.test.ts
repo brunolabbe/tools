@@ -12,11 +12,12 @@ import { AppError } from "@ledger/contract";
 import {
   INFLATE_CHUNK_BYTES,
   MAX_WORKBOOK_ENTRIES,
+  compressedOf,
   countInflated,
   workbookEntries,
 } from "../src/workbook-zip.ts";
 import type { ZipEntry } from "../src/workbook-zip.ts";
-import { rawZip, reEnded } from "./helpers/xlsx-file.ts";
+import { rawZip, reEnded, zipOf } from "./helpers/xlsx-file.ts";
 import type { RawEntry } from "./helpers/xlsx-file.ts";
 
 const TYPES = Buffer.from(
@@ -156,10 +157,11 @@ describe("stored entries are counted too", () => {
     // reads each name's bytes: forty names over one block of 300 000 are 12 MB.
     // Not a divisor of the bound, so a stop on a whole entry would overshoot.
     // Each declared 0 until lg-87, which refuses a directory size the local
-    // header does not repeat; the count is what this test is about.
+    // header does not repeat; the count is what this test is about. One name for all
+    // forty since lg-104, which refuses a name the local header does not repeat.
     const block = Buffer.alloc(300_000, 0x20);
     const sheets: RawEntry[] = Array.from({ length: 40 }, (_, index) => ({
-      name: `xl/worksheets/sheet${String(index + 1)}.xml`,
+      name: "xl/worksheets/sheet1.xml",
       data: block,
       method: 0,
       ...(index === 0 ? {} : { sameAs: 2 }),
@@ -370,6 +372,41 @@ describe("what SheetJS reads that the directory does not say (lg-87)", () => {
     );
     expect(codeOf(() => workbookEntries(Buffer.concat([zip, Buffer.alloc(8)])))).toBe(
       "nothing thrown",
+    );
+  });
+});
+
+// lg-104: SheetJS names each entry from its local header, this parse from the directory.
+describe("the name an entry's local header carries (lg-104)", () => {
+  const SHEET = "xl/worksheets/sheet1.xml";
+  const zipNamed = (localName: string): Buffer =>
+    zipOf([
+      { name: "[Content_Types].xml", data: TYPES },
+      { name: "xl/workbook.xml", data: WORKBOOK },
+      { name: SHEET, data: Buffer.from("<x/>"), localName },
+    ]);
+
+  test("the control, the directory's name in the local header, is read", () => {
+    expect(codeOf(() => workbookEntries(zipNamed(SHEET)))).toBe("nothing thrown");
+  });
+
+  test.each([
+    ["another name", "xl/junk0.xml"],
+    ["the same name in other case", "XL/worksheets/sheet1.xml"],
+    ["a name one byte longer", `${SHEET} `],
+  ])("a local header carrying %s is not an .xlsx", (_what, localName) => {
+    expect(codeOf(() => workbookEntries(zipNamed(localName)))).toBe("WORKBOOK_NOT_XLSX");
+  });
+
+  test("an entry's bytes are not found through a local header whose name is not the entry's", () => {
+    const zip = zipNamed(SHEET);
+    const entries = workbookEntries(zip);
+    const sheet = entries.find((entry) => entry.name === SHEET);
+    if (sheet === undefined) throw new Error("no sheet in the control");
+
+    expect(codeOf(() => compressedOf(zip, sheet))).toBe("nothing thrown");
+    expect(codeOf(() => compressedOf(zip, { ...sheet, rawName: "xl/junk0.xml" }))).toBe(
+      "WORKBOOK_NOT_XLSX",
     );
   });
 });

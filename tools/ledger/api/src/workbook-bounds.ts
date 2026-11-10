@@ -36,7 +36,8 @@ export const MAX_WORKBOOK_ROWS = 20_000;
  * `sheet_x0031_` read +375.1 MB through `readSheets`, gate 2's F2). That check still
  * judges distinct parts by a copy of SheetJS's rules, and gate 3 read +367.5 MB (peak
  * 448.9 MB) through a zip entry whose local-header name differs from its central one,
- * and +352.5 MB through a comments part that 14 sheets' `.rels` all name. lg-104 owns
- * those; this cap is not measured against them.
+ * and +352.5 MB through a comments part that 14 sheets' `.rels` all name; lg-104 refuses
+ * both, and every part a sheet's `.rels` names that another read reaches, before the
+ * parse. This cap is measured against neither: they no longer get here.
  */
 export const MAX_WORKBOOK_SLOTS = 2_000_000;

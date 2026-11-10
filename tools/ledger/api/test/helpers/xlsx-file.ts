@@ -126,6 +126,8 @@ export interface ZipInput {
   deflated?: { bytes: Buffer; crc: number; size: number };
   /** What the directory says it inflates to, when that is to be a lie. */
   declaredSize?: number;
+  /** The name its local header carries, when that is to differ from the directory's (lg-104). */
+  localName?: string;
 }
 
 /** A zip of `entries`, deflated, with a central directory and its end record. */
@@ -135,6 +137,7 @@ export function zipOf(entries: readonly ZipInput[]): Buffer {
   let offset = 0;
   for (const entry of entries) {
     const name = Buffer.from(entry.name, "utf8");
+    const localName = Buffer.from(entry.localName ?? entry.name, "utf8");
     const data = entry.data ?? Buffer.alloc(0);
     const deflated = entry.deflated ?? {
       bytes: deflateRawSync(data),
@@ -150,7 +153,7 @@ export function zipOf(entries: readonly ZipInput[]): Buffer {
     local.writeUInt32LE(deflated.crc >>> 0, 14);
     local.writeUInt32LE(deflated.bytes.length, 18);
     local.writeUInt32LE(declared, 22);
-    local.writeUInt16LE(name.length, 26);
+    local.writeUInt16LE(localName.length, 26);
     const central = Buffer.alloc(46);
     central.writeUInt32LE(0x02014b50, 0);
     central.writeUInt16LE(20, 4);
@@ -162,9 +165,9 @@ export function zipOf(entries: readonly ZipInput[]): Buffer {
     central.writeUInt32LE(declared, 24);
     central.writeUInt16LE(name.length, 28);
     central.writeUInt32LE(offset, 42);
-    locals.push(local, name, deflated.bytes);
+    locals.push(local, localName, deflated.bytes);
     centrals.push(central, name);
-    offset += local.length + name.length + deflated.bytes.length;
+    offset += local.length + localName.length + deflated.bytes.length;
   }
   const directory = Buffer.concat(centrals);
   const end = Buffer.alloc(22);
@@ -411,4 +414,160 @@ export function sharedPartWorkbook(
     sheets: each.map((n) => `<sheet name="S${n}" sheetId="${n}" r:id="dup${n}"/>`).join(""),
     relationships: each.map((n) => worksheetRelationship(`dup${n}`, target(n))).join(""),
   });
+}
+
+const MAIN = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+const RELATIONSHIPS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+const PACKAGE = "http://schemas.openxmlformats.org/package/2006/relationships";
+const XML = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
+
+/** A relationship's type, by the last word of its URI. */
+export function relationshipType(kind: string): string {
+  return `${RELATIONSHIPS}/${kind}`;
+}
+
+/** A `.rels` part holding `relationships`. */
+export function relationshipsPart(relationships: string): Buffer {
+  return Buffer.from(`${XML}<Relationships xmlns="${PACKAGE}">${relationships}</Relationships>`);
+}
+
+/** A worksheet part holding `text` in `A1`, and `more` after its cells. */
+export function textPart(text: string, more = ""): Buffer {
+  return Buffer.from(
+    `${XML}<worksheet xmlns="${MAIN}" xmlns:r="${RELATIONSHIPS}"><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>${text}</t></is></c></row></sheetData>${more}</worksheet>`,
+  );
+}
+
+/** A worksheet part of `rows` rows of `columns` numbers, each its row's number. */
+export function numbersPart(rows: number, columns: number): Buffer {
+  const out: string[] = [];
+  for (let r = 1; r <= rows; r += 1) {
+    let row = `<row r="${String(r)}">`;
+    for (let c = 0; c < columns; c += 1) {
+      row += `<c r="${XLSX.utils.encode_col(c)}${String(r)}"><v>${String(r)}</v></c>`;
+    }
+    out.push(`${row}</row>`);
+  }
+  return Buffer.from(
+    `${XML}<worksheet xmlns="${MAIN}"><sheetData>${out.join("")}</sheetData></worksheet>`,
+  );
+}
+
+/** A comments part of `count` comments, a hundred to a row, each on its own cell. */
+export function commentsPart(count: number): Buffer {
+  const list: string[] = [];
+  for (let i = 0; i < count; i += 1) {
+    const ref = `${XLSX.utils.encode_col(i % 100)}${String(Math.floor(i / 100) + 1)}`;
+    list.push(`<comment ref="${ref}" authorId="0"><text><t>c</t></text></comment>`);
+  }
+  return Buffer.from(
+    `${XML}<comments xmlns="${MAIN}"><authors><author>a</author></authors><commentList>${list.join("")}</commentList></comments>`,
+  );
+}
+
+/** One sheet of `packaged`: its target from the workbook's `.rels`, and its type. */
+export interface PackagedSheet {
+  target: string;
+  /** The relationship type's last word; `worksheet` when not given. */
+  kind?: string;
+}
+
+/**
+ * A workbook of `sheets`, named `S1` on, with the content types, the package and
+ * workbook relationships, and `parts` as the rest of the zip, written as given.
+ */
+export function packaged(sheets: readonly PackagedSheet[], parts: readonly ZipInput[]): Buffer {
+  const ids = sheets.map((_, i) => String(i + 1));
+  return zipOf([
+    {
+      name: "[Content_Types].xml",
+      data: Buffer.from(
+        `${XML}<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/></Types>`,
+      ),
+    },
+    {
+      name: "_rels/.rels",
+      data: relationshipsPart(
+        `<Relationship Id="rId1" Type="${relationshipType("officeDocument")}" Target="xl/workbook.xml"/>`,
+      ),
+    },
+    {
+      name: "xl/workbook.xml",
+      data: Buffer.from(
+        `${XML}<workbook xmlns="${MAIN}" xmlns:r="${RELATIONSHIPS}"><sheets>${ids.map((i) => `<sheet name="S${i}" sheetId="${i}" r:id="rId${i}"/>`).join("")}</sheets></workbook>`,
+      ),
+    },
+    {
+      name: "xl/_rels/workbook.xml.rels",
+      data: relationshipsPart(
+        sheets
+          .map(
+            (sheet, i) =>
+              `<Relationship Id="rId${String(i + 1)}" Type="${relationshipType(sheet.kind ?? "worksheet")}" Target="${sheet.target}"/>`,
+          )
+          .join(""),
+      ),
+    },
+    ...parts,
+  ]);
+}
+
+/**
+ * `count` worksheets, `xl/worksheets/sheet<n>.xml` each holding `P<n>` in `A1`, each
+ * with a `.rels` of what `relationships` gives for it (lg-104): what a test needs to
+ * name one comments, VML or other part from several sheets, or a part each.
+ */
+export function relatedWorkbook(
+  count: number,
+  relationships: (n: string) => string,
+  extra: readonly ZipInput[],
+  more: (n: string) => string = () => "",
+): Buffer {
+  const ids = Array.from({ length: count }, (_, i) => String(i + 1));
+  return packaged(
+    ids.map((n) => ({ target: `worksheets/sheet${n}.xml` })),
+    [
+      ...ids.flatMap((n) => [
+        { name: `xl/worksheets/sheet${n}.xml`, data: textPart(`P${n}`, more(n)) },
+        {
+          name: `xl/worksheets/_rels/sheet${n}.xml.rels`,
+          data: relationshipsPart(relationships(n)),
+        },
+      ]),
+      ...extra,
+    ],
+  );
+}
+
+/**
+ * Gate 3's local-name decoy of lg-96, as lg-104's `localname.mts` builds it: `count`
+ * sheets whose targets each find, in the directory, an entry of their own, where every
+ * such entry's local header carries a name SheetJS never asks for, so SheetJS falls
+ * through to the target itself, and every target names the one part `part`. With
+ * `honest`, each local name is its directory name, and nothing is shared.
+ */
+export function localNameWorkbook(count: number, part: Buffer, honest = false): Buffer {
+  const m = count - 1;
+  const segments = Array.from({ length: m }, () => "xl");
+  const big = `${segments.join("/")}/b.xml`;
+  // Target j, below m: segment j in lower case and the rest "XL"; target m: all "XL".
+  const targets: string[] = [];
+  for (let j = 0; j <= m; j += 1) {
+    targets.push(`${segments.map((_, i) => (i === j ? "xl" : "XL")).join("/")}/b.xml`);
+  }
+  // SheetJS's first lookup of each, as `parse_zip` builds it.
+  const first = targets.map((t) => `xl/${t.replace(/[/]?xl\//u, "")}`);
+  const decoys: ZipInput[] = [];
+  for (const [i, name] of first.entries()) {
+    if (name.toLowerCase() === big.toLowerCase()) continue;
+    decoys.push({
+      name,
+      data: textPart("decoy"),
+      ...(honest ? {} : { localName: `xl/junk${String(i)}.xml` }),
+    });
+  }
+  return packaged(
+    targets.map((target) => ({ target })),
+    [{ name: big, data: part }, ...decoys],
+  );
 }

@@ -45,8 +45,13 @@ import {
 import { history, render } from "./helpers/workbook.ts";
 import {
   SheetWriter,
+  commentsPart,
+  localNameWorkbook,
+  relatedWorkbook,
+  relationshipType,
   rewiredWorkbook,
   sharedPartWorkbook,
+  textPart,
   workbookOf,
   worksheetRelationship,
 } from "./helpers/xlsx-file.ts";
@@ -1435,6 +1440,37 @@ describe("a workbook past the reader's bounds, through the command (lg-96)", () 
 
     expect(ran.code, ran.err).toBe(2);
     expect(ran.err).toContain("Only an .xlsx workbook");
+    expect(existsSync(dataDir)).toBe(false);
+  });
+});
+
+// lg-104: the two shapes gate 3 of lg-96 read past the shared-part check, through the
+// command, which reads the file only through `readSheets`.
+describe("a part SheetJS would read for many sheets, through the command (lg-104)", () => {
+  test.each([
+    [
+      "the local-name decoy, refused by the zip check",
+      "Only an .xlsx workbook",
+      () => localNameWorkbook(14, textPart("BIG")),
+    ],
+    [
+      "one comments part named by 14 sheets, refused before a sheet is parsed",
+      "names one of its parts from more than one place in its sheets",
+      () =>
+        relatedWorkbook(
+          14,
+          () =>
+            `<Relationship Id="c1" Type="${relationshipType("comments")}" Target="../comments1.xml"/>`,
+          [{ name: "xl/comments1.xml", data: commentsPart(200) }],
+        ),
+    ],
+  ])("%s, and nothing is created", async (_what, message, file) => {
+    writeFileSync(path.join(dir, "classeur.xlsx"), file());
+
+    const ran = await run("classeur.xlsx", "--as", "alex", "--write");
+
+    expect(ran.code, ran.err).toBe(2);
+    expect(ran.err).toContain(message);
     expect(existsSync(dataDir)).toBe(false);
   });
 });

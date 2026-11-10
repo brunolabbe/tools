@@ -1,6 +1,6 @@
 /**
- * Which worksheet part each of a workbook's sheets is read from, judged from the
- * zip before SheetJS parses any sheet (lg-96, gate 1's F2 and gate 2's F2).
+ * Which parts of a workbook SheetJS reads for each of its sheets, judged from the zip
+ * before SheetJS parses any sheet (lg-96, gate 1's F2 and gate 2's F2; lg-104).
  *
  * **Why.** `workbook.xml` lists the sheets and a relationship gives each its part,
  * and nothing in the format stops two sheets from naming the same part. SheetJS
@@ -9,18 +9,23 @@
  * biggest part many times over: 14 entries over a part of 1 400 rows by 100 numeric
  * cells (3.84 MB inflated, under the 4 MiB bound) read +384.7 MB, SheetJS's parse
  * alone +223.8 MB of it, all before `xlsx.ts` could charge a place. A running total
- * over the sheets cannot close that; refusing the shared part can. What this file
- * judges is distinctness by a copy of SheetJS's rules, and two ways past it were read
- * through `readSheets` (gate 3, lg-96; lg-104 owns them): a zip entry whose
- * local-header name differs from its central-directory name, which `workbookEntries`
- * and `compressedOf` read by the central one and SheetJS's CFB by the local one, so
- * one 1 400 by 100 part is parsed 14 times, +367.5 MB (peak 448.9 MB); and a part,
- * such as comments, that 14 sheets' `.rels` all name, parsed once per sheet, +352.5 MB.
- * `MAX_WORKBOOK_INFLATED_BYTES` counts each entry once, so it does not bound either.
+ * over the sheets cannot close that; refusing the shared part can.
  *
- * **No workbook Excel saves does this**: each sheet is a part of its own, so a
- * shared one is a file that is not a workbook a household saves, which is what
- * `WORKBOOK_NOT_XLSX` says of the other shapes `workbook-zip.ts` refuses.
+ * **It is not only the worksheet part** (lg-104). For each sheet SheetJS also reads the
+ * sheet's own `.rels`, and through it the sheet's comments, threaded comments and VML
+ * drawing, and for a chartsheet its drawing, the drawing's `.rels`, the chart and the
+ * chart's `.rels`. A comments part of 50 000 comments that 14 sheets' `.rels` all name
+ * read +327.1 MB through `readSheets` (peak 412.0 MB; gate 3 of lg-96 read +352.5 MB),
+ * where 14 parts of the same total read +54.0 MB. So `eachPartReadOnce` counts every
+ * part a sheet's relationships name, whatever their type, and refuses a workbook in which
+ * one part is counted twice: by two sheets, or twice by one. Counting every type is
+ * more than SheetJS reads, which costs nothing here: a part only one sheet names is
+ * counted once whatever it is.
+ *
+ * **No workbook Excel saves does this**: each sheet is a part of its own, with its own
+ * comments and drawings, so a shared one is a file that is not a workbook a household
+ * saves, which is what `WORKBOOK_NOT_XLSX` says of the other shapes `workbook-zip.ts`
+ * refuses. Believed of Excel in general; measured on one real workbook (lg-104's Log).
  *
  * **This is a copy of how SheetJS picks a part, and the check does not rest on it
  * alone.** What is refused has to be what SheetJS reads twice, and it picks the part
@@ -28,18 +33,24 @@
  * found seven more that SheetJS reads as two sheets over one part and the copy did not
  * (entities and `_x0031_` in a target, a `>` inside a quoted name, an empty `r:id`
  * beside `strRelID`, a sheet with no id beside a relationship `Id="undefined"`, a tab
- * after a tag name); patching the next difference only reopens it. So the check that
- * `xlsx.ts` makes is one SheetJS's own sheet list can contradict: it reads the list
- * with `bookSheets`, which parses no sheet, and refuses unless this copy finds the same
+ * after a tag name); gate 3 found a local-header name (`workbook-zip.ts` now refuses
+ * it), and lg-104's build a `<![CDATA[` section in a target and a `.rels` part saved as
+ * UTF-16. Patching the next difference only reopens it. So the check that `xlsx.ts`
+ * makes is one SheetJS's own sheet list can contradict: it reads the list with
+ * `bookSheets`, which parses no sheet, and refuses unless this copy finds the same
  * number of sheets, each resolved to a part that exists, and no two to the same one.
  * What this file does on top is to be as exact as it can be where a difference would
- * let two sheets look distinct to the copy and the same to SheetJS: the tag and
+ * let two reads look distinct to the copy and the same to SheetJS: the tag and
  * attribute reading is `parsexmltag` and `tagregex` ported, the zip is searched as
- * `safegetzipfile` does, text is decoded a byte to a character as its `cc2str` does
- * (so two different bytes are never the same character here), a relationship is
- * looked up as `hash[id]` is (an absent id is `"undefined"`), and a target that
- * `unescapexml` would change is not guessed at (`&`, `_x0031_`): it is "cannot tell",
- * and so refused.
+ * `safegetzipfile` does, by each name a byte to a character as SheetJS's CFB reads it,
+ * text is decoded a byte to a character as its `cc2str` does (so two different bytes
+ * are never the same character here), and a part that `cc2str` would decode as UTF-16
+ * is "cannot tell", a relationship is looked up as `hash[id]` is (an absent id is
+ * `"undefined"`), a sheet's relationship target is decoded by `unescapexml` ported and
+ * resolved by `resolve_path` ported, and a workbook's relationship target that
+ * `unescapexml` would change is not guessed at (`&#49;`, `_x0031_`, `<![CDATA[`): it is
+ * "cannot tell", and so refused. A part that exists and cannot be read is refused the
+ * same way, never read as empty.
  *
  * The workbook part is the first `Override` of a workbook content type in
  * `[Content_Types].xml` (else `xl/workbook.xml`); a sheet's relationship is found by
@@ -47,7 +58,8 @@
  * leading xl/>`, then as the target itself, then beside the relationships. A
  * workbook in which any sheet has no relationship is read by position,
  * `xl/worksheets/sheet<n>.xml`, every sheet of it. A SheetJS upgrade should re-read
- * all of this against `parse_zip`, `parse_wb_xml`, `parse_rels` and `parsexmltag`.
+ * all of this against `parse_zip`, `safe_parse_sheet`, `parse_wb_xml`, `parse_rels`,
+ * `resolve_path`, `unescapexml`, `cc2str` and `parsexmltag`.
  */
 
 import type { Buffer } from "node:buffer";
@@ -64,6 +76,9 @@ const WORKBOOK_TYPES = new Set([
   "application/vnd.openxmlformats-officedocument.spreadsheetml.template.main+xml",
 ]);
 
+/** SheetJS's `RELS.CS`: the one relationship type it reads as a chartsheet (`get_sheet_type`). */
+const CHARTSHEET = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chartsheet";
+
 /** SheetJS's `tagregex1`, the one it splits an XML part into tags with. */
 const TAG =
   /<[/?]?[a-zA-Z0-9:_-]+(?:\s+[^"\s?<>/]+\s*=\s*(?:"[^"]*"|'[^']*'|[^'"<>\s=]+))*\s*[/?]?>/gm;
@@ -71,8 +86,63 @@ const TAG =
 /** SheetJS's `attregexg`, the attributes of one tag. */
 const ATTRIBUTE = /\s([^"\s?>/]+)\s*=\s*((?:")([^"]*)(?:")|(?:')([^']*)(?:')|([^'">\s]+))/g;
 
-/** What `unescapexml` would change in a value: an entity, or a `_x0031_` code. */
-const ESCAPED = /&|_x[\da-fA-F]{4}_/u;
+/** `unescapexml`'s two expressions and its table, as SheetJS writes them. */
+const ENTITY = /&(?:quot|apos|gt|lt|amp|#x?([\da-fA-F]+));/gi;
+const CODE = /_x([\da-fA-F]{4})_/gi;
+const ENTITIES = new Map([
+  ["&quot;", '"'],
+  ["&apos;", "'"],
+  ["&gt;", ">"],
+  ["&lt;", "<"],
+  ["&amp;", "&"],
+]);
+
+/**
+ * SheetJS's `unescapexml` (its `raw_unescapexml`), ported line for line, the CDATA split
+ * and its odd cases included: `&AMP;` matches the expression and not the table, and
+ * becomes the character `parseInt(undefined)` gives, as it does there.
+ */
+function unescaped(text: string): string {
+  const at = text.indexOf("<![CDATA[");
+  if (at === -1) {
+    return text
+      .replace(
+        ENTITY,
+        (whole: string, code: string | undefined) =>
+          ENTITIES.get(whole) ||
+          String.fromCharCode(Number.parseInt(String(code), whole.includes("x") ? 16 : 10)) ||
+          whole,
+      )
+      .replace(CODE, (_whole: string, code: string) =>
+        String.fromCharCode(Number.parseInt(code, 16)),
+      );
+  }
+  const end = text.indexOf("]]>");
+  return unescaped(text.slice(0, at)) + text.slice(at + 9, end) + unescaped(text.slice(end + 3));
+}
+
+/** SheetJS's `resolve_path`, ported: `target` read from the folder `base` is in. */
+function resolved(target: string, base: string): string {
+  if (target.startsWith("/")) return target.slice(1);
+  const result = base.split("/");
+  if (!base.endsWith("/")) result.pop();
+  for (const step of target.split("/")) {
+    if (step === "..") result.pop();
+    else if (step !== ".") result.push(step);
+  }
+  return result.join("/");
+}
+
+/** The `.rels` part `safe_parse_sheet` reads beside a sheet's part, by `parse_zip`'s expression. */
+function sheetRelationshipsOf(path: string): string {
+  return path.replace(/^(.*)(\/)([^/]*)$/, "$1/_rels/$3.rels");
+}
+
+/** The `.rels` part of any other part, by SheetJS's `get_rels_path`. */
+function relationshipsOf(file: string): string {
+  const slash = file.lastIndexOf("/");
+  return `${file.slice(0, slash + 1)}_rels/${file.slice(slash + 1)}.rels`;
+}
 
 interface Tag {
   /** SheetJS's `y[0]`: the tag up to its first space, line feed or carriage return. */
@@ -116,28 +186,34 @@ function parseTag(tag: string): Tag {
 }
 
 /**
- * The part of the zip that `file` names as SheetJS's `safegetzipfile` finds it: no
- * regard to case, `/` and `\` alike, a `Root Entry/` prefix on a stored name ignored,
- * the first stored name that matches. The index is the part's identity.
+ * The zip as SheetJS's `safegetzipfile` searches it: no regard to case, `/` and `\`
+ * alike, a `Root Entry/` prefix on a stored name ignored, the first stored name that
+ * matches. Names are compared a byte to a character, as SheetJS's CFB reads them from
+ * the local header (`workbook-zip.ts` refuses one the directory does not repeat). The
+ * index is the part's identity.
  */
-function finderOf(entries: readonly ZipEntry[]): (file: string) => number {
-  const stored = entries.map((entry) => entry.name.replace(/^Root Entry\//u, "").toLowerCase());
-  return (file) => {
-    const backslashed = file.toLowerCase().replaceAll("/", "\\");
-    const slashed = backslashed.replaceAll("\\", "/");
-    return stored.findIndex((name) => name === backslashed || name === slashed);
-  };
+interface Zip {
+  /** The index of the part `file` names, or -1. */
+  find: (file: string) => number;
+  /** The part at `index` as text, or `undefined` when it cannot be read as SheetJS reads it. */
+  textAt: (index: number) => string | undefined;
+  /** The part `file` names as text; `null` when there is none, `undefined` as `textAt`. */
+  textOf: (file: string) => string | null | undefined;
 }
 
-/**
- * The index in `entries` of the part each of the workbook's sheets is read from, in
- * the order `workbook.xml` lists them (the same part twice is the same index), or
- * `undefined` when this cannot say: the workbook part is not text it can read, a
- * sheet resolves to no part, or a target is one SheetJS would decode. The caller
- * refuses `undefined`.
- */
-export function sheetPartsOf(bytes: Buffer, entries: readonly ZipEntry[]): number[] | undefined {
-  const find = finderOf(entries);
+function zipOf(bytes: Buffer, entries: readonly ZipEntry[]): Zip {
+  // The first index of each name, so a lookup is one step and not a walk of the entries.
+  const first = new Map<string, number>();
+  for (const [index, entry] of entries.entries()) {
+    const name = entry.rawName.replace(/^Root Entry\//u, "").toLowerCase();
+    if (!first.has(name)) first.set(name, index);
+  }
+  const find = (file: string): number => {
+    const backslashed = file.toLowerCase().replaceAll("/", "\\");
+    const slashed = backslashed.replaceAll("\\", "/");
+    const either = [first.get(backslashed), first.get(slashed)].filter((at) => at !== undefined);
+    return either.length === 0 ? -1 : Math.min(...either);
+  };
   const textAt = (index: number): string | undefined => {
     const entry = entries[index];
     if (entry === undefined) return undefined;
@@ -147,21 +223,47 @@ export function sheetPartsOf(bytes: Buffer, entries: readonly ZipEntry[]): numbe
         entry.method === 0
           ? raw
           : inflateRawSync(raw, { maxOutputLength: MAX_WORKBOOK_INFLATED_BYTES });
+      if (inflated.length > MAX_WORKBOOK_INFLATED_BYTES) return undefined;
+      // `cc2str` reads a part opening with either byte-order mark as UTF-16 (its test for
+      // a big-endian one is off by a byte, and differs between a Buffer and an array):
+      // text this copy would read otherwise, so it is not read at all (lg-104).
+      if (
+        (inflated[0] === 0xff && inflated[1] === 0xfe) ||
+        (inflated[0] === 0xfe && inflated[1] === 0xff) ||
+        (inflated[1] === 0xfe && inflated[2] === 0xff)
+      ) {
+        return undefined;
+      }
       // A byte to a character, as SheetJS reads a part: no two bytes alike.
-      return inflated.length > MAX_WORKBOOK_INFLATED_BYTES
-        ? undefined
-        : inflated.toString("latin1");
+      return inflated.toString("latin1");
     } catch {
       return undefined;
     }
   };
-  const textOf = (file: string): string | undefined => {
+  const textOf = (file: string): string | null | undefined => {
     const index = find(file);
-    return index < 0 ? undefined : textAt(index);
+    return index < 0 ? null : textAt(index);
   };
+  return { find, textAt, textOf };
+}
 
+/** One sheet as SheetJS reads it. */
+interface SheetRead {
+  /** The name SheetJS reads the part under, which its `.rels` and targets hang from. */
+  path: string;
+  /** The part's index in the entries. */
+  part: number;
+  /** Whether SheetJS reads it as a chartsheet, and so follows its drawing to a chart. */
+  chart: boolean;
+}
+
+/** `sheetPartsOf`, with the name each part is read under: `undefined` when it cannot say. */
+function sheetReadsOf(zip: Zip): SheetRead[] | undefined {
+  const { find, textOf } = zip;
+  const types = textOf("[Content_Types].xml");
+  if (types === undefined) return undefined;
   const workbooks: (string | undefined)[] = [];
-  for (const tag of textOf("[Content_Types].xml")?.match(TAG) ?? []) {
+  for (const tag of types?.match(TAG) ?? []) {
     const { root, attributes } = parseTag(tag);
     if (root.replace(/<\w*:/u, "<") !== "<Override") continue;
     const type = attributes.get("ContentType");
@@ -171,7 +273,7 @@ export function sheetPartsOf(bytes: Buffer, entries: readonly ZipEntry[]): numbe
   // A binary workbook is not an `.xlsx`; the reader says so after, in its own words.
   if (workbookPart === undefined || workbookPart.endsWith("bin")) return undefined;
   const workbook = textOf(workbookPart.startsWith("/") ? workbookPart.slice(1) : workbookPart);
-  if (workbook === undefined) return undefined;
+  if (typeof workbook !== "string") return undefined;
 
   const ids: string[] = [];
   for (const tag of workbook.match(TAG) ?? []) {
@@ -191,41 +293,131 @@ export function sheetPartsOf(bytes: Buffer, entries: readonly ZipEntry[]): numbe
       "",
     );
   if (find(relationships) < 0) relationships = "xl/_rels/workbook.xml.rels";
-  const targets = new Map<string, string>();
-  for (const tag of textOf(relationships)?.match(TAG) ?? []) {
+  const relationshipsText = textOf(relationships);
+  if (relationshipsText === undefined) return undefined;
+  const targets = new Map<string, { target: string; type: string | undefined }>();
+  for (const tag of relationshipsText?.match(TAG) ?? []) {
     const { root, attributes } = parseTag(tag);
     if (root !== "<Relationship") continue;
-    // No Target is a throw in SheetJS's `parse_rels`, and an entity is one it would decode.
+    // No Target is a throw in SheetJS's `parse_rels`, and one `unescapexml` would change
+    // is one it would decode.
     const target = attributes.get("Target");
-    if (target === undefined || ESCAPED.test(target)) return undefined;
+    if (target === undefined || decodes(target)) return undefined;
     const id = attributes.get("Id") ?? "undefined";
     // Assigning `hash["__proto__"]` changes what every other lookup finds.
     if (id === "__proto__") return undefined;
-    targets.set(id, target);
+    targets.set(id, { target, type: attributes.get("Type") });
   }
 
-  const parts: number[] = [];
+  const sheets: SheetRead[] = [];
   // Every sheet's target found, or SheetJS reads the whole workbook by position.
   if (ids.every((id) => targets.has(id))) {
     const beside = relationships.replace(/_rels\/[\s\S]*$/u, "");
     for (const id of ids) {
-      const target = targets.get(id) ?? "";
-      let part = find(`xl/${target.replace(/\/?xl\//u, "")}`);
-      if (part < 0) part = find(target);
-      if (part < 0) part = find(beside + target);
+      const { target, type } = targets.get(id) ?? { target: "", type: undefined };
+      let path = `xl/${target.replace(/\/?xl\//u, "")}`;
+      if (find(path) < 0) path = target;
+      if (find(path) < 0) path = beside + target;
+      const part = find(path);
       if (part < 0) return undefined;
-      parts.push(part);
+      sheets.push({ path, part, chart: type === CHARTSHEET });
     }
-    return parts;
+    return sheets;
   }
   // The Numbers hack: a workbook with an `xl/worksheets/sheet.xml` numbers from 0.
   const offset = find("xl/worksheets/sheet.xml") < 0 ? 0 : 1;
   for (const [index] of ids.entries()) {
-    const part = find(
-      `xl/worksheets/sheet${String(index + 1 - offset)}.xml`.replace("sheet0.", "sheet."),
+    const path = `xl/worksheets/sheet${String(index + 1 - offset)}.xml`.replace(
+      "sheet0.",
+      "sheet.",
     );
+    const part = find(path);
     if (part < 0) return undefined;
-    parts.push(part);
+    sheets.push({ path, part, chart: false });
   }
-  return parts;
+  return sheets;
+}
+
+/** Whether `unescapexml` would read `text` as something else, or cannot read it at all. */
+function decodes(text: string): boolean {
+  try {
+    return unescaped(text) !== text;
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * The index in `entries` of the part each of the workbook's sheets is read from, in
+ * the order `workbook.xml` lists them (the same part twice is the same index), or
+ * `undefined` when this cannot say: the workbook part is not text it can read, a
+ * sheet resolves to no part, or a target is one SheetJS would decode. The caller
+ * refuses `undefined`.
+ */
+export function sheetPartsOf(bytes: Buffer, entries: readonly ZipEntry[]): number[] | undefined {
+  return sheetReadsOf(zipOf(bytes, entries))?.map((sheet) => sheet.part);
+}
+
+/**
+ * Whether every part SheetJS reads for the workbook's sheets is read once (lg-104): for
+ * each sheet, its part, its `.rels`, every part a relationship there names, and for a
+ * chartsheet each of those parts' `.rels`, every part they name and those parts' `.rels`.
+ * `false` when one part is reached twice, by two sheets or by one, and when this cannot
+ * say: the sheets cannot be resolved (`sheetPartsOf`), a `.rels` part exists and cannot
+ * be read, or a relationship has no target or one `unescapexml` cannot read. A part
+ * that does not exist is not read, and costs nothing.
+ */
+export function eachPartReadOnce(bytes: Buffer, entries: readonly ZipEntry[]): boolean {
+  const zip = zipOf(bytes, entries);
+  const sheets = sheetReadsOf(zip);
+  if (sheets === undefined) return false;
+  const seen = new Set<number>();
+  /** Counts `file` as read; `false` when it was read already. */
+  const read = (file: string): boolean => {
+    // `getzipdata` and `getzipstr` read nothing for an empty name.
+    const index = file === "" ? -1 : zip.find(file);
+    if (index < 0) return true;
+    if (seen.has(index)) return false;
+    seen.add(index);
+    return true;
+  };
+  /**
+   * Counts `rels` as read, and gives every target in it resolved from `from`, as
+   * `parse_rels` and then `resolve_path` read them; `undefined` when `rels` was read
+   * already or cannot be read.
+   */
+  const targetsOf = (rels: string, from: string): string[] | undefined => {
+    if (!read(rels)) return undefined;
+    const text = zip.textOf(rels);
+    if (text === undefined) return undefined;
+    const found: string[] = [];
+    for (const tag of text?.match(TAG) ?? []) {
+      const { root, attributes } = parseTag(tag);
+      if (root !== "<Relationship") continue;
+      const target = attributes.get("Target");
+      if (target === undefined) return undefined;
+      try {
+        found.push(resolved(unescaped(target), from));
+      } catch {
+        return undefined;
+      }
+    }
+    return found;
+  };
+  for (const sheet of sheets) {
+    if (!read(sheet.path)) return false;
+    const targets = targetsOf(sheetRelationshipsOf(sheet.path), sheet.path);
+    if (targets === undefined) return false;
+    for (const target of targets) {
+      if (!read(target)) return false;
+      if (!sheet.chart) continue;
+      // A chartsheet's drawing names its chart, and SheetJS reads both with their `.rels`.
+      const charts = targetsOf(relationshipsOf(target), target);
+      if (charts === undefined) return false;
+      for (const chart of charts) {
+        if (!read(chart) || !read(relationshipsOf(chart))) return false;
+      }
+    }
+  }
+  return true;
 }
