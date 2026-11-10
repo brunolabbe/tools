@@ -54,6 +54,12 @@ const CENTS_OFF: ReceiptProposal = {
 /** The same receipt with the total misread too: `items-differ` and `parts-differ`. */
 const WORSE: ReceiptProposal = { ...CENTS_OFF, total: 2_660 };
 
+/**
+ * The same receipt with the tax misread, and nothing that blocks filing: two
+ * flags (`tax-differs`, `taxable-differs`), none of them `items-differ`.
+ */
+const TAX_OFF: ReceiptProposal = { ...ADDS_UP, gst: 70, qst: 130, total: 2_700 };
+
 const SECRET = "sk-ant-api-ESCALATION-KEY-MARKER";
 
 interface FakeReader {
@@ -156,6 +162,7 @@ describe("the fixtures say what the tests take them to", () => {
     expect(checkReceipt(CENTS_OFF)).toEqual(["items-differ"]);
     expect(checkReceipt(WORSE)).toContain("items-differ");
     expect(checkReceipt(WORSE).length).toBeGreaterThan(1);
+    expect(checkReceipt(TAX_OFF)).toEqual(["tax-differs", "taxable-differs"]);
   });
 });
 
@@ -262,6 +269,36 @@ describe("a flagged reading is read again (lg-105)", () => {
     expect(second.signals[0]?.aborted).toBe(true);
     const logged = lines.find((line) => line.includes("was not read again"));
     expect(JSON.parse(logged ?? "{}")).toMatchObject({ outOfTime: true });
+  });
+
+  test("a first read that has used the whole deadline is not followed by a second, and the log says so", async () => {
+    const lines: string[] = [];
+    // Answers a flagged reading after the deadline below has gone by.
+    const first = fakeReader("fake-haiku", async () => {
+      await new Promise((resolve) => setTimeout(resolve, 120));
+      return [CENTS_OFF];
+    });
+    const second = answering("fake-sonnet", ADDS_UP);
+    const target = await start(
+      {
+        receiptReader: first.reader,
+        escalationReader: second.reader,
+        receiptReadDeadlineMs: 50,
+      },
+      { lines },
+    );
+
+    const answer = await uploadAndRead(target);
+
+    expect(second.calls).toBe(0);
+    expect(answer.model).toBe("fake-haiku");
+    expect(answer.proposals.map((read) => read.proposal)).toEqual([CENTS_OFF]);
+    const logged = lines.filter((line) => line.includes("was not read again"));
+    expect(logged).toHaveLength(1);
+    const fields: Record<string, unknown> = JSON.parse(logged[0] ?? "{}");
+    expect(fields).toMatchObject({ level: "warn", model: "fake-sonnet", outOfTime: true });
+    // No error was thrown: the reader was never asked.
+    expect(fields).not.toHaveProperty("code");
   });
 
   test("both reads are handed a signal, so a person who hangs up stops either", async () => {
@@ -381,6 +418,14 @@ describe("which reading is better (lg-105)", () => {
     expect(isBetter(checked(CENTS_OFF), checked(WORSE))).toBe(true);
     expect(isBetter(checked(CENTS_OFF), checked(CENTS_OFF))).toBe(false);
     expect(isBetter(checked(WORSE), checked(CENTS_OFF))).toBe(false);
+  });
+
+  test("fewer proposals that block filing outranks fewer flags in total", () => {
+    // One blocking proposal and one flag becomes two flags and none blocking:
+    // kept, though the total went up.
+    expect(isBetter(checked(TAX_OFF), checked(CENTS_OFF))).toBe(true);
+    // The other way round has fewer flags and a blocking proposal more: refused.
+    expect(isBetter(checked(CENTS_OFF), checked(TAX_OFF))).toBe(false);
   });
 
   test("a reading with fewer receipts than the first is never better, an empty one included", () => {
