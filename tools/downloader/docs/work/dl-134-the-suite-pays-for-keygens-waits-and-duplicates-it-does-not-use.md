@@ -406,3 +406,9 @@ times in the CI log unless marked measured.
     duration, and that the dropped row also counted more than 100 digests.
   - **Step 3** stays not done, on the owner's answer above. **F3 and F5** are
     recorded by the gate and not touched.
+- 2026-11-10: Landing as `in-flight`; two things remain before this ticket
+  reaches `done`. (1) **Step 11**, built on top of dl-133 (PR #781) once it
+  merges, which settles Done when 4's step-11 part, now `unproven (scope)`.
+  (2) A merge of `main` into this branch once PR #777 (dl-130) squash-merges,
+  which retargets this draft (#787) to `main`; the draft holds for merge order
+  until then.
