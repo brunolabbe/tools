@@ -257,21 +257,23 @@ files together.
 | `hard` | `builder-hard` (Opus 5.5, high) | `ticket-reviewer-sonnet` (Sonnet 5.5, xhigh) |
 | a Build step that searches the web — a measurement ticket's web check | `builder-web` (Sonnet 5.5, high; the one builder with `WebSearch`), dispatched for that step alone, continuing the ticket's branch | the ticket's own gate row |
 | maintenance — a rebase, a merge from `main`, one Log edit, recording an answer | `builder-mechanical`, prompt saying "maintenance" | none |
-| a filing whose reproduction is in hand | `builder-standard` (Sonnet 5.5, high) | `ticket-reviewer-sonnet`, narrow, after the PR opens |
+| a filing whose reproduction is in hand | `builder-standard` (Sonnet 5.5, high) | `ticket-reviewer-opus`, narrow, after the PR opens |
 | a docs-only chore — ticket files, tool docs, no source | `builder-standard` | one gate, narrow, after the PR opens |
 | a round's mechanical fixes, and a landing | `fixer` (Sonnet 5.5, high) | gate 2: the ticket's own gate row, dispatched fresh |
 
 - Never `haiku` for a gate or a gate record; never `fable` for either role. A
   filing whose reproduction is in hand is a `standard` build, not a maintenance
-  dispatch, with one narrow gate after the PR opens (owner, 2026-11-10,
-  repo-138). The 2026-10-14 row put it on `builder-mechanical`, priced on
-  lg-24's filing at $0.10, against $0.63 and $1.17 for dl-123 and dl-125 on
-  `builder-standard`; five filings on that row in 2026-10-31 to 2026-11-01
-  (lg-82, lg-83, repo-133, lg-80, repo-126) each took two gates and cost $5.11
-  to $6.85 in all, against $1.14 and $1.54 for the one-gate filings in the
-  same period. A filing that must first reproduce on `main` is not in hand and
-  is a `standard` dispatch. The rule is "a different model", not "a cheaper
-  one".
+  dispatch, with one narrow `ticket-reviewer-opus` gate after the PR opens
+  (owner, 2026-11-10, repo-138: a Sonnet filer under a Sonnet gate broke the
+  rule below, so the gate is Opus). The 2026-10-14 row put it on
+  `builder-mechanical`, priced on lg-24's filing at $0.10, against $0.63 and
+  $1.17 for dl-123 and dl-125 on `builder-standard`; five filings on that row
+  in 2026-10-31 to 2026-11-01 (lg-82, lg-83, repo-133, lg-80, repo-126) each
+  took two gates and cost $5.11 to $6.85 in all, against $1.14 and $1.54 for
+  the one-gate filings in the same period. The Opus gate 1 on a `standard`
+  build ran $2.65 to $3.47 (#684, #691, #703). A filing that must first
+  reproduce on `main` is not in hand and is a `standard` dispatch. The rule is
+  "a different model", not "a cheaper one".
 - A Haiku build or filing is always gated: it has reported verifications it
   did not run (dl-36, pl-51), and lg-64's filing gate found a false fact among
   seven lows. A maintenance dispatch that changes no source and no brief is
