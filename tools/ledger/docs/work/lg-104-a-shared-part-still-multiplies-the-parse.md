@@ -996,3 +996,97 @@ built (both exit 0). The code is commit `08c22e7a`.
   seconds, through `readSheets` and the import command, with a test that fails or times
   out at `2c48efa3`. It also asks where the spin is, and says to stop if the only fix is
   inside `node_modules/xlsx`.
+
+### 2026-11-10, review round 1 (Claude Opus 5.5)
+
+The round's code is commit `76429ea5`. "Before" means a second tree at `2c48efa3` with
+the round's test files and helper copied in, farmed and built (both exit 0), and
+removed after.
+
+- **Gate 1's F1 reproduced on `2c48efa3` before any change.** The gate's
+  `slash-doubleslash-14` and `slash-leadingslash-14` read 14 sheets in 3,959 ms and
+  3,857 ms. `ct-listed-50-shadowed` read in 2,389 ms, against 105 ms listed once.
+- **The premise, from SheetJS's source and a reading.** `init_cfb` puts `Root Entry/`
+  first and `seed_cfb` a four-byte `\u0001Sh33tJ5` second. `cfb_add` keeps any name not
+  starting with `Root Entry/` as `("Root Entry/" + name).replace("//", "/")`.
+  `paths.mts` printed SheetJS's `FullPaths` for `/xl/a.xml`, `xl//b.xml`,
+  `Root Entry//xl/c.xml`, `//xl//d.xml`, `\u0001Sh33tJ5` and `xl/a.xml`:
+  `["Root Entry/","Root Entry/\u0001Sh33tJ5","Root Entry/xl/a.xml","Root Entry/xl/b.xml","Root Entry//xl/c.xml","Root Entry//xl//d.xml","Root Entry/\u0001Sh33tJ5","Root Entry/xl/a.xml"]`.
+- **The fix.** `zipOf` in `workbook-parts.ts` keys each entry by `cfbPathOf`, the path
+  `cfb_add` keeps. It also seeds the two keys `init_cfb` puts first, the empty name and
+  the seed, as "no part", since SheetJS finds those before any zip entry of that name.
+  This is gate 1's candidate remedy plus the seed, which the candidate left out.
+- **The two texts F1 names, corrected.** The header of `workbook-parts.ts` now says
+  the zip is searched under the path `cfb_add` keeps, after the seeded entries. It also
+  says the count of reads is as exact as the lookup and no more, since a part the copy
+  cannot find is counted as not read, and it records gate 1's +329.5 MB. In
+  `workbook-bounds.ts`, "they no longer get here" is replaced: the refusal rests on the
+  copy finding each part as SheetJS does, gate 1 read the comments shape past it, and
+  the copy, not the cap, keeps them from the cap.
+- **The sheet-part variant, built and measured.** It is the new helper
+  `storedSlashWorkbook`. One part is stored first as `xl//worksheets/b.xml`. Its
+  targets are `worksheets/b.xml`, `/xl/worksheets/b.xml` and `xl/worksheets/b.xml`,
+  each with a decoy under the name the old copy's next lookup tried. With `more`, it
+  adds one target for each place in `worksheets/b.xml` (not after a `/`) where `xl/`
+  can be put and still be taken out by SheetJS's first lookup, which makes 18 sheets.
+  The part is 1,400 by 100 numbers. These are `multiplier.mts` reader runs under
+  `--max-old-space-size=900`, one at a time:
+
+  | File              | At `2c48efa3`                                                                   | At `76429ea5`                       |
+  | ----------------- | ------------------------------------------------------------------------------- | ----------------------------------- |
+  | `slashsheet-3`    | read 3 sheets, 420,000 cells; +114.2 MB (peak 211.3); 1,296 ms                  | `WORKBOOK_NOT_XLSX`; +8.6 MB; 75 ms |
+  | `slashsheet-more` | `WORKBOOK_TOO_LARGE` `slots`, after the parse; +414.5 MB (peak 499.1); 7,755 ms | `WORKBOOK_NOT_XLSX`; +8.3 MB; 86 ms |
+
+  The gate estimated three to four times by reading. The spellings reach 18, and the
+  18-sheet file's parse peaked at 499.1 MB against the 512 MB container before the slots
+  cap refused it.
+
+- **The gate's own files, the same runs.**
+
+  | File                          | At `2c48efa3`                          | At `76429ea5`                        |
+  | ----------------------------- | -------------------------------------- | ------------------------------------ |
+  | `slash-plain-14-50000`        | `WORKBOOK_NOT_XLSX`; +4.9 MB           | `WORKBOOK_NOT_XLSX`; +11.0 MB; 75 ms |
+  | `slash-doubleslash-14-50000`  | read 14 sheets; +346.2 MB (peak 430.5) | `WORKBOOK_NOT_XLSX`; +7.8 MB; 75 ms  |
+  | `slash-leadingslash-14-50000` | read 14 sheets; +330.9 MB (peak 416.9) | `WORKBOOK_NOT_XLSX`; +9.8 MB; 73 ms  |
+  | `slash-triple-14-50000`       | read 14 sheets; +9.8 MB                | read 14 sheets; +12.3 MB             |
+  | `ct-listed-50-shadowed`       | read, 1,931 ms                         | `WORKBOOK_NOT_XLSX`, 18 ms           |
+  | `ct-listed-once`              | read, 111 ms                           | read, 102 ms                         |
+
+  `triple` is the gate's negative control: SheetJS keeps it under a name no relationship
+  asks for. It reads at both heads.
+
+- **The spin, located.** Gate 1's `fold-F-wb-rels-corrupt.xlsx` on `2c48efa3`:
+  `XLSX.CFB.read` alone exits 124 at 30 s, and so does `XLSX.read` with `bookSheets`.
+  Node's `inflateRawSync` refuses `xl/_rels/workbook.xml.rels` with `Z_DATA_ERROR` in
+  3 ms. So the spin is SheetJS's own JavaScript inflate inside its zip read, before any
+  code of ours runs.
+  - It is fixed in our code, not in `node_modules`. `readSheets` now runs
+    `countInflated` over every entry, with no bound, before any SheetJS read. That
+    inflates each stream through zlib once, keeps nothing, and refuses one that does not
+    inflate as `WORKBOOK_NOT_XLSX`.
+  - It costs one more inflate of the file: about 35 ms at the bound by
+    `workbook-zip.ts`'s own figure. The route already ran this count against its bound;
+    the command now gets the stream check and no bound. The comments-14 refusal went
+    from 35 ms (+4.7 MB) to 86 ms (+10.8 MB) through the reader.
+  - At `76429ea5`, `fold-F-wb-rels-corrupt.xlsx` through the gate's `one.mts` is refused
+    `WORKBOOK_NOT_XLSX` in 7 ms.
+- **Regression tests,** all passing on `76429ea5`:
+  - `xlsx.test.ts`, describe "a part stored under a name SheetJS's CFB normalises is
+    found as SheetJS finds it (lg-104, gate 1)", four tests: comments stored as
+    `xl//comments1.xml` and as `/xl/comments1.xml`, each asserting that SheetJS hangs a
+    comment on all 14 sheets; `/[Content_Types].xml` before a plain one; the sheet-part
+    variant, asserting that SheetJS reads `BIG` for 3 sheets.
+  - `xlsx.test.ts`, describe "a deflate stream that does not inflate is refused before
+    SheetJS reads it (lg-104)": refused, in under 5 s.
+  - `workbook-import.test.ts`, describe "a deflate stream that does not inflate, through
+    the command (lg-104)": exit 2, "Only an .xlsx workbook", no books directory.
+- **The same tests at `2c48efa3`:** `npx vitest run … -t "CFB normalises"` gave 4 of 4
+  failed. The two corrupt-stream tests each hit `timeout -k 5 90` (exit 124). No vitest
+  process survived (`ps … | grep -c "[v]itest"` → 0).
+- **Re-run at `76429ea5`:**
+  - Gate 1's `legit.mts`: the same six lines as gate 1's, the case-only `Override`
+    pair still refused.
+  - The real workbook, read in place, counts only: 14 sheets, 3,513 cells.
+  - `localname.sh 2 14` and `comments.sh … 50000 1 14`, all exit 0: both 14-sheet files
+    refused; the controls read 140,013 cells and 14 cells.
+  - The four spec files: 210 of 210.
