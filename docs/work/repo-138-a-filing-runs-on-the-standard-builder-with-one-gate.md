@@ -27,7 +27,7 @@ The review of 2026-11-01 read it off the accounting tables and filed this.
 
 ## Reproduction
 
-From `reference/history.md`'s entries, 2026-10-31 and 2026-11-01 (each figure
+From `reference/history.md`'s entries, 2026-10-25 and 2026-10-31 (each figure
 is that entry's accounting row):
 
 | Filing                    | Filer       | Gate 1                                       | Round              | Gate 2          | Landing | Total |
@@ -38,8 +38,8 @@ is that entry's accounting row):
 | lg-80 (tools-54)          | Haiku $0.54 | $1.10, CONCERNS, 1 med                       | fresh Sonnet $1.21 | $1.73, PASS     | $0.54   | $5.11 |
 | repo-126 (tools-5e)       | Haiku $0.13 | $1.60, CONCERNS, 2 meds                      | Sonnet $1.01       | $2.33, CONCERNS | $0.50   | $5.58 |
 
-Five of five filings in the period took two gates; the gates cost $3.3 to
-$4.9 of each $5.1 to $6.9 total. The one-gate filings in the same period
+Five of five filings in the period took two gates; the gates cost $2.83 to
+$4.91 of each $5.1 to $6.9 total. The one-gate filings in the same period
 (lg-81's one-line fix, pl-65's Build line) had no numerical claim to get wrong:
 $1.54 and $1.14.
 
@@ -47,7 +47,7 @@ The `builder-standard` builds of the same period, for scale: repo-130 $2.13,
 repo-133's build $1.25, repo-120 $1.25, lg-69 $2.71 — each with one gate and no
 round.
 
-## Decision — answered
+## Decision — answered 2026-11-10 by the owner
 
 Question, put by the orchestrator at the tools-86 batch checkpoint: "repo-138:
 what should the pairing table's filing row read?"
@@ -180,3 +180,53 @@ The filing row now reads `builder-standard` (Sonnet 5.5, high) with
     `ticket-reviewer-opus.md:5:model: claude-opus-5-5`.
   - Left as before, not in the Build: `SKILL.md`'s "A Haiku build or filing is
     always gated" bullet.
+- 2026-11-10 — Owner's answers at the tools-86 checkpoint 3, after gate 1
+  (CONCERNS: 1 med, 6 lows, no high, no round opened). Recorded by the lander
+  from the orchestrator's dispatch; each was the recommended option and none
+  was overridden.
+  - Question: which of gate 1's below-floor findings to fix at the landing
+    without a re-gate. Options as relayed: fix F1, F2, F4, F5 and F7 and leave
+    F3 and F6 recorded unfixed (recommended), or leave all recorded. Chosen: fix
+    F1, F2, F4, F5 and F7; F3 and F6 stay recorded unfixed. On F4 the owner
+    chose the rewording ("A Haiku build is always gated") over leaving it.
+    Provenance: gate 1's section on this ticket, `## Review`.
+  - Question: what the docs-only chore row's gate cell should name, which gate
+    1 raised as an open decision (a Sonnet build there could get a Sonnet gate,
+    the same-model pairing the second answer above ruled out for filings).
+    Options as relayed: name `ticket-reviewer-opus` (recommended), or leave
+    "one gate". Chosen: name it. The row now reads `ticket-reviewer-opus`,
+    narrow, after the PR opens. This is an owner-authorised landing edit that
+    was not gated; the gate saw the row as `one gate, narrow, after the PR
+    opens` and did not read the new cell.
+  - Question: how Done when 2 is held after the merge. Options as relayed:
+    an `awaiting:` line (recommended), or leave it `unproven (scope)` as the
+    gate graded it. Chosen: the `awaiting:` line, committed before the records:
+    event, the first three filing dispatches after this merge; reading, their
+    per-agent cost rows logged in `reference/history.md`. The gate graded the
+    row `unproven (scope)` because the dispatch told it to; `gate.md` calls the
+    case `awaiting`, and the error was the dispatch's, not the gate's. The gate
+    section is landed as written.
+- 2026-11-10 — Fixed at landing by owner choice: gate 1, F1 — "The Opus gate 1
+  on a `standard` build ran $2.65 to $3.47". `SKILL.md` now names the sample:
+  three Opus gate 1s ran $2.65 to $3.47 and the 23 from 2026-10-25 on ran $2.17
+  to $4.26, median $3.17, as the gate stated. Proof: the removed-line grep
+  below, `SKILL.md`, after this commit, read `1`.
+- 2026-11-10 — Fixed at landing by owner choice: gate 1, F2 — "in 2026-10-31 to
+  2026-11-01" is wrong at both ends. `SKILL.md` now dates four filings
+  2026-10-31 and repo-126 2026-10-25, and the Reproduction's lead-in reads
+  "2026-10-25 and 2026-10-31". Checked against `git log --diff-filter=A` on
+  the five ticket files: #682, #688, #693 and #696 on 2026-10-31, #650 on
+  2026-10-25. Proof: the removed-line greps, `SKILL.md` and this ticket, each
+  read `1`.
+- 2026-11-10 — Fixed at landing by owner choice: gate 1, F4 — "A Haiku build or
+  filing is always gated". Reworded to "A Haiku build is always gated". Proof:
+  the removed-line grep, `SKILL.md`, read `1`.
+- 2026-11-10 — Fixed at landing by owner choice: gate 1, F5 — the heading is a
+  bare `## Decision — answered`. It now reads `## Decision — answered
+  2026-11-10 by the owner`. Proof: the removed-line grep, this ticket, read
+  `1`.
+- 2026-11-10 — Fixed at landing by owner choice: gate 1, F7 — "the gates cost
+  $3.3 to $4.9". The Reproduction now reads $2.83 to $4.91, the gate's sums
+  (lg-82 $4.91, lg-83 $3.94, repo-133 $3.11, lg-80 $2.83, repo-126 $3.93). The
+  Log entry of 2026-11-10 above that says the old figure had no matching sum
+  stands. Proof: the removed-line grep, this ticket, read `1`.
