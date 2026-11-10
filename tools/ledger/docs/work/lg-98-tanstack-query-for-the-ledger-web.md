@@ -253,48 +253,48 @@ The sets are as `writes.ts` names them:
 
 - `BOOKS`: buckets, inbox, inbox/auto-filed, rows, periods, periods/open,
   period-lines, mortgage, spending-category-map and the eight `stats/*` routes.
-- `RULES`: rules and inbox.
+- `RULES`: rules, inbox and rows (rows added in fix round 1, gate 1's F2).
 - `SPENDING`: spending-categories, spending-category-map, rows, inbox,
   inbox/auto-filed, period-lines and stats/spending.
 - `DIRECTORY`: me, households/:id, admin/households and people.
 - `EVERYTHING`: every route.
 
-| #   | File                 | Function                 | Marks stale (patched instead of read)        | Screen test besides                                                                                                                                   |
-| --- | -------------------- | ------------------------ | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | `households.ts`      | `addHouseholdMember`     | `DIRECTORY` + `BOOKS`                        | `household.test.tsx` › adds a member, tells them the address must be admitted on Access, and shows the list again                                     |
-| 2   | `households.ts`      | `renameHousehold`        | `DIRECTORY`                                  | `household.test.tsx` › titles the page by the household's name, and a member renames it there                                                         |
-| 3   | `households.ts`      | `adminRenameHousehold`   | `DIRECTORY`                                  | —                                                                                                                                                     |
-| 4   | `households.ts`      | `createHousehold`        | admin/households (patched with the answer)   | `writes.test.tsx` › the patches put the answer where the inbox and the admin list show it                                                             |
-| 5   | `households.ts`      | `adminAddMember`         | `DIRECTORY` + `BOOKS`                        | —                                                                                                                                                     |
-| 6   | `households.ts`      | `adminRemoveMember`      | `DIRECTORY` + `BOOKS`                        | —                                                                                                                                                     |
-| 7   | `households.ts`      | `adminChangeAddress`     | `DIRECTORY`                                  | —                                                                                                                                                     |
-| 8   | `households.ts`      | `adminRetirePerson`      | `DIRECTORY` + `BOOKS`                        | —                                                                                                                                                     |
-| 9   | `households.ts`      | `adminRenamePerson`      | `DIRECTORY`                                  | `app.test.tsx` › the shell hands every screen the shown names, and a rename is on the next tab opened (lg-33)                                         |
-| 10  | `inbox.ts`           | `classifyRow`            | `BOOKS` (inbox, inbox/auto-filed patched)    | `history.test.tsx` › a row answered by a person is filed again from the history, the list is read again, … (lg-95); `writes.test.tsx` › the patches … |
-| 11  | `mortgage-splits.ts` | `fileMortgageSplit`      | mortgage-splits + `BOOKS`                    | —                                                                                                                                                     |
-| 12  | `mortgage.ts`        | `saveMortgage`           | `BOOKS` (mortgage patched with the answer)   | —                                                                                                                                                     |
-| 13  | `periods.ts`         | `closePeriod`            | `BOOKS`                                      | `periods.test.tsx` › the close button shows who deposits what, and closing sends the period as seen                                                   |
-| 14  | `periods.ts`         | `addLine`                | `BOOKS`                                      | —                                                                                                                                                     |
-| 15  | `periods.ts`         | `correctLine`            | `BOOKS`                                      | —                                                                                                                                                     |
-| 16  | `periods.ts`         | `retireLine`             | `BOOKS`                                      | —                                                                                                                                                     |
-| 17  | `periods.ts`         | `addRecurring`           | recurring + `BOOKS`                          | —                                                                                                                                                     |
-| 18  | `periods.ts`         | `changeRecurring`        | recurring + `BOOKS`                          | —                                                                                                                                                     |
-| 19  | `receipts.ts`        | `uploadReceipt`          | nothing                                      | —                                                                                                                                                     |
-| 20  | `receipts.ts`        | `readReceipt`            | nothing                                      | —                                                                                                                                                     |
-| 21  | `receipts.ts`        | `fileReceipt`            | `BOOKS`                                      | —                                                                                                                                                     |
-| 22  | `rules.ts`           | `createRule`             | `RULES`                                      | —                                                                                                                                                     |
-| 23  | `rules.ts`           | `editRule`               | `RULES`                                      | —                                                                                                                                                     |
-| 24  | `rules.ts`           | `retireRule`             | `RULES`                                      | `rules.test.tsx` › retiring a rule asks the API and reloads what is in force                                                                          |
-| 25  | `salaries.ts`        | `enterSalaries`          | salaries, ratios + `BOOKS`                   | —                                                                                                                                                     |
-| 26  | `salaries.ts`        | `confirmRatio`           | salaries, ratios + `BOOKS`                   | —                                                                                                                                                     |
-| 27  | `spending.ts`        | `addSpendingCategory`    | `SPENDING`                                   | —                                                                                                                                                     |
-| 28  | `spending.ts`        | `renameSpendingCategory` | `SPENDING`                                   | —                                                                                                                                                     |
-| 29  | `spending.ts`        | `retireSpendingCategory` | `SPENDING`                                   | —                                                                                                                                                     |
-| 30  | `spending.ts`        | `setSpendingMapEntry`    | `SPENDING`                                   | —                                                                                                                                                     |
-| 31  | `spending.ts`        | `setRowSpendingCategory` | `SPENDING` (inbox, inbox/auto-filed patched) | `writes.test.tsx` › the patches put the answer where the inbox and the admin list show it                                                             |
-| 32  | `statements.ts`      | `importStatement`        | `BOOKS`                                      | `app.test.tsx` › the inbox tab's count changes when a paste is stored, with no change of tab (lg-54)                                                  |
-| 33  | `workbook.ts`        | `describeWorkbook`       | nothing                                      | —                                                                                                                                                     |
-| 34  | `workbook.ts`        | `confirmWorkbook`        | `EVERYTHING`                                 | —                                                                                                                                                     |
+| #   | File                 | Function                 | Marks stale (patched instead of read)                | Screen test besides                                                                                                                                                                                   |
+| --- | -------------------- | ------------------------ | ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | `households.ts`      | `addHouseholdMember`     | `DIRECTORY` + `BOOKS`                                | `household.test.tsx` › adds a member, tells them the address must be admitted on Access, and shows the list again                                                                                     |
+| 2   | `households.ts`      | `renameHousehold`        | `DIRECTORY`                                          | `household.test.tsx` › titles the page by the household's name, and a member renames it there                                                                                                         |
+| 3   | `households.ts`      | `adminRenameHousehold`   | `DIRECTORY`                                          | —                                                                                                                                                                                                     |
+| 4   | `households.ts`      | `createHousehold`        | admin/households (patched with the answer)           | `writes.test.tsx` › the patches put the answer where the inbox and the admin list show it                                                                                                             |
+| 5   | `households.ts`      | `adminAddMember`         | `DIRECTORY` + `BOOKS`                                | —                                                                                                                                                                                                     |
+| 6   | `households.ts`      | `adminRemoveMember`      | `DIRECTORY` + `BOOKS`                                | —                                                                                                                                                                                                     |
+| 7   | `households.ts`      | `adminChangeAddress`     | `DIRECTORY`                                          | —                                                                                                                                                                                                     |
+| 8   | `households.ts`      | `adminRetirePerson`      | `DIRECTORY` + `BOOKS`                                | —                                                                                                                                                                                                     |
+| 9   | `households.ts`      | `adminRenamePerson`      | `DIRECTORY`                                          | `app.test.tsx` › the shell hands every screen the shown names, and a rename is on the next tab opened (lg-33)                                                                                         |
+| 10  | `inbox.ts`           | `classifyRow`            | `BOOKS` (inbox, inbox/auto-filed patched)            | `history.test.tsx` › a row answered by a person is filed again from the history, the list is read again, … (lg-95); `writes.test.tsx` › the patches …                                                 |
+| 11  | `mortgage-splits.ts` | `fileMortgageSplit`      | mortgage-splits + `BOOKS`                            | —                                                                                                                                                                                                     |
+| 12  | `mortgage.ts`        | `saveMortgage`           | `BOOKS` (mortgage patched with the answer)           | —                                                                                                                                                                                                     |
+| 13  | `periods.ts`         | `closePeriod`            | people, admin/households + `BOOKS` (fix round 1, F1) | `periods.test.tsx` › a person retired at the close is no longer offered on the Period tab once it is closed (lg-98); › the close button shows who deposits what, and closing sends the period as seen |
+| 14  | `periods.ts`         | `addLine`                | `BOOKS`                                              | —                                                                                                                                                                                                     |
+| 15  | `periods.ts`         | `correctLine`            | `BOOKS`                                              | —                                                                                                                                                                                                     |
+| 16  | `periods.ts`         | `retireLine`             | `BOOKS`                                              | —                                                                                                                                                                                                     |
+| 17  | `periods.ts`         | `addRecurring`           | recurring + `BOOKS`                                  | —                                                                                                                                                                                                     |
+| 18  | `periods.ts`         | `changeRecurring`        | recurring + `BOOKS`                                  | —                                                                                                                                                                                                     |
+| 19  | `receipts.ts`        | `uploadReceipt`          | nothing                                              | —                                                                                                                                                                                                     |
+| 20  | `receipts.ts`        | `readReceipt`            | nothing                                              | —                                                                                                                                                                                                     |
+| 21  | `receipts.ts`        | `fileReceipt`            | `BOOKS`                                              | —                                                                                                                                                                                                     |
+| 22  | `rules.ts`           | `createRule`             | `RULES`                                              | `rule-rows.test.tsx` › a rule added on the Rules tab takes its row off the Spending tab's uncategorised list (lg-98)                                                                                  |
+| 23  | `rules.ts`           | `editRule`               | `RULES`                                              | shares 22's test: the same keys                                                                                                                                                                       |
+| 24  | `rules.ts`           | `retireRule`             | `RULES`                                              | shares 22's test: the same keys; `rules.test.tsx` › retiring a rule asks the API and reloads what is in force                                                                                         |
+| 25  | `salaries.ts`        | `enterSalaries`          | salaries, ratios + `BOOKS`                           | —                                                                                                                                                                                                     |
+| 26  | `salaries.ts`        | `confirmRatio`           | salaries, ratios + `BOOKS`                           | —                                                                                                                                                                                                     |
+| 27  | `spending.ts`        | `addSpendingCategory`    | `SPENDING`                                           | —                                                                                                                                                                                                     |
+| 28  | `spending.ts`        | `renameSpendingCategory` | `SPENDING`                                           | —                                                                                                                                                                                                     |
+| 29  | `spending.ts`        | `retireSpendingCategory` | `SPENDING`                                           | —                                                                                                                                                                                                     |
+| 30  | `spending.ts`        | `setSpendingMapEntry`    | `SPENDING`                                           | —                                                                                                                                                                                                     |
+| 31  | `spending.ts`        | `setRowSpendingCategory` | `SPENDING` (inbox, inbox/auto-filed patched)         | `writes.test.tsx` › the patches put the answer where the inbox and the admin list show it                                                                                                             |
+| 32  | `statements.ts`      | `importStatement`        | `BOOKS`                                              | `app.test.tsx` › the inbox tab's count changes when a paste is stored, with no change of tab (lg-54)                                                                                                  |
+| 33  | `workbook.ts`        | `describeWorkbook`       | nothing                                              | —                                                                                                                                                                                                     |
+| 34  | `workbook.ts`        | `confirmWorkbook`        | `EVERYTHING`                                         | —                                                                                                                                                                                                     |
 
 `writes.test.tsx` › "a refused write marks nothing stale" covers the refusal.
 `npx vitest run tools/ledger/web/test/writes.test.tsx tools/ledger/web/test/writes-source.test.ts`
@@ -360,3 +360,106 @@ Relayed by the orchestrator in the dispatch of gate 1's fix round, 2026-11-10.
   it in this round. The options were: fix it in this round (chosen, the
   orchestrator's recommendation); record it unfixed in the gate's record; or file
   a ticket for it.
+
+### 2026-11-10 — fix round 1, gate 1's F1, F2, F3, F4 and F7
+
+A new builder; the one that built the branch is retired. Every new test below was
+first run against the source at `70b129cc`, unchanged in the tree at `892b0f9c`
+(the commit above, a Log entry only): 6 of 6 new screen tests failed there, and 14
+of 14 new and changed `lg-98` tests pass at the round's head.
+
+- **F1, `closePeriod`.** It now marks `people` and `admin/households` stale besides
+  `BOOKS`. A close applies the retirements waiting for it, so who `GET /api/people`
+  says is in changes, and so does each person's standing in the admin's list
+  (`api/test/retire-person.test.ts` › "a person retired while a period is open" ›
+  "takes part in its settlement, and from the day after its close is no longer
+  offered" asserts both). `periods.test.tsx` › "a person retired at the close is no
+  longer offered on the Period tab once it is closed (lg-98)": a fake that answers
+  casey as in before the close and as retired after it; the Add a line form's
+  "Paid by" offers alex, casey, sam, then alex, sam. At `70b129cc` it still offered
+  casey after the close.
+- **F2, the three rule writes.** `RULES` is now rules, inbox and rows. A rule files
+  nothing already stored, but `GET /api/rows` gives an unfiled row the category of
+  the rule that would file it (`api/test/spending-categories.test.ts` › "a rule that
+  matches a row filed before the rule existed" › "gives the unfiled row its
+  category in the inbox and in the rows list alike"). The comment in `writes.ts`
+  that said a rule changes only what the inbox suggests was wrong, and is
+  rewritten. New `rule-rows.test.tsx` › "a rule added on the Rules tab takes its row
+  off the Spending tab's uncategorised list (lg-98)": Spending read, Rules opened and
+  a rule with a category added, Spending opened again within `staleTime`; the fake's
+  rows list follows the rules it holds. At `70b129cc` the row was still listed.
+  `editRule` and `retireRule` invalidate the same keys and share the test, as the
+  owner's 2026-11-10 answer allows.
+- **Another omission of the same kind: none found.** Read for it: every `INSERT`
+  in `api/src` and the GET handlers in `api/src/routes/`; who reads
+  `people_retirements` (`/api/people` and, through `stats.ts`, `buckets.ts` and
+  `periods.ts`, only routes already in `BOOKS`); who reads the current rules
+  (`/api/inbox` and `/api/rows` only; `classifyAdded` is the paste); and the eight
+  `stats/*` computations in `stats.ts` against each write. Spending counts only
+  filed rows, which cite the rule version that filed them, so a rule moves no
+  chart; `ratiosAsOf` and `splitsAsOf` read no periods or retirements; the
+  household's own route carries no standing, so a close does not change it.
+- **F3, a paged list read again past 500.** History's rows, and the bank rows and
+  card lines under a spending chart, are read again from the top with as many as
+  are shown, and the API refuses `limit` above 500 (`rowsQuerySchema`,
+  `periodLinesQuerySchema`). The remedy: `queries.ts`'s `readFromTop` reads them in
+  requests of at most `READ_LIMIT_MAX` (500), one after another, and stops at a
+  short answer; up to 500 shown it is the one request it was. And a read again that
+  fails over a list still shown now says so on all three
+  (`rereadFailureOf`, "The list could not be read again, so it shows what was read
+  before."), where `failureOf` hid it. Rejected:
+  - reading only the first page again after a write: one request, but the person
+    is sent back to the top, which lg-95's and lg-18's re-reads were written not to
+    do;
+  - capping the re-read at 500 and dropping the rest: one request, but rows the
+    person opened disappear without a word;
+  - `useInfiniteQuery`: it reads every page again, one request per page of 25 or
+    50, so 22 requests for 550 History rows against an edge rule of 20 in 10
+    seconds, and it is a rewrite of three screens;
+  - raising the API's 500: an API contract change, not this round's.
+    The tests serve 600 rows (and 700 lines) through fakes that refuse what the
+    contract's own schemas refuse, and put the first 500 in the cache entry as Show
+    more would leave them, then tap Show more once past 500, to keep each to
+    seconds. `history.test.tsx` › "past 500 rows shown, the history is read again
+    whole after a change and after staleTime (lg-98)" and › "a history read again
+    that is refused says so, over the rows it still shows (lg-98)";
+    `stats-rows.test.tsx` › "past 500 shown, the rows and card lines under the chart
+    are read again whole after a write and after staleTime (lg-98)" and › "rows and
+    card lines read again and refused say so, over what they still show (lg-98)". At
+    `70b129cc` the History change ended in "The change was saved, but the list could
+    not be read again", the spending row kept its old category, and neither refused
+    re-read showed an alert.
+- **F4.** `query-retry.test.tsx` › "a write refused as RATE_LIMITED is never sent
+  again on its own (lg-98)" and the same for `UNREACHABLE`: a `saveMortgage` through
+  `useWrite` on the app's own client, refused, then two minutes of fake time, one
+  call. It passes at `70b129cc` (the config was right), and fails under
+  `mutations: { retry: 3 }` (below).
+- **F7.** The two new screen tests are grounded in the API, not in `writes.ts`: each
+  cites the API test that asserts the answer changes, and each drives the change
+  through a fake that answers differently after the write. `writes.test.tsx`'s
+  `EXPECTED` gains the same two changes, each with a comment naming the screen test
+  that grounds it. The rest of the table is still typed out from the same intent as
+  `writes.ts`; whether to ground every row the same way is put to the owner in the
+  round's report, not settled here.
+- **The 34-write table above** has rows 13 and 22 to 24 changed to match.
+
+Mutation controls on the round's head, each planted, run and restored by a
+script (`git status` clean after):
+
+| Mutation                        | Result                                                |
+| ------------------------------- | ----------------------------------------------------- |
+| none (`app`, `query-cache`)     | 24 of 24 pass                                         |
+| `STALE_MS = 0`                  | 2 of 24 fail: both `query-cache.test.tsx` count tests |
+| `DIRECTORY` without `people`    | 9 of 58 fail, lg-33's among them                      |
+| `BOOKS` without `inbox`         | 18 of 58 fail, lg-54's among them                     |
+| `closePeriod` without `people`  | 1 of 21 fails: the F1 test                            |
+| `RULES` without `rows`          | 1 of 1 fails: the F2 test                             |
+| `READ_LIMIT_MAX = 1000`         | 2 of 53 fail: the two "read again whole" tests        |
+| `rereadFailureOf` always `null` | 2 of 53 fail: the two "refused says so" tests         |
+| `mutations: { retry: 3 }`       | 2 of 45 fail: the two F4 tests                        |
+
+Checks at the round's head: `npx vitest run --project ledger tools/ledger/web` → 459
+of 459 in 30 files; `npm run check` → exit 0; `E2E_PORT=8163 npm run e2e:ledger` at
+`71e27721` → 37 passed (60.0 s). Opened: History (stored change unread)-360, which
+shows the one line "The change was saved, but the list could not be read again",
+not a second one from the new re-read line, and Period-360; both whole.
