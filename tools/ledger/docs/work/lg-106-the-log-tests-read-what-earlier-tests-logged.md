@@ -156,7 +156,8 @@ order is only ever shuffled by the flag on the command line.
    why: (a) the log test makes the requests whose lines it checks, against its
    own app, so it does not need the earlier describes to have run; or (b) each
    test captures its own app's lines, and the log test checks the captures
-   rather than a shared array. Whichever is chosen, the log test must not depend
+   rather than a shared array. _Option (b) is superseded 2026-11-10: the owner
+   deleted it, see the Log._ Whichever is chosen, the log test must not depend
    on the order of the describes above it.
 2. The checks must not pass on an empty log. The `toBeGreaterThan(20)` and each
    `LOGGED.some(...)` precondition must hold under every seed the sweep runs,
@@ -195,3 +196,20 @@ numbers are read at `a100f429`. Repo-129 (PR #783, not merged) and repo-144
 The dispatch's own file-level command, with `--sequence.shuffle` and
 `--sequence.shuffle.files` together, does not parse under vitest 5 and reaches no
 test; the working spelling is `--sequence.shuffle.files` without the bare flag.
+
+**2026-11-10, the owner's answer on gate 1's F4, recorded before any change to
+the Build.**
+
+- Question: Build option (b), where each test captures its own app's lines and
+  the log test checks the captures, does not fix the failure. The captures the
+  log test reads still come from the other tests. A probe of (b) on csv-import
+  gave `63 passed` at seed 1, `1 failed | 62 passed` at seeds 3 and 6, and
+  `1 failed | 62 skipped` for `-t` on the log test. Which remedy should the
+  Build keep?
+- Options: (1) delete (b) and keep (a), where the log test makes the requests
+  whose lines it checks against its own app; or (2) reword (b) so the log test
+  makes its own requests and captures only those.
+- Choice: (1), delete (b) and keep (a). The gate recommended (1).
+- Provenance: the owner, 2026-11-10, at tools-86 checkpoint 8. The orchestrator
+  relayed the answer to the builder in its round-1 message; the builder records
+  it as relayed and did not verify it against the owner directly.
