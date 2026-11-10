@@ -126,3 +126,78 @@ Do not escalate on anything but a flag.
 - `npm run check` and the ledger suite pass.
 
 ## Log
+
+### 2026-11-10 — build (builder, Opus 5.5)
+
+Built on `a100f429`. Steps 1–5 are in place, with the owner's answer above for
+step 4: `@ledger/contract` is not changed.
+
+- **Step 1.** `RECEIPT_ESCALATION_MODEL` → `ReceiptReaderConfig.escalationModel`,
+  `DEFAULT_ESCALATION_MODEL = "claude-sonnet-5-5"` exported from
+  `@ledger/receipts` beside `DEFAULT_RECEIPT_MODEL`. Unset is the default and
+  empty (or blank) is `null`, unlike every other variable in `config.ts`, where
+  blank is unset. Documented in `tools/ledger/.env.example` and in the root
+  `docs/02-DEPLOYMENT.md` table, the two places `RECEIPT_MODEL` is. **The
+  brief named a compose file and a README: neither names `RECEIPT_MODEL`.**
+  `compose.ledger.prod.yaml` passes only the key, and the deployment doc says
+  the other rows go in an override file, so the new row follows it.
+- **Step 2.** Built in `api/src/server.ts` (`receiptReadersFor`) with the same
+  key, logger and options; only `model` differs. `receipts/src/reader.ts` gains
+  only the constant: the reader is unchanged. **Built from configuration only
+  when the first reader is**: beside a handed-in `receiptReader`, the
+  escalation is `escalationReader` or none, so a test that hands in a fake
+  reader and a key (`receipts.test.ts`'s "what is logged" does) cannot build a
+  real Sonnet reader by accident. Two test-only options, `modelReader` (the
+  factory, `createModelReader` by default) and `receiptReadDeadlineMs`.
+  `api/test/helpers/no-model-environment.ts` clears `RECEIPT_ESCALATION_MODEL`
+  from the host too.
+- **Step 3.** `readReceipt` reads again when any proposal carries any flag, with
+  the same categories and the same repair and check, and keeps the second
+  reading only when `isBetter` says so. **The brief's rule, applied as written,
+  keeps a reading that dropped a receipt**: an empty reading ("not a receipt")
+  has no flags, and a reading of one receipt out of two has fewer. `isBetter`
+  never keeps a reading with fewer proposals than the first. That is the
+  builder's call, reported to the orchestrator as an open decision. The
+  failure log line is
+  `warn "a flagged receipt was not read again; the first reading is kept"`
+  with `model`, `code` (`AppError.from(error).code`) and `outOfTime`. It holds
+  no message, cause, URL or header, so `redactHeaders` and `redactUrl` have
+  nothing to redact.
+- **Step 4.** `model` names the escalation model when its reading is kept. The
+  screen's sentence now reads "where it is read by Claude." / "where they are
+  read by Claude, one at a time." The upload's `reader` still decides whether
+  the offer shows. **The brief says "the screen says the photo went to that
+  model"**: no screen reads `ReadReceiptResponse.model` (`grep -rn "\.model"
+  tools/ledger/web/src` → nothing), so only the upload's sentence named a
+  model.
+- **Step 5, measured.** Nothing in the API stops a slow read. The scratch run
+  (`what-stops.mts`: the app listening, a fake reader answering after 130 s,
+  Node's `fetch`):
+  `server timeouts (ms): requestTimeout=0 headersTimeout=60000 timeout=0 keepAliveTimeout=72000`
+  then `read 200 after 130.0 s`. `headersTimeout` bounds only the request's
+  own headers. The web's `requestJson` sets no timeout. What stops it is the
+  edge. `docs/02-DEPLOYMENT.md` says Cloudflare answers `524` to an origin
+  silent for 125 s, and keeps the downloader's wait under 100 s. The
+  Cloudflare docs did not load here (WebFetch failed on both pages), so that
+  figure is the repo's, not re-measured. The first read is already up to
+  3 × 60 s per lg-8's gate, which is unchanged. The second read is therefore
+  given `READ_DEADLINE_MS = 100_000` from the route's start, minus what the
+  first took. A second reading still going then is aborted, and the first
+  reading is answered (`outOfTime: true` in the log line).
+- **A defect the tests found in the build itself:** `AbortSignal.timeout`
+  refuses a fractional delay. The first cut passed
+  `deadline - performance.now()` straight in, and every escalating read
+  answered 500, losing the first reading. The delay is now floored. Everything
+  the second reading takes is inside its `try`, so nothing it throws can cost
+  the first reading again.
+
+Tests: `tools/ledger/api/test/receipt-escalation.test.ts`, 13 tests: one per
+Done-when line, plus the deadline, both signals, the factory's "same key and
+options", "nothing built beside a handed-in reader", and `isBetter`. In
+`web/test/receipts.test.tsx`, the two assertions that read the model's name in
+the sentence now read "read by Claude".
+
+Fold-in: none was free. The ledger `CLAUDE.md`'s "the screen names the model
+beside that button" (Rules, receipts paragraph) and "Claude Haiku 5.5 through
+Anthropic's SDK" (Layout) are now stale. A `CLAUDE.md` is edited only when the
+Build names it, so both are proposed to the orchestrator instead.

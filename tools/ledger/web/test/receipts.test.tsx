@@ -181,7 +181,10 @@ test("keeps the photo, and says where it goes before anything sends it there", a
   expect(await screen.findByText("Kept, not read yet.")).toBeTruthy();
   expect(uploadReceipt).toHaveBeenCalledTimes(1);
   const notice = screen.getByText(/Reading sends this photo out of the house, to Anthropic/u);
-  expect(notice.textContent).toContain("claude-haiku-5-5");
+  // "Claude", never the one model the upload names: a flagged reading is read
+  // again by a second (lg-105, the owner's answer of 2026-11-10).
+  expect(notice.textContent).toContain("where it is read by Claude.");
+  expect(notice.textContent).not.toContain("claude-haiku-5-5");
   expect(readReceipt).not.toHaveBeenCalled();
 });
 
@@ -979,7 +982,7 @@ test("three photos go up one at a time and nothing is read before Read all, then
 
   chooseSeveral(THREE.map((name) => jpeg(name)));
   const notice = await screen.findByText(/Reading sends these photos out of the house/u);
-  expect(notice.textContent).toContain("claude-haiku-5-5");
+  expect(notice.textContent).toContain("where they are read by Claude, one at a time.");
   expect(uploadReceipt).toHaveBeenCalledTimes(3);
   expect(vi.mocked(uploadReceipt).mock.calls.map(([photo]) => (photo as File).name)).toEqual(THREE);
   expect(readReceipt).not.toHaveBeenCalled();

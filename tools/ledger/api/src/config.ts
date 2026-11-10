@@ -8,7 +8,7 @@
 import path from "node:path";
 import process from "node:process";
 import { AppError } from "@ledger/contract";
-import { DEFAULT_RECEIPT_MODEL } from "@ledger/receipts";
+import { DEFAULT_ESCALATION_MODEL, DEFAULT_RECEIPT_MODEL } from "@ledger/receipts";
 import { trustProxy } from "@webtools/core";
 import { readAddress } from "./directory.ts";
 
@@ -94,6 +94,13 @@ export interface ReceiptReaderConfig {
   apiKey: string | undefined;
   /** `RECEIPT_MODEL`, `claude-haiku-5-5` by default (the owner's choice, measured on lg-8). */
   model: string;
+  /**
+   * `RECEIPT_ESCALATION_MODEL` (lg-105): the model a reading the arithmetic
+   * check flags is read again by, `claude-sonnet-5-5` by default (the owner's
+   * choice of 2026-11-09). Set empty, it is `null` and nothing is read twice:
+   * Haiku alone again, with no deploy.
+   */
+  escalationModel: string | null;
 }
 
 /**
@@ -261,7 +268,22 @@ function loadReceiptReaderConfig(env: NodeJS.ProcessEnv): ReceiptReaderConfig {
       "ANTHROPIC_API_KEY and ANTHROPIC_CUSTOM_HEADERS are both set. The Anthropic SDK applies that variable to every request and it can replace the key, so the ledger refuses to start with it. Unset it.",
     );
   }
-  return { apiKey, model: optionalString(env["RECEIPT_MODEL"]) ?? DEFAULT_RECEIPT_MODEL };
+  return {
+    apiKey,
+    model: optionalString(env["RECEIPT_MODEL"]) ?? DEFAULT_RECEIPT_MODEL,
+    escalationModel: escalationModel(env["RECEIPT_ESCALATION_MODEL"]),
+  };
+}
+
+/**
+ * Unset is the default and empty is none (lg-105), unlike every other variable
+ * here, where blank is unset: empty is how the owner turns the second reading
+ * off.
+ */
+function escalationModel(raw: string | undefined): string | null {
+  if (raw === undefined) return DEFAULT_ESCALATION_MODEL;
+  const value = raw.trim();
+  return value === "" ? null : value;
 }
 
 /**

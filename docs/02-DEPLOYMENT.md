@@ -1617,7 +1617,9 @@ reaches outside the host unless it is given a key to read receipts and describe 
 ### Reading receipts and describing workbooks with a model
 
 Receipts (lg-8) are read by Claude Haiku 5.5, and only when a person taps "Read
-it". The same key also describes an imported workbook's layout (lg-66), with a
+it". A reading the arithmetic check flags is read again, once, by Claude Sonnet
+5.5 (lg-105), and the second reading is kept only when it adds up better; set
+`RECEIPT_ESCALATION_MODEL` empty to read with Haiku alone. The same key also describes an imported workbook's layout (lg-66), with a
 fixed model rather than `RECEIPT_MODEL`, and only when a person presses "Send the
 samples and describe". **With no key the ledger reaches nothing outside the
 host**: a read is refused, and a receipt is typed in instead, which never needed
@@ -1626,12 +1628,13 @@ server". Photos are
 kept on the volume, at `/data/receipts/<household>/`, so the backup of `/data`
 above covers them.
 
-| Variable                                   | Value                        | Required                     |
-| ------------------------------------------ | ---------------------------- | ---------------------------- |
-| `LEDGER_ANTHROPIC_API_KEY` in `.env`       | the key                      | no — **a secret**, see below |
-| `RECEIPT_MODEL`                            | `claude-haiku-5-5` (default) | no                           |
-| `RATE_LIMIT_RECEIPT_READS_PER_MINUTE`      | `5` (default), per person    | no                           |
-| `RATE_LIMIT_WORKBOOK_DESCRIBES_PER_MINUTE` | `5` (default)                | no                           |
+| Variable                                   | Value                                         | Required                     |
+| ------------------------------------------ | --------------------------------------------- | ---------------------------- |
+| `LEDGER_ANTHROPIC_API_KEY` in `.env`       | the key                                       | no — **a secret**, see below |
+| `RECEIPT_MODEL`                            | `claude-haiku-5-5` (default)                  | no                           |
+| `RECEIPT_ESCALATION_MODEL`                 | `claude-sonnet-5-5` (default); empty for none | no                           |
+| `RATE_LIMIT_RECEIPT_READS_PER_MINUTE`      | `5` (default), per person                     | no                           |
+| `RATE_LIMIT_WORKBOOK_DESCRIBES_PER_MINUTE` | `5` (default)                                 | no                           |
 
 **The key is a secret: it goes in the host's `.env` as `LEDGER_ANTHROPIC_API_KEY`,
 and nowhere checked in.** `compose.ledger.prod.yaml` passes it to the container as

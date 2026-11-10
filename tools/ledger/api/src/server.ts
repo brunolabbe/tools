@@ -12,7 +12,7 @@ import { AppError } from "@ledger/contract";
 import type { Buffer } from "node:buffer";
 import type { Sheet } from "@ledger/books";
 import { LAYOUT_MODEL, createLayoutAsk, createModelReader } from "@ledger/receipts";
-import type { LayoutAsk, ReceiptReader } from "@ledger/receipts";
+import type { LayoutAsk, ModelReaderOptions, ReceiptReader } from "@ledger/receipts";
 import { RateLimiter } from "@webtools/core/rate-limit";
 import Fastify from "fastify";
 import type { FastifyInstance } from "fastify";
@@ -76,6 +76,22 @@ export interface CreateAppOptions {
    * from `config.receiptReader` when it has a key.
    */
   receiptReader?: ReceiptReader | null;
+  /**
+   * What reads a flagged reading again (lg-105). Tests hand in a fake beside a
+   * fake `receiptReader`; `null` is none. Left out, it is built from
+   * `config.receiptReader.escalationModel` only when the first reader is built
+   * from configuration too: a handed-in reader is a test's, and a test reaches
+   * no model, so none is built beside one.
+   */
+  escalationReader?: ReceiptReader | null;
+  /**
+   * How a model reader is built from configuration: `createModelReader`, unless
+   * a test hands in a factory that answers fakes and counts what it was asked
+   * to build (lg-105). Nothing in production passes it.
+   */
+  modelReader?: (options: ModelReaderOptions) => ReceiptReader;
+  /** Test-only (lg-105): `READ_DEADLINE_MS`, shortened. Nothing in production passes it. */
+  receiptReadDeadlineMs?: number;
   /** Where receipt photos are kept; by default files in the data directory, or the process under `:memory:`. */
   photos?: PhotoStore;
   /**
@@ -221,10 +237,11 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
   registerSpendingCategoryRoutes(server, context);
   registerStatsRoutes(server, context);
   registerReceiptRoutes(server, context, {
-    reader: receiptReaderFor(options.receiptReader, config, logger),
+    ...receiptReadersFor(options, config, logger),
     photos:
       options.photos ??
       (config.dataDir === ":memory:" ? memoryPhotoStore() : filePhotoStore(config.dataDir)),
+    readDeadlineMs: options.receiptReadDeadlineMs,
   });
   registerWorkbookRoutes(server, context, {
     ask: layoutAskFor(options.layoutAsk, config, logger),
@@ -257,22 +274,41 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
 }
 
 /**
- * The reader handed in, or the model reader when a key is configured, or none.
- * The model is logged at boot so an operator can see what reads; the key never.
+ * The readers handed in, or the model readers when a key is configured, or
+ * none. The second, which reads a flagged reading again (lg-105), is built with
+ * the same key and options as the first and only its model differs; with
+ * `RECEIPT_ESCALATION_MODEL` empty it is not built at all. Each model is logged
+ * at boot so an operator can see what reads; the key never.
  */
-function receiptReaderFor(
-  given: ReceiptReader | null | undefined,
+function receiptReadersFor(
+  options: CreateAppOptions,
   config: ApiConfig,
   logger: AppLogger,
-): ReceiptReader | undefined {
-  if (given !== undefined) return given ?? undefined;
-  const { apiKey, model } = config.receiptReader;
+): { reader: ReceiptReader | undefined; escalation: ReceiptReader | undefined } {
+  const given = options.receiptReader;
+  const givenEscalation =
+    options.escalationReader === undefined ? undefined : (options.escalationReader ?? undefined);
+  if (given !== undefined) return { reader: given ?? undefined, escalation: givenEscalation };
+  const build = options.modelReader ?? createModelReader;
+  const { apiKey, model, escalationModel } = config.receiptReader;
   if (apiKey === undefined) {
     logger.info("no receipt reader: ANTHROPIC_API_KEY is not set, so receipts are typed by hand");
-    return undefined;
+    return { reader: undefined, escalation: undefined };
   }
   logger.info("receipts are read by a model when a person asks", { model });
-  return createModelReader({ provider: "anthropic", apiKey, model, logger });
+  const reader = build({ provider: "anthropic", apiKey, model, logger });
+  if (options.escalationReader !== undefined) return { reader, escalation: givenEscalation };
+  if (escalationModel === null) {
+    logger.info("a flagged receipt reading is not read again: RECEIPT_ESCALATION_MODEL is empty");
+    return { reader, escalation: undefined };
+  }
+  logger.info("a flagged receipt reading is read again by a second model", {
+    model: escalationModel,
+  });
+  return {
+    reader,
+    escalation: build({ provider: "anthropic", apiKey, model: escalationModel, logger }),
+  };
 }
 
 /**

@@ -15,5 +15,8 @@
 import process from "node:process";
 
 for (const name of Object.keys(process.env)) {
-  if (name.startsWith("ANTHROPIC_") || name === "RECEIPT_MODEL") delete process.env[name];
+  // RECEIPT_MODEL and lg-105's RECEIPT_ESCALATION_MODEL.
+  if (name.startsWith("ANTHROPIC_") || (name.startsWith("RECEIPT_") && name.endsWith("_MODEL"))) {
+    delete process.env[name];
+  }
 }

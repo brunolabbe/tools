@@ -83,7 +83,11 @@ async function start(directory: Directory): Promise<App> {
       rateLimitReadsPerMinute: 0,
       rateLimitWritesPerMinute: 0,
       rateLimitWorkbookDescribesPerMinute: 0,
-      receiptReader: { apiKey: "sk-ant-test-lg78-never-sent", model: "claude-haiku-5-5" },
+      receiptReader: {
+        apiKey: "sk-ant-test-lg78-never-sent",
+        model: "claude-haiku-5-5",
+        escalationModel: null,
+      },
     },
     logger: createLogger({ level: "silent", write: () => undefined }),
     now: () => NOW,

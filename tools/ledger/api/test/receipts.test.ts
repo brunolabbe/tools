@@ -137,7 +137,7 @@ async function start(
       rateLimitReadsPerMinute: 0,
       rateLimitWritesPerMinute: 0,
       // Never the environment's: a key on the host must not reach a test.
-      receiptReader: { apiKey: options.apiKey, model: "claude-haiku-5-5" },
+      receiptReader: { apiKey: options.apiKey, model: "claude-haiku-5-5", escalationModel: null },
     },
     logger:
       options.logger ??
@@ -626,11 +626,12 @@ describe("the receipt reader's configuration", () => {
     expect(loadApiConfig({}, {}).receiptReader).toEqual({
       apiKey: undefined,
       model: "claude-haiku-5-5",
+      escalationModel: "claude-sonnet-5-5",
     });
     expect(
       loadApiConfig({}, { ANTHROPIC_API_KEY: "k", RECEIPT_MODEL: "claude-sonnet-5-5" })
         .receiptReader,
-    ).toEqual({ apiKey: "k", model: "claude-sonnet-5-5" });
+    ).toEqual({ apiKey: "k", model: "claude-sonnet-5-5", escalationModel: "claude-sonnet-5-5" });
   });
 
   test("refuses to boot with ANTHROPIC_CUSTOM_HEADERS beside a key, and never repeats it", () => {

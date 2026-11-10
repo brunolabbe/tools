@@ -61,7 +61,8 @@ detail and the numbers behind each.
 - **Receipts are read by Claude Haiku 5.5, when the person asks.** Decided on
   2026-10-12, after measuring real receipts against local OCR (lg-8's Log).
   The photo is sent only on that request, and a receipt can always be typed
-  in by hand instead.
+  in by hand instead. A reading the arithmetic check flags is read again, once, by
+  Claude Sonnet 5.5 (lg-105, 2026-11-09).
 - **Receipts are read line by line.** Items that are not shared come off,
   together with their taxes and deposits, and the code computes that part, not
   the model. An item can also be marked as the _other_ person's, which makes it

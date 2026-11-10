@@ -38,7 +38,11 @@ import { ruleContext } from "./rules.ts";
 export interface ReceiptRouteOptions {
   /** `undefined` when no model is configured: a read is refused, and typing by hand still works. */
   reader: ReceiptReader | undefined;
+  /** What reads a flagged reading again (lg-105); `undefined` when none is configured. */
+  escalation: ReceiptReader | undefined;
   photos: PhotoStore;
+  /** Test-only: the read's deadline for a second reading, `READ_DEADLINE_MS` otherwise. */
+  readDeadlineMs?: number | undefined;
 }
 
 /** The caller's household's books and photos, and nobody else's. */
@@ -95,7 +99,12 @@ export function registerReceiptRoutes(
     });
     const body: ReadReceiptResponse = await readReceipt(
       photosContext(request, photos),
-      reader,
+      {
+        reader,
+        escalation: options.escalation,
+        logger: context.logger,
+        deadlineMs: options.readDeadlineMs,
+      },
       idOf(request, "receipt"),
       hungUp.signal,
     );

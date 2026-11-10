@@ -69,6 +69,13 @@ export interface ReceiptReader {
 /** The measured model, and the default. */
 export const DEFAULT_RECEIPT_MODEL = "claude-haiku-5-5";
 
+/**
+ * The model a reading the arithmetic check flags is read again by (lg-105, the
+ * owner's choice of 2026-11-09), and the default. `api` decides when to ask it;
+ * a reader built with it is the same reader as any other.
+ */
+export const DEFAULT_ESCALATION_MODEL = "claude-sonnet-5-5";
+
 /** Explicit, so the SDK never reads `ANTHROPIC_BASE_URL`. */
 export const ANTHROPIC_BASE_URL = "https://api.anthropic.com";
 

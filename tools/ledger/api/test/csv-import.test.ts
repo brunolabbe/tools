@@ -144,7 +144,7 @@ async function start(model: FakeAsk = fake()): Promise<Started> {
       rateLimitReadsPerMinute: 0,
       rateLimitWritesPerMinute: 0,
       rateLimitWorkbookDescribesPerMinute: 0,
-      receiptReader: { apiKey: API_KEY, model: "claude-haiku-5-5" },
+      receiptReader: { apiKey: API_KEY, model: "claude-haiku-5-5", escalationModel: null },
     },
     logger: createLogger({ level: "debug", write: (line: string) => LOGGED.push(line) }),
     now: () => NOW,
