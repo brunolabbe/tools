@@ -3,7 +3,7 @@ id: repo-138
 tool: repo
 title: A filing runs on the standard builder with one gate, not on Haiku with two
 kind: chore
-status: needs-decision
+status: ready
 milestone: null
 depends_on: []
 difficulty: mechanical
@@ -47,7 +47,13 @@ The `builder-standard` builds of the same period, for scale: repo-130 $2.13,
 repo-133's build $1.25, repo-120 $1.25, lg-69 $2.71 — each with one gate and no
 round.
 
-## Decision — open
+## Decision — answered
+
+Question, put by the orchestrator at the tools-86 batch checkpoint: "repo-138:
+what should the pairing table's filing row read?"
+
+**Answered by the owner, 2026-11-10: (a)**, the ticket's own recommendation; no
+recommendation overridden. The options as offered, unchanged:
 
 What the filing row should read.
 
