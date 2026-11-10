@@ -234,3 +234,24 @@ dispatch.
    read again, once, by `RECEIPT_ESCALATION_MODEL`. Nothing else in any
    `CLAUDE.md` changed, so the Layout line "Claude Haiku 5.5 through
    Anthropic's SDK" the build entry named stays as it was.
+
+### 2026-11-10 — gate 1 findings applied (fixer, Sonnet 5.5)
+
+- **F1** (`isBetter`'s order). `TAX_OFF` (two flags, none `items-differ`) joins
+  the fixtures, and "fewer proposals that block filing outranks fewer flags in
+  total" asserts both directions: `TAX_OFF` over `CENTS_OFF` is kept, the
+  reverse is refused. Mutants run with gate 1's `mutate.mjs` on the committed
+  tree, 1 of 15 failing each: total flags only, `a || b`, and flags first.
+- **F2** (`left <= 0`). A first reader that answers a flagged reading after
+  120 ms against a 50 ms deadline: the second reader is called 0 times, the
+  first reading is answered, and the one `was not read again` line carries
+  `outOfTime: true` and no `code`. Deleting the branch fails it (1 of 15): the
+  second reader is then asked.
+- **F4** (stale headers). `Receipts.tsx` and `receipts/src/reader.ts` no longer
+  say the screen names one model or that Haiku reads alone. The
+  `@ledger/contract` comments are untouched, as the owner's answer of
+  2026-11-10 covers them.
+- **F6.** The owner's answer on fewer proposals is above, and Build 3 says what
+  is built.
+- Not this round, left as gate 1 wrote them: no minimum time for the second
+  read, and the escalation default being Sonnet when `RECEIPT_MODEL` is Sonnet.

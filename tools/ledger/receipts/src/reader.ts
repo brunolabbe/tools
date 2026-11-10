@@ -1,11 +1,12 @@
 /**
  * The receipt reader (lg-8): one seam, one implementation, the model.
  *
- * **Claude Haiku 5.5 alone, no local OCR** — the owner's choice of 2026-10-12,
- * from fourteen real photos read by two local OCR engines and two models (the
- * table is on lg-8's Log). Haiku read the subtotal, GST, QST and total right on
- * all thirteen printed receipts; no engine was ever wrong in a way the
- * arithmetic check (`checkReceipt` in `books`) missed.
+ * **Claude Haiku 5.5, no local OCR** — the owner's choice of 2026-10-12, from
+ * fourteen real photos read by two local OCR engines and two models (the table
+ * is on lg-8's Log). Haiku read the subtotal, GST, QST and total right on all
+ * thirteen printed receipts; no engine was ever wrong in a way the arithmetic
+ * check (`checkReceipt` in `books`) missed. Haiku reads first; a reading that
+ * check flags is read again, once, by `DEFAULT_ESCALATION_MODEL` (lg-105).
  *
  * **It reads, and does nothing else.** No reader classifies, computes a share or
  * files anything (`docs/00-ANALYSIS.md` §6, _What a reader is trusted with_): its

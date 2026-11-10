@@ -5,8 +5,9 @@
  * corrected; the list is where it is filed.
  *
  * **The photo leaves the house only on the "Read it" tap**, and the screen says
- * so beside that button, naming the model, at the moment it matters: not in a
- * notice on the camera step that nobody rereads (`docs/00-ANALYSIS.md` §6).
+ * so beside that button, naming Anthropic and Claude but no one model (a flagged
+ * reading is read again by a second, lg-105), at the moment it matters: not in
+ * a notice on the camera step that nobody rereads (`docs/00-ANALYSIS.md` §6).
  * Taking the photo keeps it on the household's own server; typing the receipt
  * in never sends it anywhere.
  *
