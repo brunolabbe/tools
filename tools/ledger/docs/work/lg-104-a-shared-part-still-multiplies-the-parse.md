@@ -981,3 +981,18 @@ built (both exit 0). The code is commit `08c22e7a`.
     SheetJS read on this file.
 - **The real workbook at `07a1471f`.** Read in place, counts only: 14 sheets and 3,513
   cells, as at the base.
+
+### 2026-11-10, the owner's answer on the corrupt-stream spin
+
+- **Question.** Gate 1 (Sonnet 5.5, FAIL at `2c48efa3`) dropped one item as outside its
+  range: `readSheets` spins at 100% CPU, killed at 30 s, on a workbook whose
+  `xl/_rels/workbook.xml.rels` is a corrupt deflate stream. It does the same at
+  `a100f429` (exit 124), so this branch does not introduce it. The import command reaches
+  it, since it does not call `countInflated`; the route does not. The reproduction is the
+  gate's `fold-F-wb-rels-corrupt.xlsx` through its `one.mts`. Asked by the orchestrator,
+  answered 2026-11-10 by the owner. The options: fold it into lg-104's review round (the
+  orchestrator's recommendation); file a ledger ticket; leave it. **Chosen: fold it into
+  lg-104's round.** The answer asks for a typed refusal, or a failure bounded to a few
+  seconds, through `readSheets` and the import command, with a test that fails or times
+  out at `2c48efa3`. It also asks where the spin is, and says to stop if the only fix is
+  inside `node_modules/xlsx`.
