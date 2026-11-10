@@ -928,3 +928,18 @@ built (both exit 0). The code is commit `08c22e7a`.
   `readSheets` read the file. It is not a sheet's part, so it falls outside this ticket's
   population. Whether to fix it here or file it is an open decision, handed to the
   orchestrator.
+
+### 2026-11-10, the owner's answer on the external-link listing
+
+- **Question.** SheetJS parses an external-link part's `.rels` once for each time
+  `[Content_Types].xml` lists the part. It costs time, not memory, and it is already on
+  `main`. Asked by the orchestrator, answered 2026-11-10 by the owner. The options:
+  (1) file a ledger ticket, which was the builder's recommendation; (2) fold it into
+  lg-104: refuse a repeated `Override` `PartName` before the `bookSheets` read, with a
+  test; (3) accept it and record it. **Chosen: (2), fold it in now.** That overrides the
+  builder's recommendation.
+- **The base measurement put with the question,** taken by the orchestrator. It ran the
+  builder's `links.mts` with the head's `xlsx-file.ts` helper over `a100f429`'s
+  `readSheets`. Listed once with 20,000 relationships: `bookSheets` 148 ms, `readSheets`
+  220 ms, +38.1 MB. Listed 50 times: `bookSheets` 4,829 ms, `readSheets` 13,565 ms,
+  +68.6 MB.
