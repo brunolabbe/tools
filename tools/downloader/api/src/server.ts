@@ -133,7 +133,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
     ...(config.proxyUrl === undefined ? {} : { proxyUrl: config.proxyUrl }),
     ...(operatorCa === null ? {} : { originTls: { ca: withSystemRoots(operatorCa) } }),
   });
-  const guardedFetch = createGuardedFetch(guard, globalThis.fetch, {
+  const guardedFetch = createGuardedFetch(guard, egress.fetch, {
     dispatcher: egress.dispatcher,
   });
   // **Two proxies, and which one a subprocess gets is the whole of dl-27. Both

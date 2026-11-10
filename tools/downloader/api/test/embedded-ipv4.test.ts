@@ -340,14 +340,14 @@ describe("the connect-time literal check", () => {
       resolve: noResolution,
     });
     cleanups.push(() => exempt.close());
-    const reached = await fetch(target, { dispatcher: exempt.dispatcher });
+    const reached = await exempt.fetch(target, { dispatcher: exempt.dispatcher });
     expect(reached.status).toBe(200);
     await reached.body?.cancel();
     expect(origin.hits).toHaveLength(1);
 
     const egress = createEgressDispatcher({ guard: literalOnlyGuard(), resolve: noResolution });
     cleanups.push(() => egress.close());
-    const refusal = await appErrorOf(fetch(target, { dispatcher: egress.dispatcher }));
+    const refusal = await appErrorOf(egress.fetch(target, { dispatcher: egress.dispatcher }));
     expect(refusal?.code).toBe("BLOCKED_TARGET");
     // Not the lookup path's reason: `noResolution` would have produced
     // UNREACHABLE, and the pre-flight check never ran.
@@ -361,7 +361,7 @@ describe("the connect-time literal check", () => {
     const guard = literalOnlyGuard();
     const egress = createEgressDispatcher({ guard, resolve: noResolution });
     cleanups.push(() => egress.close());
-    const guarded = createGuardedFetch(guard, globalThis.fetch, { dispatcher: egress.dispatcher });
+    const guarded = createGuardedFetch(guard, egress.fetch, { dispatcher: egress.dispatcher });
 
     const refusal = await appErrorOf(guarded(`http://[${MAPPED_LOOPBACK}]:${origin.port}/`));
     expect(refusal?.code).toBe("BLOCKED_TARGET");
@@ -540,7 +540,7 @@ describe("every entry point refuses a mapped-loopback URL", () => {
     const guard = literalOnlyGuard({ allowHosts: ["127.0.0.1"] });
     const egress = createEgressDispatcher({ guard, resolve: noResolution });
     cleanups.push(() => egress.close());
-    const guarded = createGuardedFetch(guard, globalThis.fetch, { dispatcher: egress.dispatcher });
+    const guarded = createGuardedFetch(guard, egress.fetch, { dispatcher: egress.dispatcher });
 
     const refusal = await appErrorOf(guarded(`http://127.0.0.1:${origin.port}/go`));
     expect(refusal?.code).toBe("BLOCKED_TARGET");

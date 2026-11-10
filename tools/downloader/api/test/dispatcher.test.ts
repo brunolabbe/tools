@@ -190,7 +190,7 @@ describe("a rebind between the check and the connection", () => {
       // What DNS says the *second* time — the rebind.
       resolve: resolverFor([v4("127.0.0.1")]),
     });
-    const guarded = createGuardedFetch(lyingGuard, globalThis.fetch, {
+    const guarded = createGuardedFetch(lyingGuard, egress.fetch, {
       dispatcher: egress.dispatcher,
     });
 
@@ -217,7 +217,7 @@ describe("a rebind between the check and the connection", () => {
       lookup: async () => ["93.184.216.34"],
     });
     const egress = createEgressDispatcher({ guard, resolve: resolverFor([v4("127.0.0.1")]) });
-    const guarded = createGuardedFetch(guard, globalThis.fetch, {
+    const guarded = createGuardedFetch(guard, egress.fetch, {
       dispatcher: egress.dispatcher,
     });
 
@@ -238,7 +238,7 @@ describe("a rebind between the check and the connection", () => {
       guard: lyingGuard,
       resolve: resolverFor([v4("169.254.169.254")]),
     });
-    const guarded = createGuardedFetch(lyingGuard, globalThis.fetch, {
+    const guarded = createGuardedFetch(lyingGuard, egress.fetch, {
       dispatcher: egress.dispatcher,
     });
 
@@ -247,6 +247,92 @@ describe("a rebind between the check and the connection", () => {
     expect((error as AppError).code).toBe("BLOCKED_TARGET");
     expect((error as AppError).details).toMatchObject({ address: "169.254.169.254" });
 
+    await egress.close();
+  });
+});
+
+/**
+ * dl-131: the redirect half, over a real socket, on the undici this service
+ * ships. Nothing else here would fail if undici began following a redirect
+ * itself: `embedded-ipv4.test.ts`'s "both layers" case ends in the connector's
+ * refusal either way, and `ssrf.test.ts` stubs the underlying fetch.
+ *
+ * The two guards differ on purpose. The dispatcher's lets both hosts through
+ * its connector, so the only thing that can stop the second hop is the
+ * per-hop `assertAllowed` in `createGuardedFetch`; and if undici followed the
+ * 302 on its own, the dispatcher's guard would let it, and `/secret` would be
+ * among the hits.
+ */
+describe("a redirect on the pinned dispatcher", () => {
+  let server: http.Server;
+  let port = 0;
+  const hits: string[] = [];
+
+  beforeAll(async () => {
+    server = http.createServer((request, response) => {
+      hits.push(`${request.headers.host ?? ""}${request.url ?? ""}`);
+      if (request.url === "/go") {
+        response.writeHead(302, { location: `http://second.local:${port}/secret` }).end();
+        return;
+      }
+      response.writeHead(200).end("the secret");
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    port = (server.address() as AddressInfo).port;
+  });
+
+  afterAll(async () => {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  });
+
+  test("is judged again by the guard before the second hop opens a socket", async () => {
+    hits.length = 0;
+    const permissive = createSsrfGuard({
+      allowHosts: ["first.local", "second.local"],
+      lookup: async () => ["93.184.216.34"],
+    });
+    const egress = createEgressDispatcher({
+      guard: permissive,
+      resolve: resolverFor([v4("127.0.0.1")]),
+    });
+    // The request's own guard: `first.local` is exempt, `second.local` resolves
+    // to a private address.
+    const strict = createSsrfGuard({
+      allowHosts: ["first.local"],
+      lookup: async () => ["10.0.0.5"],
+    });
+    const guarded = createGuardedFetch(strict, egress.fetch, { dispatcher: egress.dispatcher });
+
+    const error = await guarded(`http://first.local:${port}/go`).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(AppError);
+    expect((error as AppError).code).toBe("BLOCKED_TARGET");
+    expect(hits).toEqual([`first.local:${port}/go`]);
+
+    await egress.close();
+  });
+
+  test("is handed back to the caller, not followed, by the fetch the dispatcher travels with", async () => {
+    hits.length = 0;
+    const permissive = createSsrfGuard({
+      allowHosts: ["first.local", "second.local"],
+      lookup: async () => ["93.184.216.34"],
+    });
+    const egress = createEgressDispatcher({
+      guard: permissive,
+      resolve: resolverFor([v4("127.0.0.1")]),
+    });
+
+    const response = await egress.fetch(`http://first.local:${port}/go`, {
+      redirect: "manual",
+      dispatcher: egress.dispatcher,
+    });
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe(`http://second.local:${port}/secret`);
+    expect(hits).toEqual([`first.local:${port}/go`]);
+
+    await response.body?.cancel();
     await egress.close();
   });
 });

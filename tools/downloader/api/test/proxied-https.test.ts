@@ -615,7 +615,7 @@ describe("guardedFetch through the proxy the deployment configures", () => {
     cleanups.push(() => dispatcher.close());
     expect(dispatcher.mode).toBe("proxy");
 
-    const fetchThroughProxy = createGuardedFetch(guard, globalThis.fetch, {
+    const fetchThroughProxy = createGuardedFetch(guard, dispatcher.fetch, {
       dispatcher: dispatcher.dispatcher,
     });
     const response = await fetchThroughProxy(masterUrl());
@@ -632,7 +632,7 @@ describe("guardedFetch through the proxy the deployment configures", () => {
     const dispatcher = createEgressDispatcher({ guard, proxyUrl: proxy.url });
     cleanups.push(() => dispatcher.close());
 
-    const fetchThroughProxy = createGuardedFetch(guard, globalThis.fetch, {
+    const fetchThroughProxy = createGuardedFetch(guard, dispatcher.fetch, {
       dispatcher: dispatcher.dispatcher,
     });
 
@@ -649,7 +649,7 @@ describe("guardedFetch through the proxy the deployment configures", () => {
     });
     cleanups.push(() => dispatcher.close());
 
-    const fetchThroughProxy = createGuardedFetch(guard, globalThis.fetch, {
+    const fetchThroughProxy = createGuardedFetch(guard, dispatcher.fetch, {
       dispatcher: dispatcher.dispatcher,
     });
 

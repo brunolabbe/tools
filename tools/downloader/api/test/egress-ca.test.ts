@@ -97,7 +97,7 @@ async function fetchThrough(
     guard,
     ...(originTls === undefined ? {} : { originTls }),
   });
-  const guardedFetch = createGuardedFetch(guard, globalThis.fetch, {
+  const guardedFetch = createGuardedFetch(guard, egress.fetch, {
     dispatcher: egress.dispatcher,
   });
   try {
@@ -116,7 +116,7 @@ async function classify(url: string, ca?: string | string[]): Promise<string> {
     guard,
     ...(ca === undefined ? {} : { originTls: { ca } }),
   });
-  const guardedFetch = createGuardedFetch(guard, globalThis.fetch, {
+  const guardedFetch = createGuardedFetch(guard, egress.fetch, {
     dispatcher: egress.dispatcher,
   });
   try {
