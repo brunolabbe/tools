@@ -133,17 +133,18 @@ let intercept: TlsInterception;
 let proxy: EgressProxy;
 let rejections: TlsRejectionLog;
 /**
- * dl-130. What the proxy did with each `CONNECT`, kept only to be read into the
- * Done-when 2 test's failure message. That test failed once in ten isolated runs
- * (`UNREACHABLE` where `TLS_VERIFICATION_FAILED` was due) and has not failed
- * since, so the next failure has to name its own branch: no refusal recorded
- * for its `CONNECT` and which other hook fired instead, a refusal recorded
- * before the call's window opened, or a `CONNECT` the proxy never saw. Nothing
- * here touches the `TlsRejectionLog`, so what `since` reads is unchanged.
+ * dl-130. What the proxy did with each `CONNECT`, and the Done-when 2 test's
+ * `since` read, on one clock, kept only to be read into that test's failure
+ * message. It failed once in ten isolated runs (`UNREACHABLE` where
+ * `TLS_VERIFICATION_FAILED` was due) and has not failed since, so the next
+ * failure has to name its own branch: no refusal recorded for its `CONNECT` and
+ * which other hook fired instead, a refusal recorded before the call's window
+ * opened, or a `CONNECT` the proxy never saw. Nothing here touches the
+ * `TlsRejectionLog`, so what `since` reads is unchanged.
  */
-const proxyEvents: { at: number; what: string }[] = [];
-function noteProxyEvent(what: string): void {
-  proxyEvents.push({ at: Date.now(), what });
+const events: { at: number; what: string }[] = [];
+function noteEvent(what: string): void {
+  events.push({ at: Date.now(), what });
 }
 /** The dl-37 arrangement. */
 let wired: RegistryBuild;
@@ -180,23 +181,23 @@ beforeAll(async () => {
       // The first thing the proxy does with a `CONNECT`, so a navigation the
       // proxy never saw shows as no line at all (dl-130).
       assertAllowed: async (rawUrl) => {
-        noteProxyEvent(`assertAllowed ${rawUrl}`);
+        noteEvent(`assertAllowed ${rawUrl}`);
         return await guard.assertAllowed(rawUrl);
       },
     },
     logger: NOOP_LOGGER,
     interceptTls: intercept,
     onCertificateRejected: (host, code) => {
-      noteProxyEvent(`onCertificateRejected ${host} ${code}`);
+      noteEvent(`onCertificateRejected ${host} ${code}`);
       rejections.record(host, code);
     },
     // Recorded and not forwarded: passing either on to `rejections` would
     // change what `since` reads, which is the verdict under test (dl-130).
     onOtherConnectFailure: (host, port) => {
-      noteProxyEvent(`onOtherConnectFailure ${host}:${String(port)}`);
+      noteEvent(`onOtherConnectFailure ${host}:${String(port)}`);
     },
     onConnectEstablished: (host, port) => {
-      noteProxyEvent(`onConnectEstablished ${host}:${String(port)}`);
+      noteEvent(`onConnectEstablished ${host}:${String(port)}`);
     },
   });
 
@@ -277,11 +278,12 @@ describe("the browser tier behind a proxy that terminates its TLS", () => {
     async () => {
       // dl-130: the `since` read this call's verdict turned on, recorded and
       // passed through unchanged, so a failure can say what it returned.
-      const reads: string[] = [];
+      let sinceRead = false;
       const since = rejections.since.bind(rejections);
       rejections.since = (host, port, at) => {
         const code = since(host, port, at);
-        reads.push(
+        sinceRead = true;
+        noteEvent(
           `since(${host}, ${String(port)}, at ${String(at)}) returned ${code ?? "undefined"}`,
         );
         return code;
@@ -302,8 +304,9 @@ describe("the browser tier behind a proxy that terminates its TLS", () => {
       const diagnosis = [
         `dl-130 diagnosis, times relative to ${String(startedAt)}:`,
         `reason: ${String(error.details?.["reason"])}`,
-        ...(reads.length === 0 ? ["since: never read"] : reads),
-        ...proxyEvents.map(({ at, what }) => `${String(at - startedAt)} ms: ${what}`),
+        ...(sinceRead ? [] : ["since: never read"]),
+        ...events.map(({ at, what }) => `${String(at - startedAt)} ms: ${what}`),
+        "verdict",
       ].join("\n");
 
       expect(error.code, diagnosis).toBe("TLS_VERIFICATION_FAILED");
