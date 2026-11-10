@@ -52,17 +52,48 @@ happen?
 round builder's recommendation, which was option 1. The Build below is the
 derivation design as lg-98's round builder stated it in its report.
 
-Status is `ready`: the question is answered and the Build below is complete enough
+**Question 2 — where each write's request comes from. Answered 2026-11-10 by the
+owner.** The Build left this open; the owner settled it on the same day.
+
+**Options**
+
+1. **The web's own `tools/ledger/web/src/api/*.ts` functions, called against the
+   in-process API exactly as the screens send them. (Chosen. Recommended by the
+   orchestrator and by the builder.)**
+2. A request table written in the test (method, path and body for each write). A
+   second hand copy, of 34 requests.
+3. The builder decides.
+
+**Chosen: option 1.**
+
+**Question 3 — what becomes of `EXPECTED` in `web/test/writes.test.tsx`. Answered
+2026-11-10 by the owner.** The Build left this open; the owner settled it on the
+same day.
+
+**Options**
+
+1. **Retire it, since the derived comparison replaces it. (Chosen. Recommended by
+   the orchestrator.)**
+2. Keep it beside the derived comparison.
+3. The builder decides.
+
+**Chosen: option 1.**
+
+Status is `ready`: the questions are answered and the Build below is complete enough
 to start. It starts after lg-98 merges, because `WRITES` and `EXPECTED` are on
 that branch and not on `main` (`depends_on`).
 
 ## Build
 
-1. **Run each write against the in-process API.** For each of the 34 writes in
-   `WRITES`, on a fresh SQLite database and a seeded household, send the write to
-   the app `createApp` builds, as the api tests do (`api/test/periods.test.ts`,
-   `api/test/retire-person.test.ts`). Assert that it answered 2xx before anything
-   else is read.
+1. **Run each write against the in-process API, through its web function.** For
+   each of the 34 writes in `WRITES`, on a fresh SQLite database and a seeded
+   household, call the write's `tools/ledger/web/src/api` function (the one
+   `WRITES` imports for it, for example `closePeriod` from `api/periods.ts`)
+   exactly as the screen calls it. The request reaches the app `createApp` builds,
+   as the api tests build theirs (`api/test/periods.test.ts`,
+   `api/test/retire-person.test.ts`); the Build states how the function's `fetch`
+   is pointed there. No request is written by hand in the test. Assert that the
+   write answered 2xx before anything else is read.
 2. **Derive the changed routes.** Before the write, GET every read in `ROUTES`
    (`tools/ledger/contract/src/api.ts`); after it, GET them again; diff each
    answer, serialised with its keys sorted. The derived set is the routes whose
@@ -79,6 +110,12 @@ that branch and not on `main` (`depends_on`).
    `readReceipt`, `describeWorkbook`) are the exception: their derived set must be
    empty.
 5. **Planted omission.** See the Done when line.
+6. **Retire `EXPECTED`.** Remove the `EXPECTED` table from
+   `tools/ledger/web/test/writes.test.tsx` (on lg-98's branch). The per-write
+   arguments and answers its cases carry (`args`, `answer`) move into step 4's
+   per-write fixture, and the screen case takes each write's marked routes from
+   `WRITES`, the list the derived comparison checks. Nothing else in that file
+   restates a list.
 
 Traps worth knowing:
 
@@ -101,24 +138,25 @@ it in its Log, with the reason:
   (`tools/ledger/CLAUDE.md` and `.claude/rules/testing.md`) and state which project
   it is in and what it imports from where. The project choice is `api` or `web`
   (`npm test -- --project ledger` runs both).
-- **Where each write's request comes from.** The web's `web/src/api/*.ts`
-  functions send the request the screen sends, so a harness that calls them runs
-  each write the way the screen does. A request table written in the test (method,
-  path, body, per write) is a second hand copy, this time of the requests rather
-  than of the routes. The Build states which it takes.
 - **Whether the seeded state can be shared.** The design says a fresh SQLite per
   write. The seed could be built once and copied, or built again for each write.
   The Build measures the cost of each and records the choice.
-- **What becomes of `EXPECTED`.** Once the derivation checks the lists, the design
-  does not say whether `EXPECTED` in `web/test/writes.test.tsx` is removed, or
-  whether the screen cases take each write's `changes` from `WRITES`. The Build
-  states which, and why.
+
+(The request source and the fate of `EXPECTED` were open here until the owner
+answered them on 2026-11-10; they are steps 1 and 6 above.)
 
 ## Done when
 
 - Each of the 34 writes in `WRITES` (`addHouseholdMember` through
   `confirmWorkbook`) has a case in the harness, run by `test.each` over the keys of
   `WRITES`, and each case passes at the build's head.
+- For each of the 34 writes in `WRITES`, the case sends the write by calling the
+  `web/src/api` function that `WRITES` imports for it. No write request is
+  hand-written in the harness: the test file contains no method, path or body
+  literal for a write.
+- `EXPECTED` is removed: `web/test/writes.test.tsx` contains no `EXPECTED` table
+  (`grep -c EXPECTED` is 0), and the derived comparison covers each of the 34 writes
+  in `WRITES`, so no list is checked only against a hand copy.
 - For each of the 34 writes, the case asserts a 2xx answer before it reads the
   diff. This includes `uploadReceipt`, `readReceipt` and `describeWorkbook`.
 - For each of the 34 writes, a route whose answer changed under the write and is
