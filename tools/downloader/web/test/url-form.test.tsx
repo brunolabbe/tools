@@ -24,7 +24,7 @@ interface Mounted {
   onSubmit: ReturnType<typeof vi.fn<() => void>>;
 }
 
-function mount(props: { url?: string; busy?: boolean; invalid?: string | null } = {}): Mounted {
+function mount(props: { url?: string; invalid?: string | null } = {}): Mounted {
   const spies: Mounted = {
     onUrlChange: vi.fn<(url: string) => void>(),
     onSubmit: vi.fn<() => void>(),
@@ -34,7 +34,6 @@ function mount(props: { url?: string; busy?: boolean; invalid?: string | null } 
       url={props.url ?? ""}
       onUrlChange={spies.onUrlChange}
       onSubmit={spies.onSubmit}
-      busy={props.busy ?? false}
       invalid={props.invalid ?? null}
     />,
   );
@@ -46,7 +45,7 @@ function field(): HTMLInputElement {
 }
 
 function submitButton(): HTMLButtonElement {
-  return screen.getByRole("button", { name: /Analyse|Analysing/u }) as HTMLButtonElement;
+  return screen.getByRole("button", { name: "Analyse" }) as HTMLButtonElement;
 }
 
 test("an empty field cannot be submitted", () => {
@@ -86,13 +85,14 @@ test("submitting from the keyboard works, and does not reload the page", async (
   expect(spies.onSubmit).toHaveBeenCalledOnce();
 });
 
-test("a busy form says so and refuses a second submit", () => {
-  const spies = mount({ url: SOURCE_URL, busy: true });
-
+test("the form is never busy: each Analyse makes its own box (dl-133)", () => {
+  // It said "Analysing…" and refused a second submit while the one analysis on
+  // the page ran. Several run at once now, so the button has no busy state to
+  // be in, and a second address is analysed beside the first.
+  mount({ url: SOURCE_URL });
   const button = submitButton();
-  expect(button.textContent).toBe("Analysing…");
-  expect(button.disabled).toBe(true);
-  expect(spies.onSubmit).not.toHaveBeenCalled();
+  expect(button.textContent).toBe("Analyse");
+  expect(button.disabled).toBe(false);
 });
 
 test("a rejected address surfaces, wired to the field rather than floating beside it", () => {
@@ -164,10 +164,4 @@ test("clear empties the field and puts the cursor back in it, ready for the next
   expect(document.activeElement).toBe(field());
   // A type="button", so clearing never submits the address it is clearing.
   expect(spies.onSubmit).not.toHaveBeenCalled();
-});
-
-test("the field can be cleared while an analysis runs, to paste the next one", () => {
-  mount({ url: SOURCE_URL, busy: true });
-  const clear = screen.getByRole("button", { name: "Clear address" }) as HTMLButtonElement;
-  expect(clear.disabled).toBe(false);
 });

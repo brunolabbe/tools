@@ -22,6 +22,16 @@ import type { ProbeStage, ProbeStageEvent } from "@downloader/contract";
  */
 export const PROBE_STAGE_PENDING = "Sent to the server — waiting for it to start";
 
+/**
+ * A box waiting in this browser for one of its probe slots (dl-133), before any
+ * request is sent: true for as long as it is shown, because the box starts
+ * itself the moment one of the others ends. Worded as the stage lines are.
+ */
+export const PROBE_WAITING = "Waiting for one of your other analyses to finish";
+
+/** The same wait, for a Download pressed with both job slots taken (dl-133). */
+export const JOB_WAITING = "Waiting for one of your other downloads to finish";
+
 const STAGE_TEXT: Record<Exclude<ProbeStage, "resolver-start">, string> = {
   "browser-slot": "Waiting for a free browser — they are all busy",
   "browser-launch": "Opening a headless browser",

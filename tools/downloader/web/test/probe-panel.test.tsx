@@ -60,12 +60,14 @@ const SUBTITLES = [
 interface Spies {
   onDownload: ReturnType<typeof vi.fn<(options: JobOptions) => void>>;
   onReanalyse: ReturnType<typeof vi.fn<() => void>>;
+  onDismiss: ReturnType<typeof vi.fn<() => void>>;
 }
 
 function mount(result = probe(), options: { cached?: boolean; busy?: boolean } = {}): Spies {
   const spies: Spies = {
     onDownload: vi.fn<(options: JobOptions) => void>(),
     onReanalyse: vi.fn<() => void>(),
+    onDismiss: vi.fn<() => void>(),
   };
   render(
     <ProbePanel
@@ -74,6 +76,7 @@ function mount(result = probe(), options: { cached?: boolean; busy?: boolean } =
       busy={options.busy ?? false}
       onDownload={spies.onDownload}
       onReanalyse={spies.onReanalyse}
+      onDismiss={spies.onDismiss}
     />,
   );
   return spies;
@@ -88,6 +91,7 @@ function renderPanel(result: ProbeResult): ReturnType<typeof render> {
       busy={false}
       onDownload={vi.fn<(options: JobOptions) => void>()}
       onReanalyse={vi.fn<() => void>()}
+      onDismiss={vi.fn<() => void>()}
     />,
   );
 }
@@ -506,4 +510,18 @@ test("the duration and rendition count sit under the title, where the job card k
   const line = screen.getByText(/12:34 · 3 renditions/u);
   expect(line.classList.contains("job__subtitle")).toBe(true);
   expect(heading.nextElementSibling).toBe(line);
+});
+
+test("an analysis is dismissed from its own panel, except while its job is being created (dl-133)", () => {
+  // It no longer leaves when the next analysis starts, so one that is not wanted
+  // is put away from here. While busy the box is about to become the job.
+  const spies = mount();
+  fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+  expect(spies.onDismiss).toHaveBeenCalledOnce();
+  cleanup();
+
+  mount(probe(), { busy: true });
+  expect((screen.getByRole("button", { name: "Dismiss" }) as HTMLButtonElement).disabled).toBe(
+    true,
+  );
 });

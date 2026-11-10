@@ -160,16 +160,11 @@ code {
    row around them still has exactly two children to separate. All three
    headline rules collapse to just their text when `Preview` renders null. */
 .card__headline,
-.job__headline,
 .result__headline {
   display: flex;
   gap: 0.75rem;
   align-items: center;
   min-width: 0;
-}
-
-.job__headline {
-  align-items: flex-start;
 }
 
 /* 16:9, fixed, and applied to the *frame* rather than the image: the box is
@@ -569,36 +564,28 @@ code {
   cursor: pointer;
 }
 
-/* --- jobs --- */
+/*
+ * --- boxes ---
+ *
+ * One box per analysis (dl-133): each is a card, and the job an analysis turns
+ * into is drawn inside the same card rather than as a card of its own.
+ */
 
-.jobs {
+.boxes__list {
   display: flex;
   flex-direction: column;
-  gap: 0.9rem;
-  margin: 0.8rem 0 0;
+  gap: 1.25rem;
+  margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.job {
-  padding: 0.9rem 1rem;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface-2);
+.boxes__note {
+  margin: 0.6rem 0 0;
+  font-size: 0.85rem;
 }
 
-.job__head {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.6rem;
-  align-items: flex-start;
-  justify-content: space-between;
-}
-
-.job__title {
-  margin: 0;
-  font-size: 0.98rem;
-}
+/* --- jobs --- */
 
 .job__titles {
   min-width: 0;
@@ -656,18 +643,8 @@ code {
   color: var(--accent);
 }
 
-.jobs__note {
-  margin: 0.6rem 0 0;
-  font-size: 0.85rem;
-}
-
-/* A saved job is one line (dl-109): the result row is the whole card. */
-.job--saved {
-  padding: 0;
-  border: none;
-  background: none;
-}
-
+/* A saved job is one line (dl-109) and its Dismiss (dl-133): the result row is
+   the whole box. */
 .job--saved .result {
   margin-top: 0;
 }

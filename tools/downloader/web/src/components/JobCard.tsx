@@ -14,6 +14,7 @@ import type { StreamState } from "../lib/job-stream.ts";
 import { PROBE_STAGE_PENDING, probeStageText } from "../lib/probe-stages.ts";
 import { STATUS_HINT, STATUS_LABEL } from "../lib/status.ts";
 import { ErrorPanel } from "./ErrorPanel.tsx";
+import { BoxHead } from "./BoxHead.tsx";
 import { ProgressMessages } from "./ProgressMessages.tsx";
 import type { ProgressMessage } from "./ProgressMessages.tsx";
 import { Preview } from "./Preview.tsx";
@@ -40,9 +41,16 @@ interface JobCardProps {
    */
   stage: ProbeStageEvent | undefined;
   /**
-   * The job the visitor has just started from this page, so its card is
-   * scrolled into view once: it lands under the panel they pressed Download in,
-   * which can be below the fold. Never a job restored on a reload.
+   * The preview of the analysis this job came from (dl-133), so the image stays
+   * where it was when Download was pressed: the job record has none of its own
+   * until its re-probe has run. Absent for a job restored on a reload.
+   */
+  previewPath?: string | null;
+  /**
+   * The job the visitor has just started from this page, so its box is
+   * scrolled into view once: pressing Download takes the table and the options
+   * out of the box, and with older boxes below it the shorter box can end above
+   * the window. Never a job restored on a reload.
    */
   reveal?: boolean;
   /** The visitor followed the link, which makes any earlier refusal old news. */
@@ -58,6 +66,7 @@ export function JobCard({
   streamState,
   refusal,
   stage,
+  previewPath = null,
   reveal = false,
   onFollowLink,
   onCancel,
@@ -66,7 +75,7 @@ export function JobCard({
 }: JobCardProps): React.JSX.Element {
   const now = useNow(15_000);
   const waitedMs = useElapsed(useStepStartedAt(job.status), 1_000);
-  const item = useRef<HTMLLIElement>(null);
+  const item = useRef<HTMLDivElement>(null);
 
   // `nearest`, so a card already on screen does not move; guarded because
   // jsdom has no layout and so no `scrollIntoView`.
@@ -74,14 +83,22 @@ export function JobCard({
     if (reveal) item.current?.scrollIntoView?.({ block: "nearest" });
   }, [reveal]);
 
-  // dl-109: a saved job is a one-line confirmation, not a card. Nothing on it
-  // can be acted on — the server kept no copy (dl-53) — and it leaves the list
-  // when the next analysis starts.
+  const preview = previewPath ?? job.thumbnailPath;
+
+  // dl-109: a saved job is a one-line confirmation, not a card. Nothing in it
+  // can be acted on — the server kept no copy (dl-53) — and it stays until it
+  // is dismissed (dl-133 decision 5, which supersedes dl-109's "until the next
+  // analysis starts": other analyses now run beside it).
   if (job.status === "completed" && job.result) {
     return (
-      <li ref={item} className="job job--completed job--saved">
-        <CompletedResult result={job.result} title={title} thumbnailPath={job.thumbnailPath} />
-      </li>
+      <div ref={item} className="job job--completed job--saved">
+        <CompletedResult result={job.result} title={title} thumbnailPath={preview} />
+        <div className="job__actions">
+          <button type="button" className="button" onClick={() => onRemove(job.id)}>
+            Dismiss
+          </button>
+        </div>
+      </div>
     );
   }
 
@@ -100,27 +117,22 @@ export function JobCard({
     .join(" · ");
 
   return (
-    <li ref={item} className={`job job--${job.status}`}>
-      <div className="job__head">
-        {/* Same grouping reason as `card__headline`: `job__head` is
-            `space-between`, and this must be additive — a job from before dl-29,
-            or one whose probe found no image, renders exactly as it did. */}
-        <div className="job__headline">
-          <Preview path={job.thumbnailPath} size="card" />
-          <div className="job__titles">
-            <h3 className="job__title">{heading}</h3>
-            <p className="muted job__subtitle" title={job.sourceUrl}>
-              {subtitle}
-            </p>
-          </div>
-        </div>
-        <div className="pills">
-          {streamState === "reconnecting" && (
-            <output className="pill pill--warn">reconnecting…</output>
-          )}
-          <span className={`pill pill--${job.status}`}>{STATUS_LABEL[job.status]}</span>
-        </div>
-      </div>
+    <div ref={item} className={`job job--${job.status}`}>
+      {/* The head the analysis drew (dl-133): the same preview and title in the
+          same place, so pressing Download changes only the line under the title
+          and the pills. A job from before dl-29, or one whose probe found no
+          image, collapses to the title alone. */}
+      <BoxHead
+        title={heading}
+        subtitle={subtitle}
+        subtitleTitle={job.sourceUrl}
+        previewPath={preview}
+      >
+        {streamState === "reconnecting" && (
+          <output className="pill pill--warn">reconnecting…</output>
+        )}
+        <span className={`pill pill--${job.status}`}>{STATUS_LABEL[job.status]}</span>
+      </BoxHead>
 
       {job.status === "queued" && job.link && (
         <LinkOffer link={job.link} now={now} onFollow={() => onFollowLink(job.id)} />
@@ -189,7 +201,7 @@ export function JobCard({
           </button>
         )}
       </div>
-    </li>
+    </div>
   );
 }
 
@@ -358,8 +370,8 @@ function CompletedResult({
   return (
     <output className="result">
       {/* Grouped with the meta rather than added as a bare child of `.result`,
-          which is `space-between`. Same reason as `card__headline` and
-          `job__headline`. `result__headline` collapses to just the meta when
+          which is `space-between`. Same reason as `card__headline` in
+          `BoxHead`. `result__headline` collapses to just the meta when
           `Preview` renders null. */}
       <div className="result__headline">
         <Preview path={thumbnailPath} size="card" />
