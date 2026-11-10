@@ -61,7 +61,7 @@ function listed(projects: string[]): { project: string; file: string }[] {
  * rewrite a module graph or the process, and a file making one must not share a
  * worker with the next.
  */
-const MOCKS = /\bvi\.(?:mock|doMock|stubGlobal|stubEnv|resetModules)\(/u;
+const MOCKS = /\bvi\.(?:mock|doMock|unmock|doUnmock|stubGlobal|stubEnv|resetModules)\(/u;
 
 const SPLIT_TOOLS = ["downloader", "planner", "ledger"];
 

@@ -16,8 +16,8 @@ fixture or a tsconfig, and costs nothing the rest of the time. The rules are
 unchanged.
 
 
-**vitest**, configured once in the root `vitest.config.ts` as one project per
-tool plus one for `packages/`. Tests live in `<package>/test/**/*.test.{ts,tsx}`.
+**vitest**, one project per tool plus one for `packages/`, listed in the root
+`vitest.config.ts` and declared for a split tool in `tools/<tool>/vitest.config.ts`. Tests live in `<package>/test/**/*.test.{ts,tsx}`.
 Import `test`/`expect`/`vi` explicitly — globals are off on purpose, so oxlint's
 `no-undef` keeps working.
 
