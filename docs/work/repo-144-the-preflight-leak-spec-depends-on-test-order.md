@@ -125,8 +125,9 @@ counted here because the file has one.
 
 ## Build
 
-The owner's answer to the open question on the floor, 2026-11-10, is recorded in
-the Log: option (a). Build what it says.
+The owner's answer to the open question on the floor, 2026-11-10, is recorded
+under `## Decision — answered 2026-11-10 by the owner` below: option (a). Build
+what it says.
 
 1. Move the leak check out of the test body and into a file-level `afterAll`.
    Hooks run after every test in the file in both orders, so the list is complete
@@ -136,15 +137,21 @@ the Log: option (a). Build what it says.
    (for example `expect(leftovers, "leaked: " + leftovers.join(", ")).toEqual([])`). **The hook has no floor.** A filtered run whose tests make no
    shim directory passes the hook: it says nothing leaked among the tests that ran,
    not that a shim test ran. That is the cost of option (a), and the Build accepts
-   it.
+   it. A whole-file run with fewer than three registered directories no longer
+   reds: if the six real tests stopped registering their shim directories and one
+   leaked, the hook would not see it and the file would exit 0, where the old
+   `>= 3` floor exits 1. That is the second cost of (a), and the Build accepts it.
 2. Add an order-free cover test for the empty-list case, the one thing the hook
    no longer proves. It calls `makeShimDir()` once, asserts the directory is in
    `shimDirsMade` and exists, then calls `removeShimDir(dir)`. Name it with
-   `(repo-144)` and keep it out of any ordering dependence: it makes its own
-   directory and removes it.
+   `makeShimDir records each directory (repo-144)`, because Done when 5 filters on
+   that substring, and keep it out of any ordering dependence: it makes its own
+   directory and removes it. The cover test covers the recording, not the callers:
+   it proves `makeShimDir` pushes onto `shimDirsMade`, and says nothing about the
+   six tests that call it.
 3. Remove the old `test(...)` at `:3038-3041` and its two-line comment at
-   `:3036-3037`. Delete all four lines: deleting only `:3037` leaves a dangling
-   comment. Keep an explanatory comment in the hook that says why it is in an
+   `:3036-3037`. Delete all six lines (comment 2, test 4): deleting only `:3037` leaves a
+   dangling comment. Keep an explanatory comment in the hook that says why it is in an
    `afterAll`: shuffled order is the reason.
 4. Mutation control, committed first: commit the file as a baseline
    (`test(repo): preflight leak spec baseline`), then comment out the
@@ -158,6 +165,39 @@ the Log: option (a). Build what it says.
 6. Run `npx oxlint scripts/test/preflight.test.ts`, `npm run check`, and
    `npx oxfmt --check scripts/test/preflight.test.ts`. The file is under
    `scripts/test` and is not under an oxfmt ignore pattern, so the check applies.
+
+## Decision — answered 2026-11-10 by the owner
+
+Two questions, both answered at the tools-86 checkpoints. Both answers are the
+gate's recommendation; none overrode it.
+
+**1. The floor in the hook (gate 1 F1, re-asked on gate 2's N1).** Answered at
+checkpoint 6 for the first form and re-asked at checkpoint 9.
+
+- Question at checkpoint 6: keep the `shimDirsMade.length >= 3` floor in the
+  file-level `afterAll`, which reds any filtered run that makes fewer than three
+  shim directories? Options: (a) drop the floor, keep the leftovers assertion and
+  add an order-free cover test; (b) keep the floor and document the supported
+  filters; (c) keep the floor but detect whether the file ran whole (no stable
+  vitest API found). Choice: (a). The options and their measurements are in the
+  Log, round 1.
+- Question at checkpoint 9, put on gate 2's N1 measurement: "With option (a), the
+  floorless hook plus the cover test, if the six real tests stopped registering
+  their shim directories and one leaked, a whole-file run still exits 0 (121
+  passed). The old >=3 floor exits 1 in that case. Keep (a)?" Options: keep (a) and
+  state the limit; switch to (b) and keep the floor. **Choice: keep (a), state the
+  limit.** Build 1 and Build 2 state it.
+- Provenance: the owner, tools-86 checkpoint 9, 2026-11-10; the recommendation was
+  the gate's.
+
+**2. Where gate 2's lows are fixed (N2, N3, N4, N5, and the rest of F3 and F6).**
+
+- Question: apply them at the landing, or send the ticket back for another gate?
+  Choice: fix at landing, no re-gate, each with its own Fixed at landing Log entry.
+  The other option offered was not carried in the landing dispatch and is not
+  recorded here.
+- Provenance: the owner, tools-86 checkpoint 9, 2026-11-10; the recommendation was
+  the gate's.
 
 ## Done when
 
@@ -173,7 +213,7 @@ the Log: option (a). Build what it says.
 4. The leak check is order-free. `grep -n "afterAll" scripts/test/preflight.test.ts`
    shows the hook, and `grep -n "shimDirsMade"` shows only its declaration, the
    `makeShimDir` helper, the cover test and the hook, with no test body reading the
-   list. The mutation control in Build 4 exits 1 and prints `Test Files  1 failed (1)`
+   list other than the cover test. The mutation control in Build 4 exits 1 and prints `Test Files  1 failed (1)`
    under file order and under seed 2, and the hook's failure names the leaked
    directory path. After the restore, `git diff <baseline sha> --
    scripts/test/preflight.test.ts` prints nothing.
@@ -181,8 +221,10 @@ the Log: option (a). Build what it says.
    `-t "repo-110"`, `-t "repo-104"`,
    `-t "the CLI never leaks next-id.mjs's id-sweep wording"`,
    `-t "allProjects is exactly"`, and `-t "makeShimDir records each directory"`.
-   The first four are the filters that went red under the floor, which is the
-   regression this round removes. The last is the cover test.
+   `-t "repo-104"`, `-t "the CLI never leaks next-id.mjs's id-sweep wording"` and
+   `-t "allProjects is exactly"` are the filters that went red under the floor,
+   which is the regression this round removes. `-t "repo-110"` did not go red under
+   it and stays as the control. The last is the cover test.
 6. `npm run check` exits 0 and `npx oxfmt --check scripts/test/preflight.test.ts`
    exits 0, both at the branch head.
 
@@ -235,6 +277,9 @@ Options, as the gate and the owner had them:
   `-t "repo-104"` exit 0 (`Tests 14 passed | 107 skipped`) and `-t "allProjects is
   exactly"` exit 0 (`Tests 1 passed | 120 skipped`). The mutation and the sweep on
   it are the Build's own Done-when lines, not yet run.
+  WITHDRAWN — do not cite the two counts in this bullet. They are of a 121-test
+  variant with no cover test. The Build's variant, with the cover test, gives
+  `14 passed | 108 skipped (122)` and `1 passed | 121 skipped (122)` (gate 2, N3).
 - **(b)** keep the floor and document in the Build and the hook's comment that only
   the whole file or `-t "repo-110"` is a supported filter, accepting the red.
 - **(c)** keep the floor but detect whether the file ran whole. The gate found no
@@ -243,6 +288,12 @@ Options, as the gate and the owner had them:
 **Choice: (a).** Provenance: the owner's answer at tools-86 checkpoint 6, taken as
 the gate's recommendation, which the owner accepted. Recorded here by the builder
 of round 1 because the ticket has no `needs-decision` heading to hold it.
+
+WITHDRAWN — do not cite the reason in the sentence above. `scripts/status.mjs`
+rejects only a `## Decision — open` heading on a ticket that is not
+`needs-decision`, so `## Decision — answered <date> by <who>` was available on a
+`ready` ticket. The answers now sit under that heading (error by the round 1
+builder, found by gate 2's N5).
 
 **Lows, fixed in this round, with the owner's direction to fix all six** (F2-F7):
 
@@ -278,3 +329,26 @@ records.
 
 **Dropped by the gate:** "the ledger half is a separate ticket" with no id. The
 ledger ticket is outside this pull request's range, so it is not a defect here.
+
+### 2026-11-10 — landing
+
+- 2026-11-10 — Gate 1's and gate 2's full reports are on the pull request thread,
+  #788; status unchanged.
+- 2026-11-10 — Fixed at landing by owner choice: gate 2, N1 — "say in Build 2 that
+  the cover test covers the recording, not the callers. Say in Build 1 that a
+  whole-file run with fewer than three registered directories no longer reds."
+  `git diff 264f2e1d HEAD -- docs/work/repo-144-the-preflight-leak-spec-depends-on-test-order.md | grep -v 'Fixed at landing' | grep -c '^+.*That is the second cost [o]f'` → `1`.
+- 2026-11-10 — Fixed at landing by owner choice: gate 2, N2 — "The first four are
+  the filters that went red under the floor." `git diff 264f2e1d HEAD -- docs/work/repo-144-the-preflight-leak-spec-depends-on-test-order.md | grep -c '^-.*The first four are the filters that went red'` → `1`.
+- 2026-11-10 — Fixed at landing by owner choice: gate 2, N3 — "the Log's
+  measurements of (a) are of a 121-test variant, which has no cover test."
+  `git diff 264f2e1d HEAD -- docs/work/repo-144-the-preflight-leak-spec-depends-on-test-order.md | grep -v 'Fixed at landing' | grep -c '^+.*The Build.s variant, with the cover test, give[s]'` → `1`.
+- 2026-11-10 — Fixed at landing by owner choice: gate 2, N4 — "Put the name in
+  Build 2." `git diff 264f2e1d HEAD -- docs/work/repo-144-the-preflight-leak-spec-depends-on-test-order.md | grep -c '^-.*and keep it out of any ordering dependence'` → `1`.
+- 2026-11-10 — Fixed at landing by owner choice: gate 2, N5 — "Move the answers
+  under the answered heading, and correct the Log's reason." `git diff 264f2e1d HEAD -- docs/work/repo-144-the-preflight-leak-spec-depends-on-test-order.md | grep -v 'Fixed at landing' | grep -c '^+.*was available on [a]'` → `1`.
+- 2026-11-10 — Fixed at landing by owner choice: gate 2, F3 (fixed in part) — "the
+  clause 'no test body reading the list' is now false of the cover test."
+  `git diff 264f2e1d HEAD -- docs/work/repo-144-the-preflight-leak-spec-depends-on-test-order.md | grep -c '^-.*list. The mutation control in Build 4'` → `1`.
+- 2026-11-10 — Fixed at landing by owner choice: gate 2, F6 (fixed in part) —
+  "Delete all four lines miscounts a six-line block." `git diff 264f2e1d HEAD -- docs/work/repo-144-the-preflight-leak-spec-depends-on-test-order.md | grep -c '^-.*Delete all four lines: deleting only'` → `1`.
