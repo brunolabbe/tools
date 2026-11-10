@@ -124,3 +124,12 @@ change even with no advisory against 7.
     8.12.3 instead of its nested 8.12.2 (a patch bump, dev only), were not run:
     this tree's jsdom is linked to the shared checkout's, which keeps its own
     nested copy, so a local run could not have read it.
+- 2026-11-10 — Owner's answer on the builder's open decision about undici
+  8.12.4, relayed by the orchestrator. The question: 8.12.3 is pinned under the
+  seven-day rule; 8.12.4 (2026-11-05) fixes six advisories in features this tree
+  does not use, and npm's advisory database lists none against 8.12.3; when
+  should 8.12.4 come in. The options were: leave 8.12.3 and let the next
+  dependency update take it, bump on this branch on 2026-11-12, or file a
+  ticket. The owner chose to leave 8.12.3 and take 8.12.4 in the next dependency
+  update, which was the builder's recommendation; nothing was overridden and no
+  ticket was filed.
