@@ -453,7 +453,7 @@ describe("the link, with real ffmpeg behind it", () => {
    * survive.
    */
   async function realApp(
-    config: { maxFileSizeBytes?: number } = {},
+    config: { maxFileSizeBytes?: number; stageTimeoutMs?: number } = {},
   ): Promise<{ app: App; origin: string }> {
     const app = await createApp({
       startGc: false,
@@ -586,6 +586,15 @@ describe("the link, with real ffmpeg behind it", () => {
       expect(received.status).toBe(413);
     }
   }, 60_000);
+
+  test("the job timeout reaches the engine as its stage timeout", async () => {
+    // The wiring alone, ending before any byte: `server.ts` hands
+    // `config.stageTimeoutMs` (`JOB_TIMEOUT_MS`) to `createEngine`. The case that
+    // proved it by timing out a stalled stream was deleted for its 9.5 s (dl-134);
+    // both defaults are 3 600 000, so a value that is not the default is the test.
+    const { app } = await realApp({ stageTimeoutMs: 2_000 });
+    expect(app.context.engine.config.stageTimeoutMs).toBe(2_000);
+  });
 });
 
 describe("a fresh volume", () => {

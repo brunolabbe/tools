@@ -442,8 +442,12 @@ describe("the settings", () => {
     // one-key case has a value that could leak, the no-key case has none, and
     // neither may carry one of Cloudflare's published keys.
     const oneKey = { REQUIRE_HUMAN_CHECK: "true", TURNSTILE_SECRET_KEY: PASS_SECRET };
+    // The other one-key case, dropped from the spawned rows for their cost
+    // (dl-134): the site key is set, and it must not come back in the refusal.
+    const siteOnly = { REQUIRE_HUMAN_CHECK: "true", TURNSTILE_SITE_KEY: PASS_SITE_KEY };
     expect(refusalFor(oneKey).message).toMatch(/TURNSTILE_SITE_KEY is not set/u);
-    for (const env of [oneKey, { REQUIRE_HUMAN_CHECK: "true" }]) {
+    expect(refusalFor(siteOnly).message).toMatch(/TURNSTILE_SECRET_KEY is not set/u);
+    for (const env of [oneKey, siteOnly, { REQUIRE_HUMAN_CHECK: "true" }]) {
       const refusal = refusalFor(env);
       const written = JSON.stringify({ error: refusal.message, details: refusal.details });
       expect(written).not.toContain(PASS_SECRET);

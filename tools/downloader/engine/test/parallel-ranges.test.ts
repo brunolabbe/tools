@@ -193,7 +193,10 @@ describe("dl-98: a progressive source throttled per connection", () => {
   );
 
   // Only the faststart row (dl-134): the moov-end source's split-vs-single digest
-  // equality is the first test of this file, with the same configuration.
+  // equality is the first test of this file, at a different throttle (500 KB/s
+  // there, 2 MB/s here) and with the variant's own duration, not 0.5 s. The
+  // dropped row also asserted more than 100 packet digests; the first test
+  // compares the same digests and does not count them.
   test.each(["faststart.mp4"])(
     "the output of a split %s is identical in media to a single-connection run",
     async (name) => {
