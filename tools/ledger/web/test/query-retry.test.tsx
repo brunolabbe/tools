@@ -8,12 +8,13 @@
  */
 
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { cleanup, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, renderHook, screen, waitFor } from "@testing-library/react";
 import { AppError } from "@ledger/contract";
 import type { BucketsResponse } from "@ledger/contract";
 import { fetchBuckets } from "../src/api/buckets.ts";
-import { fetchMortgage } from "../src/api/mortgage.ts";
+import { fetchMortgage, saveMortgage } from "../src/api/mortgage.ts";
 import { Home } from "../src/home/Home.tsx";
+import { useWrite } from "../src/writes.ts";
 import {
   RATE_LIMIT_WAIT_DEFAULT_SEC,
   RATE_LIMIT_WAIT_MAX_SEC,
@@ -22,7 +23,7 @@ import {
   retryReadDelay,
 } from "../src/query.ts";
 import { LIVE } from "./mortgage-fixtures.ts";
-import { renderWithClient } from "./render-with-client.tsx";
+import { clientWrapper, renderWithClient } from "./render-with-client.tsx";
 
 vi.mock("../src/api/buckets.ts", () => ({ fetchBuckets: vi.fn() }));
 vi.mock("../src/api/mortgage.ts", () => ({ fetchMortgage: vi.fn(), saveMortgage: vi.fn() }));
@@ -110,5 +111,32 @@ test.each([
 
     expect((await screen.findByRole("alert")).textContent).toBe(message);
     expect(buckets).toHaveBeenCalledTimes(1);
+  },
+);
+
+// Gate 1's F4: a write appends, so a second copy sent on its own would be a second
+// record. Refused for any reason, the rate limit included, it is sent once.
+test.each([
+  ["RATE_LIMITED", limited(1)],
+  ["UNREACHABLE", new AppError("UNREACHABLE")],
+] as const)(
+  "a write refused as %s is never sent again on its own (lg-98)",
+  async (_code, refusal) => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const save = vi.mocked(saveMortgage).mockRejectedValue(refusal);
+    const { result } = renderHook(() => useWrite("saveMortgage"), {
+      wrapper: clientWrapper(createQueryClient()),
+    });
+
+    let settled: Promise<unknown> = Promise.resolve();
+    act(() => {
+      settled = result.current({ state: "live" }).catch((error: unknown) => error);
+    });
+    // Past any wait a retry could take: the library's own backoff tops out at 30 s.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(120_000);
+    });
+    expect(await settled).toBe(refusal);
+    expect(save).toHaveBeenCalledTimes(1);
   },
 );
