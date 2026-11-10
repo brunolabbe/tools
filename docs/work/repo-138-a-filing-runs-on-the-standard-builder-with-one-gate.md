@@ -7,6 +7,7 @@ status: ready
 milestone: null
 depends_on: []
 difficulty: mechanical
+awaiting: Done when 2 — the first three filing dispatches after this merge each have a per-agent cost row in reference/history.md, read beside this ticket's five-filing table
 ---
 
 # repo-138 — A filing runs on the standard builder with one gate, not on Haiku with two
