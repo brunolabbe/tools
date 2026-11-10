@@ -55,7 +55,8 @@ the page unguarded.
   job's `error.message` reaches it. **No live call site was found that puts
   outside text in that message** (gate 1 read the AppError sites in
   `ytdlp.ts`: they pass `undefined` as the message and put outside text in
-  `details`), but 138 AppError sites exist and only that file was read, so the
+  `details`), but 156 `new AppError(` sites exist under `tools/downloader` (tests and
+  docs excluded) and only that file was read, so the
   search is not exhaustive. The case is reached from storage, as the third
   reading above is.
 - Not measured: `.notice__title`, `.offer__title`, `.scenario__title`. They hold
@@ -127,9 +128,10 @@ widths, **with `overflow-wrap: anywhere` planted on `.card__title` and
 | failed job, 200-character `error.message`       | 2522          | 2675           |
 | the same job, a short message (gate's `GX-ctl`) | 360           | 1280           |
 
-It was measured against dl-133's head `4c621dc8` with the plant in, not on
-`main`. `ErrorPanel` renders `.notice__message` on both (`ErrorPanel.tsx`,
-line 37), but the figure is gate 1's and this ticket did not re-run it.
+Gate 1 measured this on `main`'s code (`c8938c67`, the ticket-only branch),
+twice, with the plant in and without it: 2522 / 2675 both times.
+`ErrorPanel.tsx`, `error-presentation.ts` and the `.notice__message` rule are
+unchanged on dl-133's head, which was read, not run.
 
 ## Build
 
@@ -161,8 +163,16 @@ line 37), but the figure is gate 1's and this ticket did not re-run it.
    Beside the width reading, each case asserts that the string is **whole and
    wrapped, not cut**: the element's text equals the string, and its box is
    taller than one line (its height exceeds 1.5 times its computed
-   `line-height`) with its right edge inside `innerWidth`. A heading clipped to
-   a letter would pass the width reading alone. **Open the screenshots**.
+   `font-size`, read with `getComputedStyle` as a pixel value; `line-height`
+   reads `normal` on these elements and is not a number) with its right edge
+   inside `innerWidth`. A heading clipped to a letter would pass the width
+   reading alone. **Open the screenshots**.
+
+   `h2.card__title` is not unique on the page the cases reach: the "Analyse a
+   page" form heading in `App.tsx` carries the class beside every box heading
+   (`ScenarioHints` does too, under the mock API only), and Playwright's strict
+   mode refuses `toHaveText` on a locator that matches more than one element.
+   Scope each locator by role and name, or by the box it sits in.
 
 4. A fifth, short case for the clause "a title with spaces still wraps at
    them": a heading of forty five-letter words separated by spaces at 360 px is
@@ -181,17 +191,17 @@ the commit that records it, as the last paragraph of this section said.
 
 **Question 2, the gate's text findings F1, F2 and F3 — answered 2026-11-10 by
 the owner: fix all.** The options were fix all in this round or record them
-only. They are fixed in the commit after this one, and the Log says how.
+only. They are fixed in round 1, and the Log says how.
 
 **Question 3, gate 1's F4 (`.notice__message`) — answered 2026-11-10 by the
 owner: widen dl-137.** The options were: widen this ticket to
 `.notice__message`; file it separately; record it only. This ticket's Build and
 Done when now also cover `.notice__message` with the same declaration, checked
 by the same shape of layout case. The widened Build and Done when are written
-in the commit after this one; the Why records F4's reproduction.
+in round 1; the Why records F4's reproduction.
 
 The question as it stood when filed, and the options with their costs as the
-filing put them (the costs are corrected in the commit after this one, F1 and
+filing put them (the costs are corrected in round 1, F1 and
 F2):
 
 Which branch's stylesheet the fix targets, and whether it belongs in dl-135.
@@ -236,7 +246,7 @@ one of them. Facts that decide it:
     one hunk, the `.job__title` rule #781 deletes (exit 1). On `.card__title`
     alone it merges clean (exit 0).
   - `e2e/layout.spec.ts`: Build step 3's case, appended at the end of the file,
-    conflicts (exit 1), because #781 appends 129 lines there; the
+    conflicts (exit 1), because #781 appends 126 lines there (132 in all); the
     `startDelayingProxy` import edit alone merges clean (exit 0), since #781
     makes the identical edit.
 
@@ -292,8 +302,8 @@ this ticket `dropped` with the reason. If C, `depends_on` stays empty.
   only by a job with no stored title **and** no variant.
 - **2026-11-10, round 1** after gate 1 (Sonnet 5.5, narrow, at `c8938c67`,
   CONCERNS; its plant of `overflow-wrap: anywhere` on both heading rules turned
-  all three title cases green). The owner's three answers are under _Decision_,
-  in `b5b335b3`; this entry's commit carries the text they imply:
+  all three title cases green). The owner's three answers are under _Decision_;
+  this entry carries the text they imply:
   - **F1 fixed.** Option C now carries gate 1's `git merge-tree` figures: two
     files conflict (`styles.css` on the `.job__title` hunk, `e2e/layout.spec.ts`
     on an appended case), not one.
@@ -309,11 +319,51 @@ this ticket `dropped` with the reason. If C, `depends_on` stays empty.
     (Done when 3), since a heading cut to a letter passes the width reading.
   - **F4 widened in**, on the owner's answer: `.notice__message` joins Build 2,
     Done when 1 to 3, the title, and the reproduction (gate 1's `GX-a`: 2522 px at
-    360, 2675 px at 1280, with the heading plant in). That figure is gate 1's,
-    measured on dl-133's head; this ticket did not re-run it.
+    360, 2675 px at 1280, with the heading plant in). That figure is gate 1's
+    reading on `main`'s code.
   - **`difficulty` stays `standard`.** The widening adds one declaration and one
     case shape to the same two-rule fix; the judgement is in the four reachable
     states, which the Build spells out, so it is a test and a stylesheet inside
     one package with its method stated, the format's own example of `standard`.
   - The filename keeps its `title` slug; the pull request title still says
     "page title", and the squash message is the owner's to widen if wanted.
+- 2026-11-10 — Owner's answers at the landing (relayed by the orchestrator):
+  gate 2's F5 to F9 were **fixed at landing, all five, with no re-gate** (the
+  options were fix all, F5 to F7 only, record all); and the pull request is
+  **retitled** to `docs(downloader): file dl-137, an unbroken title or error
+  message overflows the page (dl-137)` (the options were retitle or leave it; the
+  owner chose to retitle, overriding the filer's "leave it"). This supersedes the
+  last bullet of the round 1 entry above, which says the title still reads "page
+  title". Gate 2's `unproven (scope)` row asked which options the owner was shown
+  for questions 2 and 3: the orchestrator checked, and the options recorded under
+  _Decision_ match those put to the owner in substance, so nothing changes there.
+- 2026-11-10 — Fixed at landing by owner choice: gate 2, F5 — "the F4 reading is
+  attributed to the wrong tree". The sentence under the reproduction's second
+  table and the round 1 entry now say gate 1 read `main`'s code (`c8938c67`).
+  `git diff bf72d130 HEAD -- <this ticket> | grep -c '^-.*It was measured against'`
+  → `1`, and `... | grep -c '^-.*measured on dl'` → `1`.
+- 2026-11-10 — Fixed at landing by owner choice: gate 2, F6 — "Build 3's 1.5
+  times its computed line-height is not a number here". Build 3 now reads the
+  heading's height against 1.5 times its computed font size.
+  `git diff bf72d130 HEAD -- <this ticket> | grep -c '^-.*with its right edge inside'`
+  → `1`.
+- 2026-11-10 — Fixed at landing by owner choice: gate 2, F7 — "the heading
+  selector is not a unique locator on the page the cases reach". Build 3 now says
+  to scope each locator by role and name or by its box.
+  `git diff bf72d130 HEAD -- <this ticket> | grep -v 'Fixed at landing' | grep -c '^+.*is not unique on the page the cases reach'`
+  → `1`.
+- 2026-11-10 — Fixed at landing by owner choice: gate 2, F8 — "two figures the
+  round carries do not reproduce". Option C's "129 lines" is now 126 (132 in all),
+  and the Why's "138" AppError sites is 156 `new AppError(` sites under
+  `tools/downloader`, tests and docs excluded (counted at landing: 156; the
+  `layout.spec.ts` diff between `a100f429` and `4c621dc8` is 132 added, 5 removed).
+  `git diff bf72d130 HEAD -- <this ticket> | grep -c '^-.*appends 129 lines'`
+  → `1`, and `... | grep -c '^-.*but 138 AppError sites'` → `1`.
+- 2026-11-10 — Fixed at landing by owner choice: gate 2, F9 — "the text refers to
+  commits by position and by branch sha". The Decision's three positional
+  references now say round 1 and the round 1 entry no longer cites the branch
+  commit. `git diff bf72d130 HEAD -- <this ticket> | grep -c '^-.*in the commit after this one'`
+  → `3`, and `... | grep -c '^-.*in .b5b335b3'` → `1`.
+- 2026-11-10 — Gate 1's and gate 2's full reports are on the pull request thread,
+  #784; status unchanged. This pull request only files the ticket, so the thread
+  is the record and the ticket carries no `## Review` section.
