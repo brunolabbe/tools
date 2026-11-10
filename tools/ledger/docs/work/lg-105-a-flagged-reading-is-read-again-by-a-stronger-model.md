@@ -62,8 +62,9 @@ receipt that adds up is read once, by Haiku alone.
    with the same offered categories, then repair and check that reading exactly
    as the first.
    - **Keep the escalated reading only if it is strictly better**: fewer
-     proposals carrying `items-differ`, or else fewer flags in total. Otherwise
-     keep the first. Compare whole readings, never mix proposals from the two:
+     proposals carrying `items-differ`, or, when those are equal, fewer flags
+     in total; and never a reading with fewer proposals than the first (the
+     owner's answer of 2026-11-10, in the Log). Otherwise keep the first. Compare whole readings, never mix proposals from the two:
      a photo holding two receipts may come back in a different order or count,
      and matching proposals across readings is a guess.
    - **One escalation, never a loop.** A reading that is still flagged goes to
@@ -115,8 +116,9 @@ Do not escalate on anything but a flag.
   `items-differ` and a fake escalation reader that answers one that adds up
   shows the response carries the escalated reading, with no flags, and
   `model` naming the escalation model.
-- A test with an escalation reading that is no better (same or more flags)
-  shows the first reading is returned, with `model` naming the first model.
+- A test with an escalation reading that is no better (no fewer `items-differ`
+  proposals, and no fewer flags when those tie) shows the first reading is
+  returned, with `model` naming the first model.
 - A test with a first reading that adds up shows the escalation reader is never
   called.
 - A test with an escalation reader that throws shows the first reading is
@@ -156,8 +158,8 @@ step 4: `@ledger/contract` is not changed.
   reading only when `isBetter` says so. **The brief's rule, applied as written,
   keeps a reading that dropped a receipt**: an empty reading ("not a receipt")
   has no flags, and a reading of one receipt out of two has fewer. `isBetter`
-  never keeps a reading with fewer proposals than the first. That is the
-  builder's call, reported to the orchestrator as an open decision. The
+  never keeps a reading with fewer proposals than the first. The builder
+  reported it as an open decision, and the owner answered it (below). The
   failure log line is
   `warn "a flagged receipt was not read again; the first reading is kept"`
   with `model`, `code` (`AppError.from(error).code`) and `outOfTime`. It holds
@@ -201,3 +203,34 @@ Fold-in: none was free. The ledger `CLAUDE.md`'s "the screen names the model
 beside that button" (Rules, receipts paragraph) and "Claude Haiku 5.5 through
 Anthropic's SDK" (Layout) are now stale. A `CLAUDE.md` is edited only when the
 Build names it, so both are proposed to the orchestrator instead.
+
+### 2026-11-10 — owner's answers after gate 1 (recorded by the fixer, Sonnet 5.5)
+
+Three questions, answered by the owner on 2026-11-10 and relayed in the fixer's
+dispatch.
+
+1. **Gate 1, F1: which criterion ranks first in `isBetter`?** `isBetter` counts
+   the proposals carrying `items-differ` before it counts flags in total, and no
+   test asserted the order; Done when 2's parenthetical read as total flags
+   only. Options: **A, keep the order (`items-differ` first), reword Done when
+   2, add two assertions (chosen; the gate's recommendation)**; B, total flags
+   only, which drops a second reading that clears the filing blocker but adds
+   two other flags; C, either criterion wins (`a || b`), which keeps a reading
+   that adds a blocking proposal when its total is lower. Done when 2 and Build
+   3 now say the order; the assertions are in the next entry.
+2. **The builder's open decision: a second reading with fewer proposals than
+   the first.** Read as written, Build 3 keeps it whenever it has fewer flags,
+   and an empty reading ("not a receipt") has none. Options: **1, never keep a
+   second reading with fewer proposals (chosen; the builder's recommendation,
+   already built)**; 2, the brief literally; 3, require the same count. So
+   this is the owner's answer, not "the builder's call" as the build entry first
+   wrote it; Build 3's "or else fewer flags in total" is corrected to say what
+   is built.
+3. **`tools/ledger/CLAUDE.md`'s receipts paragraph, stale after the build.**
+   Options: **the lander or this branch edits it (chosen)**; the owner edits it;
+   file a ticket. The owner authorised that one sentence ("and the screen names
+   the model beside that button"), which now reads that the screen says the
+   photo goes to Anthropic to be read by Claude, and that a flagged reading is
+   read again, once, by `RECEIPT_ESCALATION_MODEL`. Nothing else in any
+   `CLAUDE.md` changed, so the Layout line "Claude Haiku 5.5 through
+   Anthropic's SDK" the build entry named stays as it was.
