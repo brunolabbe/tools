@@ -164,3 +164,24 @@ times in the CI log unless marked measured.
   over 300 ms, and Fastify 5's `forceCloseConnections: "idle"` explains why.
   `api/test/stream-link.test.ts:531,549` overlap partly with engine tests, but
   were left alone (medium coverage risk, low confidence).
+- 2026-11-10: Two owner answers, relayed by the orchestrator, recorded before
+  the build. This branch is stacked on `downloader/dl-130-proxy-flake`
+  (`e44644ad`), since dl-130 also edits
+  `api/test/tiers-on-the-terminating-proxy.test.ts`.
+  1. **Step 11 is held until dl-133 lands.** The question: step 11 edits
+     `web/test/app.test.tsx`, which dl-133 (PR #781, in review) rewrites
+     heavily; start dl-134 now? Options: yes, with step 11 held until dl-133
+     lands / no, keep the trio. The owner chose **yes, step 11 held**. Step 11
+     is **held, not "not applied"**: it is built in a later round on top of
+     dl-133, so Done when 4's step-11 part is expected `unproven` on this
+     branch (scope), and this ticket does not move to `done` here. Steps 9, 15
+     and 20 stay in this build.
+  2. **Step 2 skips `tiers-on-the-terminating-proxy.test.ts`.** The question:
+     step 2 applies `AT_ONCE_WAITS` at that file's line 105 (inside
+     `registryFor`, shared by all five tests there), which includes the flaky
+     dl-37 Done-when 2 test, and dl-130 is parked with an `awaiting:` line for
+     a real failure of it under today's timing; should step 2 touch it?
+     Options: exclude that file / apply it there too / apply, and note it on
+     dl-130. The owner chose **exclude that file**. Step 2's list above is
+     therefore read without its last site; a shorter wait would change the
+     timing dl-130 is measuring.
