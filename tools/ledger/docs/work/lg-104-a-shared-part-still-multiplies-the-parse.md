@@ -1090,3 +1090,13 @@ removed after.
   - `localname.sh 2 14` and `comments.sh … 50000 1 14`, all exit 0: both 14-sheet files
     refused; the controls read 140,013 cells and 14 cells.
   - The four spec files: 210 of 210.
+- **Done when 6, at `75d10327`.** `npm run check` exit 0. The four spec files: 210 of 210.
+  Fast preflight exit 0.
+  - `npm test -- --project ledger` exit 1, 2,334 of 2,335, in 24 s. The one failure is
+    `tools/ledger/web/test/history.test.tsx` › "the button reports whether its control is
+    open, and takes focus back when it closes (lg-95)".
+  - That test is outside this branch: `git diff --name-only a100f429...HEAD` lists no
+    path under `tools/ledger/web`. Alone, the file failed 1 of 3 runs (29 of 29, 29 of 29,
+    then 28 of 29).
+  - No ticket records the flake (`git grep` over `tools/ledger/docs` finds only lg-95's
+    and lg-99's passing readings). It is reported to the orchestrator, not fixed here.
