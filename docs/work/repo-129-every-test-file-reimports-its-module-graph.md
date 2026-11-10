@@ -41,7 +41,9 @@ where it holds; (b) not now. **Chosen: (a).**
    and use a glob such as `<tool>*` in the docs if needed.
 2. A project's non-isolated half is kept only if it passes **five consecutive
    full runs** of that project locally, with different `--sequence.seed` values
-   (`--sequence.shuffle`), and one CI run. State leaking between files shows up
+   (`--sequence.shuffle`; ledger's passes shuffle file order, `--sequence.shuffle.files`,
+   because of the in-file order dependencies filed as lg-106, PR #789, and repo-144,
+   PR #788), and one CI run. State leaking between files shows up
    as order-dependent failures. Candidates found by reading: the ledger rate
    limiter, ledger's per-file env clearing in
    `tools/ledger/api/test/helpers/no-model-environment.ts`, and module-level
@@ -61,7 +63,10 @@ where it holds; (b) not now. **Chosen: (a).**
 ## Done when
 
 1. Each project ends either split into an isolated and a non-isolated half, with
-   five shuffled local passes and one CI pass recorded in the Log, or left
+   five shuffled local passes (ledger's shuffle file order, `--sequence.shuffle.files`,
+   because of the in-file order dependencies filed as lg-106, PR #789, and repo-144,
+   PR #788; the other projects' use `--sequence.shuffle`) and one CI pass recorded
+   in the Log, or left
    unchanged with the failing files and the reason recorded.
 2. The ubuntu import share and wall clock fall against the nearest `main` matrix
    run, and the Log states the difference.
@@ -267,8 +272,9 @@ where it holds; (b) not now. **Chosen: (a).**
 - 2026-11-10 — Fixed at landing by owner choice: gate 1, F1 — "Build 2 and Done
   when 1 name `--sequence.shuffle`; for ledger the Log used
   `--sequence.shuffle.files`". The Log's "a defect to file" sentence now cites
-  lg-106 and repo-144 (Build 2's own wording is the
-  brief's). `git diff 5bee293c HEAD -- docs/work/repo-129-every-test-file-reimports-its-module-graph.md | grep -c '^-.*are a defect to$'` → `1`.
+  lg-106 and repo-144. The first landing (`ac7b78dc`) left Build 2 and Done when 1
+  as they were, which was less than the owner's answer; the next commit rewords
+  both, so the answer is applied in full. `git diff 5bee293c HEAD -- docs/work/repo-129-every-test-file-reimports-its-module-graph.md | grep -c '^-.*are a defect to$'` → `1`. Build 2 and Done when 1, run after the second commit: `git diff ac7b78dc HEAD -- docs/work/repo-129-every-test-file-reimports-its-module-graph.md | grep -c '^-.*and one CI run. State leaking'` → `1`, and the same with `'^-.*five shuffled local passes and one CI pass'` → `1`.
 - 2026-11-10 — Fixed at landing by owner choice: gate 1, F3 — "the header of
   `no-model-environment.ts` says `setupFiles` is in the root `vitest.config.ts`,
   and the opening of `testing.md` and the root `CLAUDE.md` still say the projects
