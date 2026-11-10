@@ -63,8 +63,8 @@ where it holds; (b) not now. **Chosen: (a).**
 1. Each project ends either split into an isolated and a non-isolated half, with
    five shuffled local passes and one CI pass recorded in the Log, or left
    unchanged with the failing files and the reason recorded.
-2. The CI log of this pull request shows a lower summed `import` time than run
-   `40210503276`'s 145 s, and the Log states the difference.
+2. The ubuntu import share and wall clock fall against the nearest `main` matrix
+   run, and the Log states the difference.
 3. `npm test -- --project <tool>` still runs all of that tool's files. Prove it
    by comparing the file count before and after.
 
@@ -209,3 +209,26 @@ where it holds; (b) not now. **Chosen: (a).**
   - **Not proven by anything run here:** that a file project's `maxWorkers: 4` took
     effect on CI (vitest prints no worker count). The wall clock fell, which is
     consistent with it and does not show it.
+- 2026-11-10, **the owner's answers at the gate checkpoint** (tools-86, checkpoint
+  4, relayed by the orchestrator; each was the recommended option and none was
+  overridden), recorded by the lander.
+  - **Done when 2, which asked for a seconds figure no run prints.** Options: reword
+    to the share and the wall clock (chosen; the builder's recommendation); keep
+    seconds; reword and also hold windows. The Done when line itself is reworded to
+    "The ubuntu import share and wall clock fall against the nearest `main` matrix
+    run, and the Log states the difference."
+  - **The three in-file order-dependent tests** (the preflight ghshim case and the
+    two ledger log tests). Options: file two tickets (chosen; the builder's
+    recommendation); record in the Log only; fix ghshim here and file the ledger
+    one only. Filed as
+    [repo-144](./repo-144-the-preflight-leak-spec-depends-on-test-order.md) (pull
+    request #788, open) and lg-106, `tools/ledger/docs/work/lg-106-the-log-tests-read-what-earlier-tests-logged.md`
+    (pull request #789, open, branch `ledger-file-shuffle-order`); neither is on
+    this branch, so the links are by name until they merge.
+  - **pl-64's handover.** Options: a note in pl-64's Build in this pull request
+    (chosen); leave it to pl-64's builder. The note is appended to the bullet that
+    reads "Exclude `api/test/live-records.test.ts` from the `planner` project's unit
+    run." in
+    `tools/planner/docs/work/pl-64-planner-tests-load-the-contract-twice-and-scan-archived-runs.md`:
+    the planner project is now `tools/planner/vitest.config.ts`, and `splitProject`
+    has no `exclude` option.
