@@ -219,3 +219,43 @@ Commands, from the worktree root:
    "Analyse and retry" no longer refilling the field. Gate 1's F2, F3 and F5
    are folded into this round; F4 (pre-existing) is filed separately and not
    fixed here.
+
+**2026-11-10, round 1** (gate 1's findings at `dfdc5258`, with the answers
+above).
+
+- **F1.** I read the gate's model against `api/src/routes/probe.ts` before
+  fixing: `probeClientGate.tryAcquire` is taken before the probe runs and
+  `clientReleaseProbe()` runs in the handler's `finally`, and the web never
+  aborts its POST, so the model holds. `useBoxes` now keeps each box's POST
+  token while it is out; closing or re-analysing a box with its POST out moves
+  that token to an orphan set and counts it, and `analysesToStart(boxes,
+  abandoned)` subtracts the count until the POST settles.
+- **Decision 2.** `ProbePanel` takes `waiting` and `onStopWaiting`: a waiting
+  Download keeps the panel mounted with the table and the options set aside,
+  so Stop waiting (`useBoxes.stopWaitingDownload`) brings them back as chosen.
+  A slot that frees afterwards starts nothing.
+- **F2.** "Analyse again" is disabled while the job is being created, as
+  Dismiss is.
+- **F5.** `ProgressBar` takes `waiting`, and a waiting box's bar is announced
+  as "…: not started yet" rather than "in progress, total unknown".
+- **F3.** `layout.spec.ts` gains two cases: a box waiting for a probe slot
+  beside two analysing; and a waiting Download beside a running job and a
+  refused one, every box under a 540-character title with spaces. The second
+  stops both jobs at its end, so the server's one job slot is free for the
+  specs after it. At 360 px the long title wraps in the narrow column beside
+  the preview: it fits, and reads tall.
+
+Red, then green, from the worktree root:
+
+- `npx vitest run tools/downloader/web/test/app.test.tsx tools/downloader/web/test/probe-panel.test.tsx tools/downloader/web/test/chrome.test.tsx`,
+  the new tests against `d77b5d0e`'s source → `Tests 5 failed | 75 passed
+  (80)`: F1 "expected … to be called 2 times, but got 3 times"; decision 2
+  "expected [ Array(2) ] to have a length of 3 but got 2" (the box was
+  closed); F5 twice, "Waiting to download: in progress, total unknown" and
+  "Waiting to analyse: in progress, total unknown"; F2 "expected false to be
+  true" (Analyse again enabled while busy).
+- After the fix, `npx vitest run tools/downloader/web` → `Test Files 23 passed
+  (23)`, `Tests 343 passed (343)`; with `boxes.test.ts`'s added case, 344.
+- `E2E_PORT=8133 npm run e2e:downloader` → `22 passed (1.0m)`. The
+  screenshots of both new cases were opened at 360 px and 1280 px.
+- `npm run check` → exit 0.

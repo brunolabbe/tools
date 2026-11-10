@@ -1174,3 +1174,151 @@ test("a failed job's retry analyses its address again in the same box", async ()
   expect(within(before).getByRole("heading", { name: "Analysing" })).toBeDefined();
   expect(fake.client.probe).toHaveBeenCalledTimes(2);
 });
+
+// ---------------------------------------------------------------------------
+// dl-133 round 1: gate 1's findings and the owner's answers
+// ---------------------------------------------------------------------------
+
+test("a closed analysis holds its slot until its POST settles, as the server holds its own (F1)", async () => {
+  // The server's per-client gate is taken when the POST arrives and released
+  // when its handler ends (`routes/probe.ts`); the page never aborts the POST.
+  // So the fake models that rule: a slot per unsettled POST, a third refused.
+  // Freed on the close itself, the page started the waiting box straight into
+  // that refusal.
+  let held = 0;
+  const posts: Deferred<ProbeResponse>[] = [];
+  let Errors: AppErrorClass | undefined;
+  const fake = await mountApp(false, {
+    probe: vi.fn(() => {
+      if (held >= 2) {
+        return Promise.reject(
+          new (Errors as AppErrorClass)(
+            "RATE_LIMITED",
+            "You already have as many analyses running as this server allows per client.",
+          ),
+        );
+      }
+      held += 1;
+      const next = deferred<ProbeResponse>();
+      posts.push(next);
+      const free = (): void => {
+        held -= 1;
+      };
+      next.promise.then(free, free);
+      return next.promise;
+    }),
+  });
+  Errors = fake.AppError;
+
+  for (const name of ["first", "second", "third"]) {
+    analyse(`https://videos.example.com/watch/${name}`);
+    await settle();
+  }
+  expect(fake.client.probe).toHaveBeenCalledTimes(2);
+
+  // The oldest running box is closed while its POST is still out.
+  fireEvent.click(within(box(2)).getByRole("button", { name: "Stop waiting" }));
+  await settle();
+  expect(boxes()).toHaveLength(2);
+
+  // The third still waits: the server still holds the closed box's slot.
+  expect(fake.client.probe).toHaveBeenCalledTimes(2);
+  expect(within(box(0)).getByRole("heading", { name: "Waiting" })).toBeDefined();
+  expect(lineIn(box(0))).toBe(PROBE_WAITING);
+
+  // The abandoned POST settles, its answer going nowhere: now the slot is free.
+  await act(async () => {
+    posts[0]?.resolve({ probe: probe({ title: "Nobody is waiting" }), cached: false });
+    await Promise.resolve();
+  });
+  await settle();
+
+  expect(fake.client.probe).toHaveBeenCalledTimes(3);
+  expect(within(box(0)).getByRole("heading", { name: "Analysing" })).toBeDefined();
+  expect(within(box(0)).queryByRole("alert")).toBeNull();
+  expect(screen.queryByRole("heading", { name: "Nobody is waiting" })).toBeNull();
+});
+
+/** Three analysed boxes, two jobs in flight, and the third box's Download waiting. */
+async function waitingDownload(): Promise<{
+  fake: Fake;
+  third: HTMLElement;
+  listeners: Map<string, EventStreamHandlers>;
+}> {
+  const listeners = new Map<string, EventStreamHandlers>();
+  let created = 0;
+  const fake = await mountApp(false, {
+    createJob: vi.fn(() => {
+      created += 1;
+      return Promise.resolve<JobResponse>({
+        job: job("queued", { id: `job-${String(created)}` }),
+      });
+    }),
+    openJobEvents: vi.fn((jobId: string, handlers: EventStreamHandlers) => {
+      listeners.set(jobId, handlers);
+      return { close: vi.fn() };
+    }),
+  });
+  for (const name of ["first", "second", "third"]) {
+    analyse(`https://videos.example.com/watch/${name}`);
+    await settle();
+  }
+  await answer(fake, 0, { probe: probe({ title: "First" }), cached: false });
+  await answer(fake, 1, { probe: probe({ title: "Second" }), cached: false });
+  await answer(fake, 2, { probe: probe({ title: "Third" }), cached: false });
+  const titled = (title: string): HTMLElement => {
+    const found = boxes().find((candidate) => within(candidate).queryByText(title) !== null);
+    if (found === undefined) throw new Error(`no box titled ${title}`);
+    return found;
+  };
+  for (const title of ["First", "Second"]) {
+    fireEvent.click(within(titled(title)).getByRole("button", { name: "Download" }));
+    await settle();
+  }
+  const third = titled("Third");
+  // A rendition other than the default, so the return can be seen to keep it.
+  const radios = within(third).getAllByRole("radio");
+  fireEvent.click(radios[radios.length - 1] as HTMLElement);
+  fireEvent.click(within(third).getByRole("button", { name: "Download" }));
+  await settle();
+  expect(lineIn(third)).toBe(JOB_WAITING);
+  return { fake, third, listeners };
+}
+
+test("Stop waiting on a waiting Download returns the box to its options, as chosen (owner, decision 2)", async () => {
+  const { fake, third, listeners } = await waitingDownload();
+
+  fireEvent.click(within(third).getByRole("button", { name: "Stop waiting" }));
+  await settle();
+
+  // The same box, back on its table and options, with Download and Dismiss.
+  expect(boxes()).toHaveLength(3);
+  expect(boxes()).toContain(third);
+  expect(within(third).getByRole("table")).toBeDefined();
+  expect(within(third).getByRole("group", { name: "Output" })).toBeDefined();
+  expect(within(third).getByRole("button", { name: "Download" })).toBeDefined();
+  expect(within(third).getByRole("button", { name: "Dismiss" })).toBeDefined();
+  const radios = within(third).getAllByRole("radio") as HTMLInputElement[];
+  expect(radios[radios.length - 1]?.checked).toBe(true);
+  expect(lineIn(third)).toBe("");
+
+  // No longer waiting: a slot that frees now starts nothing.
+  act(() => {
+    listeners.get("job-1")?.onEvent({
+      type: "canceled",
+      jobId: "job-1",
+      error: { code: "JOB_CANCELED", message: "The download was canceled.", retryable: false },
+      at: "2026-08-20T12:00:05.000Z",
+    });
+  });
+  await settle();
+  expect(fake.client.createJob).toHaveBeenCalledTimes(2);
+});
+
+test("a waiting box's bar does not announce work in progress (F5)", async () => {
+  // Nothing has been sent for it, so "in progress" is not true yet.
+  const { third } = await waitingDownload();
+  const label = within(third).getByRole("progressbar").getAttribute("aria-label") ?? "";
+  expect(label).not.toContain("in progress");
+  expect(label).toBe("Waiting to download: not started yet");
+});

@@ -126,9 +126,18 @@ export function jobsInFlight(boxes: readonly Box[], jobs: readonly Job[]): numbe
   return starting + jobs.filter((job) => !isTerminal(job)).length;
 }
 
-/** The waiting analyses that may start now, first come first served. */
-export function analysesToStart(boxes: readonly Box[]): Extract<Box, { kind: "waiting" }>[] {
-  const free = PROBE_SLOTS - probesInFlight(boxes);
+/**
+ * The waiting analyses that may start now, first come first served.
+ *
+ * `abandoned` is the POSTs still out whose box was closed or re-analysed: the
+ * server holds their slots until they settle, whatever the page shows (dl-133
+ * gate 1, F1).
+ */
+export function analysesToStart(
+  boxes: readonly Box[],
+  abandoned = 0,
+): Extract<Box, { kind: "waiting" }>[] {
+  const free = PROBE_SLOTS - probesInFlight(boxes) - abandoned;
   if (free <= 0) return [];
   return boxes
     .filter((box): box is Extract<Box, { kind: "waiting" }> => box.kind === "waiting")

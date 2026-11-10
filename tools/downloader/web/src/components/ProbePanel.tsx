@@ -3,7 +3,9 @@ import { canMakeWebm } from "@downloader/contract";
 import type { JobOptions, ProbeResult } from "@downloader/contract";
 import { formatDuration } from "../lib/format.ts";
 import { pickDefaultVariantId, toDisplayRows } from "../lib/variants.ts";
+import { JOB_WAITING } from "../lib/probe-stages.ts";
 import { BoxHead } from "./BoxHead.tsx";
+import { ProgressBar } from "./ProgressBar.tsx";
 import { VariantTable } from "./VariantTable.tsx";
 
 const CONTAINERS = ["mp4", "mkv", "webm", "source"] as const;
@@ -15,6 +17,15 @@ interface ProbePanelProps {
   onDownload: (options: JobOptions) => void;
   onReanalyse: () => void;
   onDismiss: () => void;
+  /**
+   * Download was pressed with both job slots taken (dl-133): the table and the
+   * options step aside, as they will when the job starts, and the line under
+   * the bar says what the box waits for. They stay mounted in this panel's
+   * state, so Stop waiting brings them back as they were chosen (owner,
+   * 2026-11-10).
+   */
+  waiting?: boolean;
+  onStopWaiting?: () => void;
 }
 
 export function ProbePanel({
@@ -24,6 +35,8 @@ export function ProbePanel({
   onDownload,
   onReanalyse,
   onDismiss,
+  waiting = false,
+  onStopWaiting,
 }: ProbePanelProps): React.JSX.Element {
   const [variantId, setVariantId] = useState<string | null>(() =>
     pickDefaultVariantId(probe.variants),
@@ -79,6 +92,23 @@ export function ProbePanel({
       ...(probe.isLive ? { liveDurationSec: Math.round(liveDurationMin * 60) } : {}),
     };
     onDownload(options);
+  }
+
+  if (waiting) {
+    return (
+      <section aria-labelledby={headingId}>
+        <ProbeHead probe={probe} cached={cached} headingId={headingId} />
+        <ProgressBar percent={null} label="Waiting to download" waiting />
+        <p className="stage" aria-live="polite" aria-atomic="true">
+          {JOB_WAITING}
+        </p>
+        <div className="card__actions">
+          <button type="button" className="button" onClick={onStopWaiting}>
+            Stop waiting
+          </button>
+        </div>
+      </section>
+    );
   }
 
   return (
@@ -153,12 +183,14 @@ export function ProbePanel({
         <button type="button" className="button button--primary" onClick={submit} disabled={busy}>
           {busy ? "Starting…" : "Download"}
         </button>
-        <button type="button" className="button" onClick={onReanalyse}>
+        {/* Neither this nor Dismiss while the job is being created: the box is
+            about to become that job, and re-analysing it in that window left
+            the job to land as a second box (dl-133 gate 1, F2). */}
+        <button type="button" className="button" onClick={onReanalyse} disabled={busy}>
           Analyse again
         </button>
         {/* An analysis no longer leaves when the next one starts (dl-133), so one
-            that is not wanted is put away from here. Not while its job is being
-            created: the box is about to become that job. */}
+            that is not wanted is put away from here. */}
         <button type="button" className="button" onClick={onDismiss} disabled={busy}>
           Dismiss
         </button>

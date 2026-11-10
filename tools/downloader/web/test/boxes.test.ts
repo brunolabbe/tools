@@ -65,3 +65,9 @@ test("a box whose job is being created holds a job slot, as an unfinished job do
   expect(downloadsToStart([starting, queued], jobs)).toEqual([]);
   expect(downloadsToStart([queued], jobs).map((box) => box.id)).toEqual(["q"]);
 });
+
+test("an abandoned POST still out takes a probe slot, with no box to show for it (gate 1 F1)", () => {
+  const boxes = [waiting("b", 3), analysing("a")];
+  expect(analysesToStart(boxes).map((box) => box.id)).toEqual(["b"]);
+  expect(analysesToStart(boxes, 1)).toEqual([]);
+});

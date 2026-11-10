@@ -1,12 +1,10 @@
 import type { AppErrorPayload, Job, JobOptions, ProbeStageEvent } from "@downloader/contract";
 import type { Box } from "../lib/boxes.ts";
 import type { StreamState } from "../lib/job-stream.ts";
-import { JOB_WAITING } from "../lib/probe-stages.ts";
 import { AnalysingPanel } from "./AnalysingPanel.tsx";
 import { ErrorPanel } from "./ErrorPanel.tsx";
 import { JobCard } from "./JobCard.tsx";
-import { ProbeHead, ProbePanel } from "./ProbePanel.tsx";
-import { ProgressBar } from "./ProgressBar.tsx";
+import { ProbePanel } from "./ProbePanel.tsx";
 
 export interface BoxListProps {
   boxes: readonly Box[];
@@ -24,6 +22,8 @@ export interface BoxListProps {
   onReanalyse: (boxId: string) => void;
   onDownload: (boxId: string, options: JobOptions) => void;
   onClearStartError: (boxId: string) => void;
+  /** A waiting Download put back: the box returns to its options, as chosen. */
+  onStopWaitingDownload: (boxId: string) => void;
   onFollowLink: (jobId: string) => void;
   onCancel: (jobId: string) => void;
   onDismissJob: (boxId: string, jobId: string) => void;
@@ -105,33 +105,20 @@ function BoxBody({ box, ...props }: BoxListProps & { box: Box }): React.JSX.Elem
       );
     case "probed": {
       const { download } = box;
-      if (download.kind === "waiting") {
-        // The table and the options go as they will when the job starts; the
-        // head stays, and the line under the bar says what it waits for.
-        return (
-          <>
-            <ProbeHead probe={box.probe} cached={box.cached} />
-            <ProgressBar percent={null} label="Waiting to download" />
-            <p className="stage" aria-live="polite" aria-atomic="true">
-              {JOB_WAITING}
-            </p>
-            <div className="job__actions">
-              <button type="button" className="button" onClick={() => props.onClose(box.id)}>
-                Stop waiting
-              </button>
-            </div>
-          </>
-        );
-      }
+      // One panel through the wait: a waiting Download sets the table and the
+      // options aside rather than unmounting the panel that holds the choice,
+      // so Stop waiting brings them back as chosen.
       return (
         <>
           <ProbePanel
             probe={box.probe}
             cached={box.cached}
             busy={download.kind === "starting"}
+            waiting={download.kind === "waiting"}
             onDownload={(options) => props.onDownload(box.id, options)}
             onReanalyse={() => props.onReanalyse(box.id)}
             onDismiss={() => props.onClose(box.id)}
+            onStopWaiting={() => props.onStopWaitingDownload(box.id)}
           />
           {download.kind === "choosing" && download.error && (
             <ErrorPanel error={download.error} onDismiss={() => props.onClearStartError(box.id)} />

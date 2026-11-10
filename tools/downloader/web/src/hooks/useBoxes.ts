@@ -34,6 +34,8 @@ export interface UseBoxes {
   close(id: string): void;
   /** Download pressed in an analysed box: starts its job, or waits for a slot. */
   download(id: string, options: JobOptions): void;
+  /** A waiting Download put back: the box returns to its options, as chosen (owner, 2026-11-10). */
+  stopWaitingDownload(id: string): void;
   /** Puts away the reason the box's last Download press failed. */
   clearStartError(id: string): void;
   /** A failed job's "Analyse and retry": the box becomes an analysis again. */
@@ -52,6 +54,19 @@ export function useBoxes(api: ApiClient, jobs: UseJobs): UseBoxes {
   const tokens = useRef(new Map<string, number>());
   /** Each box's stage channel while it analyses, so closing the box closes it. */
   const streams = useRef(new Map<string, EventStream>());
+  /** The token of each box's POST while it is out, by box id. */
+  const posts = useRef(new Map<string, number>());
+  /** Tokens of POSTs still out whose box was closed or re-analysed. */
+  const orphans = useRef(new Set<number>());
+  /**
+   * How many of those there are, and so how many server slots this page still
+   * holds with no box to show for them (dl-133 gate 1, F1). The server's
+   * per-client gate is held until the POST's handler ends, and the page never
+   * aborts the POST: freed on the close itself, the slot started a waiting box
+   * straight into a `RATE_LIMITED` refusal. The owner chose this count over an
+   * abort signal on `ApiClient.probe` (2026-11-10).
+   */
+  const [unsettled, setUnsettled] = useState(0);
 
   const next = useCallback(() => {
     counter.current += 1;
@@ -67,6 +82,14 @@ export function useBoxes(api: ApiClient, jobs: UseJobs): UseBoxes {
     tokens.current.delete(id);
     streams.current.get(id)?.close();
     streams.current.delete(id);
+    // Its POST still holds a server slot until it settles; it is counted, with
+    // no box, until then.
+    const out = posts.current.get(id);
+    if (out !== undefined) {
+      posts.current.delete(id);
+      orphans.current.add(out);
+      setUnsettled((count) => count + 1);
+    }
   }, []);
 
   const startAnalysis = useCallback(
@@ -100,6 +123,7 @@ export function useBoxes(api: ApiClient, jobs: UseJobs): UseBoxes {
       });
       streams.current.set(id, stream);
 
+      posts.current.set(id, token);
       try {
         const response = await api.probe({ url, probeId });
         if (!current()) return;
@@ -117,6 +141,9 @@ export function useBoxes(api: ApiClient, jobs: UseJobs): UseBoxes {
       } finally {
         stream.close();
         if (streams.current.get(id) === stream) streams.current.delete(id);
+        if (posts.current.get(id) === token) posts.current.delete(id);
+        // The server has let go of the slot an abandoned box was still holding.
+        if (orphans.current.delete(token)) setUnsettled((count) => count - 1);
       }
     },
     [api, next, update],
@@ -165,7 +192,7 @@ export function useBoxes(api: ApiClient, jobs: UseJobs): UseBoxes {
   // sees.
   useLayoutEffect(() => {
     // oxlint-disable-next-line react/set-state-in-effect
-    for (const box of analysesToStart(boxes)) void startAnalysis(box.id, box.url);
+    for (const box of analysesToStart(boxes, unsettled)) void startAnalysis(box.id, box.url);
     for (const box of downloadsToStart(boxes, jobs.jobs)) {
       void startDownload(
         box.id,
@@ -175,7 +202,7 @@ export function useBoxes(api: ApiClient, jobs: UseJobs): UseBoxes {
         box.probe.thumbnailPath ?? null,
       );
     }
-  }, [boxes, jobs.jobs, startAnalysis, startDownload]);
+  }, [boxes, jobs.jobs, unsettled, startAnalysis, startDownload]);
 
   // A box's channel is closed with the box; these are the boxes still open
   // when the page goes.
@@ -246,6 +273,18 @@ export function useBoxes(api: ApiClient, jobs: UseJobs): UseBoxes {
     [update],
   );
 
+  const stopWaitingDownload = useCallback(
+    (id: string) => {
+      // Only a Download still waiting: one that has started is the job's now.
+      update(id, (box) =>
+        box.kind === "probed" && box.download.kind === "waiting"
+          ? { ...box, download: { kind: "choosing", error: null } }
+          : box,
+      );
+    },
+    [update],
+  );
+
   const { remove } = jobs;
 
   const retryJob = useCallback(
@@ -283,6 +322,7 @@ export function useBoxes(api: ApiClient, jobs: UseJobs): UseBoxes {
     close,
     download,
     clearStartError,
+    stopWaitingDownload,
     retryJob,
     dismissJob,
   };

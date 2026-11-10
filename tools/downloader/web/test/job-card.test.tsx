@@ -111,6 +111,7 @@ function renderList(jobs: readonly Job[], extra: Partial<Parameters<typeof BoxLi
       onReanalyse={vi.fn()}
       onDownload={vi.fn()}
       onClearStartError={vi.fn()}
+      onStopWaitingDownload={vi.fn()}
       onFollowLink={vi.fn()}
       onCancel={vi.fn()}
       onDismissJob={vi.fn()}

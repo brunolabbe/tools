@@ -75,6 +75,7 @@ export function App(): React.JSX.Element {
           onReanalyse={boxes.reanalyse}
           onDownload={boxes.download}
           onClearStartError={boxes.clearStartError}
+          onStopWaitingDownload={boxes.stopWaitingDownload}
           onFollowLink={jobs.clearRefusal}
           onCancel={(id) => void jobs.cancel(id)}
           onDismissJob={boxes.dismissJob}

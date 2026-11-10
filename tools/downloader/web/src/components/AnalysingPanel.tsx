@@ -69,7 +69,11 @@ export function AnalysingPanel({
         <span className="pill">{seconds}s</span>
       </div>
       <p className="muted url-echo">{url}</p>
-      <ProgressBar percent={null} label={waiting ? "Waiting to analyse" : "Analysing page"} />
+      <ProgressBar
+        percent={null}
+        label={waiting ? "Waiting to analyse" : "Analysing page"}
+        waiting={waiting}
+      />
       {/* `aria-live` on the element whose text changes, not on a wrapper whose
           children merely change class. `aria-atomic` because the whole line is
           replaced and half of it is never the news. */}

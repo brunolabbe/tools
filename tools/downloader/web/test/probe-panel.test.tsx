@@ -310,8 +310,9 @@ test("a busy panel says so and cannot be pressed twice", () => {
   expect(spies.onDownload).not.toHaveBeenCalled();
 });
 
-test("analysing again is always available, because the links expire", () => {
-  const spies = mount(probe(), { busy: true });
+test("analysing again is available, because the links expire", () => {
+  // Not while busy: see "Analyse again waits while the job is being created".
+  const spies = mount(probe());
 
   fireEvent.click(screen.getByRole("button", { name: "Analyse again" }));
   expect(spies.onReanalyse).toHaveBeenCalledOnce();
@@ -524,4 +525,14 @@ test("an analysis is dismissed from its own panel, except while its job is being
   expect((screen.getByRole("button", { name: "Dismiss" }) as HTMLButtonElement).disabled).toBe(
     true,
   );
+});
+
+test("Analyse again waits while the job is being created, as Dismiss does (gate 1 F2)", () => {
+  // Pressed in that window, the box re-analysed and the job createJob then
+  // returned showed as a second box below it, with nothing counting its slot.
+  const spies = mount(probe(), { busy: true });
+  const again = screen.getByRole("button", { name: "Analyse again" }) as HTMLButtonElement;
+  expect(again.disabled).toBe(true);
+  fireEvent.click(again);
+  expect(spies.onReanalyse).not.toHaveBeenCalled();
 });

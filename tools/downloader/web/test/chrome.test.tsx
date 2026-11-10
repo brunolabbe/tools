@@ -281,3 +281,12 @@ test("a box waiting for a probe slot says so, claims no stage, and can be closed
     vi.useRealTimers();
   }
 });
+
+test("a waiting box's bar says nothing has started, not that work is in progress (gate 1 F5)", () => {
+  render(
+    <AnalysingPanel url={SOURCE_URL} startedAt={NOW} stage={null} waiting onCancel={vi.fn()} />,
+  );
+  expect(screen.getByRole("progressbar").getAttribute("aria-label")).toBe(
+    "Waiting to analyse: not started yet",
+  );
+});
