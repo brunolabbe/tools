@@ -12,7 +12,6 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "vitest";
-import { NEEDS_ISOLATION } from "../../vitest.isolation.ts";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -56,6 +55,14 @@ function listed(projects: string[]): { project: string; file: string }[] {
     .map((match) => ({ project: match[1] ?? "", file: match[2] ?? "" }));
 }
 
+/**
+ * Written out here, not imported from `vitest.isolation.ts`: a test that reads the
+ * rule it checks agrees with it whatever the rule says. These are the calls that
+ * rewrite a module graph or the process, and a file making one must not share a
+ * worker with the next.
+ */
+const MOCKS = /\bvi\.(?:mock|doMock|stubGlobal|stubEnv|resetModules)\(/u;
+
 const SPLIT_TOOLS = ["downloader", "planner", "ledger"];
 
 test("--project <tool> lists every one of the tool's test files, once each (repo-129)", () => {
@@ -75,7 +82,7 @@ test("a test file that mocks, stubs or resets modules is in the isolated half (r
   }
   for (const tool of SPLIT_TOOLS) {
     const mocking = testFilesOnDisk(`tools/${tool}`).filter((file) =>
-      NEEDS_ISOLATION.test(fs.readFileSync(path.join(REPO_ROOT, file), "utf8")),
+      MOCKS.test(fs.readFileSync(path.join(REPO_ROOT, file), "utf8")),
     );
     expect(mocking.length, `${tool} has files that mock`).toBeGreaterThan(0);
     expect(byTool.get(tool) ?? [], tool).toEqual(expect.arrayContaining(mocking));
