@@ -127,16 +127,21 @@ that branch and not on `main` (`depends_on`).
 defaults to `environment: "node"`), so the placement is not a choice of project: it
 is a choice of directory, which fixes the typecheck surface (the root
 `tsconfig.tests.json`: NodeNext, no DOM), and of the file's `@vitest-environment`
-docblock. `api/test` is node, and stays node. The only change outside the harness's
-own files is one reference in `tsconfig.tests.json`, after the `api` line:
+docblock. `api/test` is node, and stays node. The harness is in `tools/ledger/api/test/`,
+and the only changes outside it are the reference in `tsconfig.tests.json` and
+the edit of `tools/ledger/web/test/writes.test.tsx` that step 6 and Done when 3
+require. The reference goes after the `api` line:
 
 ```json
 { "path": "./tools/ledger/web" }
 ```
 
 With it the harness imports `WRITES` from `../../web/src/writes.ts` and the seeding
-helpers from `./helpers/` (`startApp` and the paste, salary, period, receipt and
-workbook builders the api tests share), and `npm run check`'s typecheck reports 0
+helpers from `./helpers/` (`startApp`, `pasteStatement`, `renderPaste`, the workbook
+fixtures and `oneDeposit`; `api/test/helpers/` has no salary, period or receipt
+seeding builder, and `jpeg`, `upload` and `salary` are file-local in
+`receipts.test.ts` and `people.test.ts`, so the builder lifts them into `helpers/`
+or writes them), and `npm run check`'s typecheck reports 0
 errors (the probe, in the Log). The screen case stays where it is, in
 `tools/ledger/web/test/writes.test.tsx` (jsdom, `web/test/tsconfig.json`); the two
 files share nothing.
@@ -165,10 +170,14 @@ files share nothing.
    of them the loop over the 8 stats routes), not every key of `ROUTES`; the keys
    left out are named in the Log with their reason. Each read that takes a value
    is given one:
-   - a route with an `:id` (`household`, `adminMembers`, `receiptMatches` and the
-     like) takes the id the case's own seed created, or the caller's household id
-     from `GET /api/me`; the literal placeholder is a 404 and fails the 2xx
-     assertion;
+   - `household` takes the caller's household id from `GET /api/me`; `receiptMatches`
+     takes a receipt id and the required query `amountCents` (a non-zero whole
+     number) and `date`, which the seed of the receipt writes gives it (the id of the
+     receipt that seed uploaded, with the amount and date it states); a case whose
+     seed uploads no receipt does not read it, and the Log names those cases.
+     `adminMembers` is `POST`-only, so it is not a read. A literal placeholder fails
+     the 2xx assertion: `receiptMatches` with one answers 400 (`idOf` refuses a
+     non-number), and `household`'s status was not measured;
    - each stats route is read with no `from` and no `to`;
    - `rows` is read unfiltered and, again, with `spendingCategory=none` (the
      variant the spending writes change); `periodLines` is read for the period the
@@ -269,8 +278,9 @@ screen case still proves were open here until the owner answered them on
 - Every request a case makes, the write and each read before and after it, is
   asserted 2xx by the helper that sends it, which throws naming the route and the
   status. This includes `uploadReceipt`, `readReceipt` and `describeWorkbook`.
-  Proved by a mutation: with one read pointed at a route that answers 404 (an
-  `:id` route left as its placeholder), the case fails and names that route.
+  Proved by a mutation: with one read pointed at a route that answers non-2xx
+  (an `:id` route left as its placeholder; `receiptMatches` answers 400), the case
+  fails and names that route.
 - For each of the 34 writes, a route whose answer changed under the write and is
   not in its `WRITES` list fails the case, naming the write and the route. The run
   at the build's head reports the count of such routes across the 34 writes, and
@@ -292,8 +302,9 @@ screen case still proves were open here until the owner answered them on
   `WRITES`, each asserts for every route that a changed one is read again, a
   patched one is marked stale and not read, and any other is read once, and the
   file passes at the build's head.
-- The harness is in `tools/ledger/api/test/`, and the one change outside its own
-  files is the `{ "path": "./tools/ledger/web" }` reference in `tsconfig.tests.json`.
+- The harness is in `tools/ledger/api/test/`, and the only changes outside it are
+  the `{ "path": "./tools/ledger/web" }` reference in `tsconfig.tests.json` and the
+  edit of `tools/ledger/web/test/writes.test.tsx` that step 6 and Done when 3 require.
 - `npm run check` passes, and so does the ledger suite (`npm test -- --project
   ledger`), which contains the harness.
 
@@ -361,3 +372,34 @@ screen case still proves were open here until the owner answered them on
   measured: a harness that runs a write through the web's functions (the probe
   imports `writes.ts` and one helper, as the rule asked, and sends nothing through
   `fetch`). The probe tree and the scratch install are removed.
+
+  **WITHDRAWN — do not cite this paragraph's order of events** (the second sentence,
+  "farmed and built (`npm run build` exit 0)", placed before the link of the scratch
+  install), by the probe's author; found by gate 2, N4. Correction: built before the
+  link, `npm run build` exits 2 (`TS2307 Cannot find module '@tanstack/react-query'`
+  in the `web` project); exit 0 comes only after the scratch install's `@tanstack` is
+  linked. The scratch install also added a second `react` beside `@tanstack` (`added
+  3 packages`: react-query, query-core and react); the probe calls no hook, so it did
+  not matter.
+
+- 2026-11-10 — Fixed at landing because the severity floor requires it: gate 2, N1 —
+  Done when 11 and the Build's opening paragraph said the only change outside the harness
+  was the `tsconfig.tests.json` reference. Both now name that reference and the edit of
+  `web/test/writes.test.tsx` that step 6 and Done when 3 require. Proof, run after the
+  commit: `git diff dfebaca7 HEAD -- <ticket> | grep -c '^-.*The only change outside the
+  harness'` → 1 (the Build's paragraph), and the same with `the one change outside its
+  own` → 1 (Done when 11).
+- 2026-11-10 — Fixed at landing by owner choice: gate 2, F3 remainder — step 2's
+  `:id` reads. `receiptMatches` is given a receipt id, `amountCents` and `date` from the
+  receipt writes' seed; `adminMembers` (`POST`-only) is out of the `:id` reads; the
+  placeholder is a 400 for `receiptMatches` and `household`'s status was not measured
+  (Done when 4 says non-2xx, not 404). Proof, run after the commit: the same command with
+  `the literal placeholder is a 404` → 1, `takes the id the case's own seed created` → 1,
+  and `route that answers 404` → 1 (Done when 4).
+- 2026-11-10 — Fixed at landing by owner choice: gate 2, N3 — the placement paragraph
+  no longer says the api tests share salary, period and receipt builders; it says
+  `api/test/helpers/` has none and the builder lifts or writes them. Proof, run after
+  the commit: the same command with `workbook builders the api tests share` → 1.
+- 2026-11-10 — Fixed at landing by owner choice: gate 2, N4 — the probe entry's order of events is withdrawn in place above, with the corrected order and the second `react`. Proof, run after the commit: `git diff dfebaca7 HEAD -- <ticket> | grep -v 'Fixed at landing' | grep -c '^+.*exit 0 comes only after the scratch install'` → 1 (an added line, so the `grep -v` keeps this entry's own quotation out).
+- 2026-11-10 — Gate 1's and gate 2's full reports are on the pull request thread,
+  #793; status unchanged.
