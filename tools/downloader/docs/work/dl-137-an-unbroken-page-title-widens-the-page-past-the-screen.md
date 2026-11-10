@@ -3,9 +3,9 @@ id: dl-137
 tool: downloader
 title: An unbroken page title widens the page past the screen
 kind: fix
-status: needs-decision
+status: ready
 milestone: null
-depends_on: []
+depends_on: [dl-133]
 difficulty: standard
 ---
 
@@ -125,7 +125,28 @@ from the spec's route, the seeded storage or the delayed origin.
    wrapped, not clipped.
 4. Run the new case **before** the fix and see it red at both widths, then green.
 
-## Decision — open
+## Decision — answered 2026-11-10 by the owner
+
+**Question 1, where the fix goes — answered 2026-11-10 by the owner: A.** The
+options were A (its own pull request on dl-133's `.card__title`, after dl-133
+merges), B (fold it into dl-135) and C (fix it on `main` now). The owner chose A,
+the recommendation below. `depends_on: [dl-133]` and `status: ready` are set in
+the commit that records it, as the last paragraph of this section said.
+
+**Question 2, the gate's text findings F1, F2 and F3 — answered 2026-11-10 by
+the owner: fix all.** The options were fix all in this round or record them
+only. They are fixed in the commit after this one, and the Log says how.
+
+**Question 3, gate 1's F4 (`.notice__message`) — answered 2026-11-10 by the
+owner: widen dl-137.** The options were: widen this ticket to
+`.notice__message`; file it separately; record it only. This ticket's Build and
+Done when now also cover `.notice__message` with the same declaration, checked
+by the same shape of layout case. The widened Build and Done when are written
+in the commit after this one; the Why records F4's reproduction.
+
+The question as it stood when filed, and the options with their costs as the
+filing put them (the costs are corrected in the commit after this one, F1 and
+F2):
 
 Which branch's stylesheet the fix targets, and whether it belongs in dl-135.
 Three branches are live around the same two rules, and the declaration lands in
