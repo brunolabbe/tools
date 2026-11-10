@@ -1063,10 +1063,14 @@ removed after.
   - It is fixed in our code, not in `node_modules`. `readSheets` now runs
     `countInflated` over every entry, with no bound, before any SheetJS read. That
     inflates each stream through zlib once, keeps nothing, and refuses one that does not
-    inflate as `WORKBOOK_NOT_XLSX`.
+    inflate as `WORKBOOK_NOT_XLSX`. It reaches each entry through `compressedOf`, so it
+    also refuses, as `WORKBOOK_NOT_XLSX`, a local header that disagrees with the
+    directory on name, method or sizes, the encryption bit, a zip64 extra field in the
+    local header, and a range past the end of the file (withdrawn in place at the
+    landing, gate 2's N3: this bullet had named only the stream that does not inflate).
   - It costs one more inflate of the file: about 35 ms at the bound by
     `workbook-zip.ts`'s own figure. The route already ran this count against its bound;
-    the command now gets the stream check and no bound. The comments-14 refusal went
+    the command now gets those checks and no bound (withdrawn in place at the landing: this line had said "the stream check" only). The comments-14 refusal went
     from 35 ms (+4.7 MB) to 86 ms (+10.8 MB) through the reader.
   - At `76429ea5`, `fold-F-wb-rels-corrupt.xlsx` through the gate's `one.mts` is refused
     `WORKBOOK_NOT_XLSX` in 7 ms.
@@ -1100,3 +1104,8 @@ removed after.
     then 28 of 29).
   - No ticket records the flake (`git grep` over `tools/ledger/docs` finds only lg-95's
     and lg-99's passing readings). It is reported to the orchestrator, not fixed here.
+
+### 2026-11-10, landing
+
+- 2026-11-10 — Fixed at landing by owner choice: gate 2, N2 — "Three sub-rules of the new key are asserted by no test". Three tests added to `xlsx.test.ts`, describe "a part stored under a name SheetJS's CFB normalises is found as SheetJS finds it (lg-104, gate 1)", built as gate 2 built its A12, A5 and A14: "a part stored as xl//c//d.xml, named /xl/c//d.xml by 14 sheets, is refused: only the first // is joined", "a part stored as Root Entry/xl/comments1.xml, named by 14 sheets, is refused: it is already rooted" and "an entry named for SheetJS's seeded stream is read: SheetJS parses nothing for it". Each asserts SheetJS's own count (14, 14, 0) beside the copy's. All three pass on the head. With gate 2's `mutate2.mjs` applied to the committed tree, one test fails under each mutant and the other two pass: `overnorm` fails the first (1 failed, 2 passed), `noroot` the second, `noseed` the third. The tree was restored from the commit after each.
+- 2026-11-10 — Fixed at landing by owner choice: gate 2, N3 — "Shipped text understates what the command now refuses". The comment in `xlsx.ts` and the Build 1 bullet above, which said the command "gets no bound here, only the refusal of a stream that does not inflate", now say what `compressedOf` also refuses (a local header that disagrees with the directory on name, method or sizes, the encryption bit, a zip64 extra field in the local header, a range past the end of the file); the JSDoc of `refuseUnlessEachSheetIsItsOwn` now lists the pre-read step in its order. The earlier Log sentences were withdrawn in place, marked as such.

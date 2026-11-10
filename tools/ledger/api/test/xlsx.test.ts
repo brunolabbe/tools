@@ -1071,6 +1071,45 @@ describe("a part stored under a name SheetJS's CFB normalises is found as SheetJ
     },
   );
 
+  // Each of the next three pins one sub-rule of the key (gate 2, N2), so that a copy which
+  // over-normalised, forgot the root, or dropped the seeded names would flip a file SheetJS
+  // itself reads the same way.
+  test("a part stored as xl//c//d.xml, named /xl/c//d.xml by 14 sheets, is refused: only the first // is joined", async () => {
+    const bytes = relatedWorkbook(
+      14,
+      () => `<Relationship Id="c1" Type="${relationshipType("comments")}" Target="/xl/c//d.xml"/>`,
+      [{ name: "xl//c//d.xml", data: commentsPart(200) }],
+    );
+
+    expect(sheetJs(bytes)).toBe(14);
+    expect((await refusal(bytes))?.code).toBe("WORKBOOK_NOT_XLSX");
+  });
+
+  test("a part stored as Root Entry/xl/comments1.xml, named by 14 sheets, is refused: it is already rooted", async () => {
+    const bytes = relatedWorkbook(
+      14,
+      () =>
+        `<Relationship Id="c1" Type="${relationshipType("comments")}" Target="../comments1.xml"/>`,
+      [{ name: "Root Entry/xl/comments1.xml", data: commentsPart(200) }],
+    );
+
+    expect(sheetJs(bytes)).toBe(14);
+    expect((await refusal(bytes))?.code).toBe("WORKBOOK_NOT_XLSX");
+  });
+
+  test("an entry named for SheetJS's seeded stream is read: SheetJS parses nothing for it", async () => {
+    // Built in code: a control character typed into a source file is easy to lose.
+    const seeded = `${String.fromCharCode(1)}Sh33tJ5`;
+    const bytes = relatedWorkbook(
+      14,
+      () => `<Relationship Id="c1" Type="${relationshipType("comments")}" Target="/${seeded}"/>`,
+      [{ name: seeded, data: commentsPart(200) }],
+    );
+
+    expect(sheetJs(bytes)).toBe(0);
+    expect(await refusal(bytes)).toBeUndefined();
+  });
+
   test("a content types part stored as /[Content_Types].xml, before a plain one, is the one read", async () => {
     // SheetJS reads the first, which lists the link 50 times; the plain one lists it once.
     const LINK = "/xl/externalLinks/externalLink1.xml";

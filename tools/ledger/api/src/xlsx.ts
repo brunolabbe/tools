@@ -227,7 +227,10 @@ export function rowsOf(
  *
  * The shape of the zip comes first, whatever the caller: whatever `workbookEntries`
  * refuses is refused here, so the import command meets the refusal the route does
- * (gate 2). Then a part listed twice in the content types is refused, since even a
+ * (gate 2). Then every entry is inflated once through node's zlib, with no bound and
+ * keeping nothing, which refuses a stream that does not inflate and whatever
+ * `compressedOf` refuses in a local header (lg-104). Then a part listed twice in the
+ * content types is refused, since even a
  * `bookSheets` read parses each listed external link's `.rels` (lg-104). Then the
  * sheets are counted by SheetJS itself, with `bookSheets`, which
  * reads the workbook part and parses no sheet, and the workbook is refused unless
@@ -252,7 +255,10 @@ async function refuseUnlessEachSheetIsItsOwn(data: Buffer): Promise<void> {
   // answer of 2026-11-10): SheetJS's own inflate, which runs on any read, `bookSheets`
   // included, spun at full CPU past 30 s on a corrupt `.rels` stream that zlib refuses in
   // 3 ms. The route has counted these already, against its bound; the import command has
-  // not, and gets no bound here, only the refusal of a stream that does not inflate.
+  // not, and gets no bound here. It gets what `compressedOf` refuses on the way to each
+  // stream: a stream that does not inflate, a local header that disagrees with the
+  // directory on name, method or sizes, the encryption bit, a zip64 extra field in the
+  // local header, and a range past the end of the file.
   await countInflated(data, entries, Number.MAX_SAFE_INTEGER);
   // Before the `bookSheets` read, which parses each listed external link's `.rels`.
   if (!eachPartListedOnce(data, entries)) {
