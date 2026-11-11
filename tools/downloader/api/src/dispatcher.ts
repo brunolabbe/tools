@@ -54,7 +54,7 @@ import dns from "node:dns/promises";
 import { isIP } from "node:net";
 import type { LookupFunction } from "node:net";
 import { AppError } from "@downloader/contract";
-import { Agent, buildConnector, ProxyAgent } from "undici";
+import { Agent, buildConnector, fetch as undiciFetch, ProxyAgent } from "undici";
 import { isBlockedAddress } from "./ssrf.ts";
 import type { SsrfGuard } from "./ssrf.ts";
 
@@ -70,6 +70,28 @@ import type { SsrfGuard } from "./ssrf.ts";
  * place the two declaration sets meet.
  */
 export type FetchDispatcher = NonNullable<RequestInit["dispatcher"]>;
+
+/**
+ * undici's `fetch`, typed as the platform's: the two declaration sets disagree
+ * for the same reason `FetchDispatcher` above exists, and the cast lives here
+ * for the same reason.
+ *
+ * **The cast is wider than that disagreement, and the type does not say so.**
+ * The platform type accepts three things the runtime package's `fetch` does not
+ * honour, each measured on undici 8.12.3 (dl-131, gate 1):
+ *
+ * - a platform `FormData` body goes out as the literal text `[object FormData]`
+ *   with `content-type: text/plain`, and no error;
+ * - a platform `Request` passed as the input throws `Failed to parse URL from
+ *   [object Request]`;
+ * - the `Response` and `Headers` it returns are undici's own classes, so
+ *   `instanceof Response` and `instanceof Headers` against the globals are false.
+ *
+ * Nothing in `src` reaches any of the three: `createGuardedFetch` reduces its
+ * input to a URL string, nothing POSTs through it, and no code checks
+ * `instanceof`. A caller that needs one of them must not rely on this type.
+ */
+const egressFetch = undiciFetch as unknown as typeof globalThis.fetch;
 
 /** One answer from the resolver, in the shape `net.connect` wants back. */
 export interface ResolvedAddress {
@@ -112,6 +134,20 @@ export interface EgressDispatcherOptions {
 
 export interface EgressDispatcher {
   dispatcher: FetchDispatcher;
+  /**
+   * The `fetch` this dispatcher can be handed to, and the only one.
+   *
+   * **Node's global `fetch` cannot take it.** It is the copy of undici bundled
+   * into Node (6.x on Node 22), and since undici 8 an `Agent` from this package
+   * refuses that copy's request handler — `invalid onRequestStart method`,
+   * surfacing as `TypeError: fetch failed` with `UND_ERR_INVALID_ARG` on its
+   * cause (dl-131). Under undici 7 the two happened to share a handler shape, so
+   * pairing them worked and nothing said it was a pairing at all. The runtime
+   * package's own `fetch` shares the dispatcher's handler API by construction,
+   * so the two travel together on this object rather than being matched by hand
+   * at every call site.
+   */
+  fetch: typeof globalThis.fetch;
   /**
    * Which mechanism is in force. Worth logging at boot: "why did this
    * deployment not pin addresses" is answered by this and nothing else.
@@ -259,6 +295,7 @@ export function createEgressDispatcher(options: EgressDispatcherOptions): Egress
     });
     return {
       dispatcher: agent as unknown as FetchDispatcher,
+      fetch: egressFetch,
       mode: "proxy",
       close: () => agent.close(),
     };
@@ -280,6 +317,7 @@ export function createEgressDispatcher(options: EgressDispatcherOptions): Egress
 
   return {
     dispatcher: agent as unknown as FetchDispatcher,
+    fetch: egressFetch,
     mode: "pinned",
     close: () => agent.close(),
   };

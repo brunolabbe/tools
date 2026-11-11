@@ -3,7 +3,7 @@ id: dl-131
 tool: downloader
 title: Move the API's undici from 7 to 8
 kind: chore
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -36,6 +36,165 @@ change even with no advisory against 7.
 - `@downloader/api` resolves undici 8.x, the downloader's suites pass, and the Log
   names the tests that would fail if pinning or the redirect SSRF check broke.
 
+## Review
+
+**Gate: PASS** — 2026-11-10 · `a100f429..e5a039a8` · Opus 5.5, depth full
+
+| Done when                                                                           | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@downloader/api` resolves undici 8.x                                               | **verified** — `api/package.json` declares `^8.12.3` and the lockfile's `node_modules/undici` is 8.12.3; the gate linked the 8.12.3 tarball (its integrity matches the lockfile) into its own tree, and `createRequire` from `api/package.json` resolved 8.12.3; CI `check` (which runs `check-lockfile-sync`) passed at `e5a039a8`                                                                                                                                                                                                                                                                                                                                                                                    |
+| the downloader's suites pass                                                        | **proven** — on 8.12.3 the gate measured `npm test -- --project downloader` exit 0: 126 files passed, 1 skipped (127); 2610 tests passed, 2 skipped (2612). At `e5a039a8`, CI's `test (ubuntu-latest)`, downloader `e2e (direct)`, `e2e (sniffer)` and `docker` all passed                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| the Log names the tests that would fail if pinning or the redirect SSRF check broke | **verified** — the gate planted each mutation the Log names. Removing pinning turned five `dispatcher.test.ts` tests red: the three in "a rebind between the check and the connection" and the two in "a redirect on the pinned dispatcher". Removing `assertAllowed` turned `ssrf.test.ts` › "re-checks after a redirect, which is how a naive guard is defeated", `embedded-ipv4.test.ts` › "a redirect hop in guarded-fetch, with no dispatcher behind it" and `dispatcher.test.ts` › "is judged again by the guard before the second hop opens a socket" red. Setting `"follow"` in `guarded-fetch.ts` turned "is judged again…" red. After the gate restored the source, all 64 tests in the 3 files passed again |
+
+- **F1 · low** · `nfr:maintainability` · no live call site · `egressFetch` in `api/src/dispatcher.ts` casts undici 8's `fetch` to the platform type. That type accepts two inputs undici 8 mishandles. A platform `FormData` body goes out as the literal text `[object FormData]` (`text/plain`), with no error. A platform `Request` passed straight to `egress.fetch` throws `Failed to parse URL from [object Request]`. Also, the `Response` and `Headers` it returns are not `instanceof` the global classes. No caller is affected today: `createGuardedFetch` reduces its input to a URL string, nothing POSTs through it, and `src` has no `instanceof` check. The doc comment presents the cast as a declaration-set difference only, which is wrong in the safe direction.
+- **F2 · low** · Log, false in the safe direction · "No test failed if undici itself began following redirects" is not true of the mutation the Log ran. With `redirect: "follow"` in `guarded-fetch.ts`, `embedded-ipv4.test.ts` › "a redirect hop in guarded-fetch, with no dispatcher behind it" already goes red without the new test.
+- **F3 · low** · Log, false in the safe direction · "the paths only e2e reaches are the whole server booted by `createApp`" is wrong. With `server.ts` paired back to `globalThis.fetch`, 23 of 853 api unit tests fail in 7 files, among them `pipeline`, `routes`, `stream-link` and `thumbnails`. Unit tests already cover the server's own pairing.
+- **dropped** · `egress.fetch` follows redirects when the caller passes no `redirect` option. Its only production caller is `createGuardedFetch`, which forces `"manual"`, and the platform fetch it replaced had the same default. Nothing new.
+- **dropped** · GHSA-mqg3-3v4r-cm32 does cover 8.12.3 (`>= 8.12.2, < 8.12.4`). It is about `compose(redirect(), cache())` on an `Agent`, which this tree does not use. `npm audit --package-lock-only` prints `found 0 vulnerabilities`, so the seven-day exemption does not apply. Not a defect.
+- **dropped** · `dispatcher.ts`'s note says Node bundles undici 6.x "on Node 22". The image runs Node 24, and the gate did not measure Node 24's bundled undici. The code uses undici's own `fetch` either way, and the `docker` job passed. Not a defect.
+- **findings** · the hunt returned 6; 3 carried, 3 dropped.
+- NFR: security ✓ (pinning `lookup` is still read by 8's connector, the per-hop check runs on every hop, `"manual"` is honoured) · performance n/a · reliability ✓ (aborts still surface as `TimeoutError` / `AbortError`) · maintainability — F1 above.
+
 ## Log
 
 - 2026-10-24: filed from the dependency audit.
+- 2026-11-10: built on `downloader/dl-131-undici-8` from `a100f429`.
+  - **Version.** `@downloader/api` now declares `undici ^8.12.3`; the lockfile
+    holds `node_modules/undici` at 8.12.3 (published 2026-10-19T14:02Z, 22 days
+    old). 8.12.4 (2026-11-05T08:55Z) is under the seven-day wait and was not
+    taken: its six advisories (GHSA-mqg3-3v4r-cm32 and five more) are all in the
+    cache interceptor, the redirect interceptor or fetch's `integrity` option,
+    and `grep -rnE "interceptors|cache\(|redirect\(\)|integrity"` over
+    `tools/downloader/{api,engine,resolvers}/src` finds none of them in use;
+    `npm audit --package-lock-only` at 8.12.3 prints `found 0 vulnerabilities`,
+    so nothing reports an advisory against this tree. jsdom's nested
+    `undici 8.12.2` (dev) dedupes to the root 8.12.3. Relock:
+    `npx -y npm@11.21.1 update undici --before=2026-11-03 --package-lock-only
+    --ignore-scripts`, then `npm install --package-lock-only --ignore-scripts`
+    on npm 10.9.9 (npm 11 had also dropped `"peer": true` lines from unrelated entries; the npm 10
+    pass put them back), `node scripts/check-lockfile-sync.mjs` → `up to date`.
+    undici 8 needs Node `>=22.19.0`; the repo's `engines` is `>=22.22.2`. The
+    image's Node (Playwright's `noble` base) was not measured here: the PR's
+    `docker` job is that reading.
+  - **What the brief had wrong.** It framed the risk as an address silently
+    unpinned. The break was louder and elsewhere: **Node's global `fetch` cannot
+    take an undici 8 dispatcher at all.** The farmed tree was pointed at 8.12.3
+    (tarball from `npm pack`, integrity matching the lockfile, linked over the
+    tree's own `node_modules/undici`; the shared checkout is untouched) and the
+    unchanged source failed 33 tests in 10 files under
+    `npm test -- --project downloader`, every one `TypeError: fetch failed`,
+    cause `InvalidArgumentError: invalid onRequestStart method`
+    (`UND_ERR_INVALID_ARG`): Node 22.23.4 bundles undici 6.29.1, whose `fetch`
+    hands the dispatcher a legacy handler, and 8's `Agent` rejects it. Under 7
+    the two shared a handler shape, so `createGuardedFetch(guard, globalThis.fetch,
+    { dispatcher })` worked and nothing said it was a pairing. Fixed by making
+    it one: `EgressDispatcher` gains `fetch`, undici's own `fetch`, and
+    `server.ts` and every test that built the pair by hand take it from there
+    (`dispatcher.ts`, `server.ts`; `dispatcher`, `egress-ca`, `embedded-ipv4`
+    and `proxied-https` specs). Fetches with no dispatcher (`createGuardedFetch(guard)`,
+    `human-check`'s default) stay on the platform's. A scratch probe through
+    `createGuardedFetch(guard, egress.fetch, { dispatcher })` against a local
+    origin showed the shapes production uses working on 8: a `URLSearchParams`
+    POST with `AbortSignal.timeout` (human-check's siteverify), a `Headers`
+    instance, a `Request` input, and a streamed body cancelled mid-flight (the
+    origin saw the client close).
+  - **Which tests prove pinning and the per-redirect check hold on 8**, each
+    shown to fail when its mechanism is removed (one mutation at a time, on the
+    committed source, restored from the commit after each):
+    - Pinning: remove `lookup: createPinningLookup(...)` from the `Agent`'s
+      connect options → `dispatcher.test.ts` "a rebind between the check and
+      the connection" fails (all three: "the connector refuses the address the
+      pre-flight check never saw", "and connects normally when the pinned
+      address is allowed", "https goes through the same connector, not around
+      it"), plus the two below. The connector's literal check is
+      `embedded-ipv4.test.ts` "the bare pinned dispatcher refuses the literal,
+      with no pre-flight check at all", which passed on 8 once paired with
+      undici's fetch.
+    - Per-hop check: remove `await guard.assertAllowed(currentUrl)` from
+      `guarded-fetch.ts` → `ssrf.test.ts` "re-checks after a redirect, which is
+      how a naive guard is defeated", `embedded-ipv4.test.ts` "a redirect hop in
+      guarded-fetch, with no dispatcher behind it", and the new test below fail.
+    - **WITHDRAWN — do not cite the first sentence of this bullet (the
+      builder's error, gate 1 F2; the correction is the Fixed at landing entry
+      below). No test failed if undici itself began following redirects, and one
+      now does.** `embedded-ipv4.test.ts` "both layers: a redirect hop through the
+      pinned dispatcher" ends in the connector's refusal either way, and
+      `ssrf.test.ts` stubs the fetch. Changing `redirect: "manual"` to `"follow"`
+      in `guarded-fetch.ts` left both green. New, at the end of
+      `dispatcher.test.ts`, "a redirect on the pinned dispatcher": "is judged
+      again by the guard before the second hop opens a socket" (the dispatcher's
+      guard lets both hosts through its connector and the request's guard
+      refuses the second, so only the per-hop check can stop it, and a
+      redirect undici followed itself would put `/secret` among the origin's
+      hits) and "is handed back to the caller, not followed, by the fetch the
+      dispatcher travels with" (a raw `egress.fetch` with `redirect: "manual"`
+      returns the 302 and the origin sees one request). With `"follow"` the
+      first fails; with the per-hop check removed the first fails; the second
+      is the direct statement of the invariant `dispatcher.ts` comments on.
+  - **Results.** `npm run check` exit 0; `npm test -- --project downloader`
+    exit 0, `Test Files 126 passed | 1 skipped (127)`, `Tests 2610 passed | 2
+    skipped (2612)`, 79 s (after the fix; 33 failed before it). `ProxyAgent`
+    (the proxy mode) is exercised by `proxied-https.test.ts` and
+    `egress-proxy.test.ts`, both green on 8.
+  - **Not run here.** The e2e suites: WITHDRAWN — do not cite this clause (the
+    builder's error, gate 1 F3; the correction is the Fixed at landing entry
+    below): the paths only e2e reaches are the whole
+    server booted by `createApp` (so `egress.fetch` with the pinned dispatcher
+    on a probe, thumbnail and manifest fetch against the fixture origin) and
+    the container's Node. Both are the draft PR's `downloader` workflow
+    (`e2e` and `docker` jobs; `package-lock.json` is in its path filter). The
+    planner and ledger web suites, whose jsdom now resolves the root undici
+    8.12.3 instead of its nested 8.12.2 (a patch bump, dev only), were not run:
+    this tree's jsdom is linked to the shared checkout's, which keeps its own
+    nested copy, so a local run could not have read it.
+- 2026-11-10 — Owner's answer on the builder's open decision about undici
+  8.12.4, relayed by the orchestrator. The question: 8.12.3 is pinned under the
+  seven-day rule; 8.12.4 (2026-11-05) fixes six advisories in features this tree
+  does not use, and npm's advisory database lists none against 8.12.3; when
+  should 8.12.4 come in. The options were: leave 8.12.3 and let the next
+  dependency update take it, bump on this branch on 2026-11-12, or file a
+  ticket. The owner chose to leave 8.12.3 and take 8.12.4 in the next dependency
+  update, which was the builder's recommendation; nothing was overridden and no
+  ticket was filed.
+- 2026-11-10 — Fixed at landing by owner choice: gate 1, F1 — "The doc comment
+  presents the cast as a declaration-set difference only, which is wrong in the
+  safe direction." The comment on `egressFetch` in `dispatcher.ts` now names the
+  three limits the gate measured; no code changed. Reproduced first, with a
+  scratch script against undici 8.12.3's `fetch`: a `FormData` POST arrived as
+  content type `text/plain;charset=UTF-8` with the body `[object FormData]`, a
+  `Request` input threw `Failed to parse URL from [object Request]`, and the
+  result was `instanceof Response` false and `instanceof Headers` false. Proof,
+  after the commit:
+  `git diff e5a039a8 HEAD -- tools/downloader/api/src/dispatcher.ts | grep -v 'Fixed at landing' | grep -c '^+.*wider than that disagreement'`
+  → `1`.
+- 2026-11-10 — Fixed at landing by owner choice: gate 1, F2 — "No test failed if
+  undici itself began following redirects" is not true of the mutation the Log
+  ran. The Log's sentence is withdrawn in place above. The mutation, redone on
+  the gated source (`"manual"` to `"follow"` in `guarded-fetch.ts`, one test
+  file): `npx vitest run tools/downloader/api/test/embedded-ipv4.test.ts` read
+  `1 failed | 27 passed (28)`, the failure being the test "a redirect hop in
+  guarded-fetch, with no dispatcher behind it". So that test already fails
+  without the new ones in `dispatcher.test.ts`, which remain the direct
+  statement of the invariant. Proof, after the commit:
+  `git diff e5a039a8 HEAD -- tools/downloader/docs/work/dl-131-undici-8.md | grep -c '^-.*No test failed if undici itself began'`
+  → `1`.
+- 2026-11-10 — Fixed at landing by owner choice: gate 1, F3 — "the paths only
+  e2e reaches are the whole server booted by `createApp`" is wrong. The Log's
+  clause is withdrawn in place above. Unit tests boot `createApp` through
+  `helpers.ts` and fetch the fixture origin through its `guardedFetch`.
+  Reproduced on undici 8.12.3: replacing the fetch that `server.ts` hands to
+  `createGuardedFetch` with one that throws, the api unit suite (the vitest
+  command over `tools/downloader/api`, `--project downloader`) read
+  `Test Files 7 failed | 46 passed | 1 skipped (54)` and
+  `Tests 23 failed | 828 passed | 2 skipped (853)`, in
+  `egress-ca`, `pipeline`, `range-ignoring-origin`, `routes`, `stream-link`,
+  `thumbnails` and `webm-undeclared-codecs`, which is the gate's count. The
+  gate called that mutation "paired back to `globalThis.fetch`", and that
+  wording does not reproduce: with the line changed to `globalThis.fetch`
+  itself, the same run read 0 failed of 853, twice, so under vitest no unit test
+  tells the server's pairing from the platform's (a plain node process throws
+  `invalid onRequestStart method` for the same pair, and the cause of the
+  difference was not found). What only e2e reaches is therefore that one
+  pairing at `server.ts`, not the server. Proof, after the commit:
+  `git diff e5a039a8 HEAD -- tools/downloader/docs/work/dl-131-undici-8.md | grep -c '^-.*the paths only e2e reaches are the whole'`
+  → `1`.
