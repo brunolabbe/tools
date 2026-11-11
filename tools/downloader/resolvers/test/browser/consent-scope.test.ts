@@ -85,33 +85,17 @@ describe("a fixed bar whose cookie wording is a compound word or a kept word (dl
   });
 });
 
-describe("a fixed bar whose cookie wording sits in a link or a hidden node stays lost (dl-93)", () => {
-  // The owner's decision of 2026-10-10: the link-in-a-sentence signal is
-  // withdrawn. r1, r1b and r2b have the shape of c1 and c4 below, a checkout bar
-  // and a newsletter popup that link a cookie policy, and no local signal tells
-  // them apart; so a link's text is not prose, and these stay lost. r2's only
-  // wording is an aria-label, and r5b's sentence is visibility:hidden through
-  // both provocation passes.
-  test.each([
-    ["r1", "Read our <a>cookie policy</a>. [Ho capito]"],
-    ["r1b", "We use <a>cookies</a> to improve the site. [Accetto e continua]"],
-    ["r2", "wording only in aria-label"],
-    ["r2b", "Leggi la <span role=link>cookie policy</span>. [Ho capito]"],
-    ["r5b", "the sentence shown at 6 s"],
-  ])("%s (%s) is not pressed", { timeout: TEST_TIMEOUT_MS }, async (row) => {
-    const { outcome, requests } = await visit(`/consent-bar-rows.html?row=${row}`);
-
-    expect(requests).not.toContain("/beacon/consent-accepted");
-    expect((outcome as AppError).code).toBe("NO_MEDIA_FOUND");
-  });
-});
-
 /**
  * How many times the page beaconed `name` while `provokePlayback` ran on case `c`:
  * both its passes, with the viewport and locale the resolver gives a probe, and
  * nothing else of the resolver's.
  */
 async function presses(c: string, name: "bad" | "other"): Promise<number> {
+  return await pressesOn(`/consent-scope-cases.html?case=${c}`, name);
+}
+
+/** `presses` for any fixture page, and any beacon it fires. */
+async function pressesOn(pathname: string, name: string): Promise<number> {
   server.requests.length = 0;
   await pool.withBrowser({ signal: new AbortController().signal }, async (browser) => {
     const context = await browser.newContext({
@@ -120,9 +104,7 @@ async function presses(c: string, name: "bad" | "other"): Promise<number> {
     });
     try {
       const page = await context.newPage();
-      await page.goto(server.url(`/consent-scope-cases.html?case=${c}`), {
-        waitUntil: "domcontentloaded",
-      });
+      await page.goto(server.url(pathname), { waitUntil: "domcontentloaded" });
       await provokePlayback(page, {
         deadline: Date.now() + 15_000,
         signal: new AbortController().signal,
@@ -136,6 +118,30 @@ async function presses(c: string, name: "bad" | "other"): Promise<number> {
   });
   return server.requests.filter((r) => r === `/beacon/${name}`).length;
 }
+
+describe("a fixed bar whose cookie wording sits in a link or a hidden node stays lost (dl-93)", () => {
+  // The owner's decision of 2026-10-10: the link-in-a-sentence signal is
+  // withdrawn. r1, r1b and r2b have the shape of c1 and c4 below, a checkout bar
+  // and a newsletter popup that link a cookie policy, and no local signal tells
+  // them apart; so a link's text is not prose, and these stay lost. r2's only
+  // wording is an aria-label, and r5b's sentence is visibility:hidden through
+  // both provocation passes.
+  //
+  // These drive `provokePlayback` on the page, as the `c` rows do, and read the
+  // beacon: a row that is not pressed asserts no stream, so it needs neither the
+  // resolver's settle nor its quiet wait (dl-134). The resolver's only other
+  // step on a page with no capture is `revisitOverlays`, which can press a close
+  // control or send Escape and nothing else; none of these bars has either.
+  test.each([
+    ["r1", "Read our <a>cookie policy</a>. [Ho capito]"],
+    ["r1b", "We use <a>cookies</a> to improve the site. [Accetto e continua]"],
+    ["r2", "wording only in aria-label"],
+    ["r2b", "Leggi la <span role=link>cookie policy</span>. [Ho capito]"],
+    ["r5b", "the sentence shown at 6 s"],
+  ])("%s (%s) is not pressed", { timeout: TEST_TIMEOUT_MS }, async (row) => {
+    expect(await pressesOn(`/consent-bar-rows.html?row=${row}`, "consent-accepted")).toBe(0);
+  });
+});
 
 describe("layers that base left alone are still left alone (dl-93 gate 1)", () => {
   // Every one of these was 0 presses at base. The first six went to 2 when a

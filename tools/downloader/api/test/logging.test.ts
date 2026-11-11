@@ -339,7 +339,7 @@ describe("what boot says about how far TLS verification reaches", () => {
 
   test("a verifying deployment is told the proxy is what verifies, and what that costs", async () => {
     const { logger, lines } = capturing("info");
-    harness = await createHarness({ logger });
+    harness = await createHarness({ logger, config: { ffmpegTlsIntercept: true } });
 
     const warnings = lines.filter((line) => line.level === "warn");
     const terminating = warnings.filter((line) => /terminates TLS/u.test(line.msg));
@@ -358,7 +358,7 @@ describe("what boot says about how far TLS verification reaches", () => {
     // proxy would break every HTTPS page it loads, and pointing ffmpeg at the
     // tunnelling one silently restores dl-21's hole with every test still green.
     const { logger, lines } = capturing("info");
-    harness = await createHarness({ logger });
+    harness = await createHarness({ logger, config: { ffmpegTlsIntercept: true } });
 
     const configured = lines.filter((line) => line.msg === "egress configured");
     expect(configured).toHaveLength(1);
@@ -413,7 +413,10 @@ describe("what boot says about how far TLS verification reaches", () => {
 
   test("a deployment with verification off gets dl-19's louder line instead", async () => {
     const { logger, lines } = capturing("info");
-    harness = await createHarness({ logger, config: { ffmpegAllowUnverifiedTls: true } });
+    harness = await createHarness({
+      logger,
+      config: { ffmpegAllowUnverifiedTls: true, ffmpegTlsIntercept: true },
+    });
 
     const warnings = lines.filter((line) => line.level === "warn");
     expect(warnings.filter((line) => /FFMPEG_ALLOW_UNVERIFIED_TLS/u.test(line.msg))).toHaveLength(
@@ -451,7 +454,9 @@ describe("what boot says about how far the operator's CA reaches", () => {
     const { logger, lines } = capturing("info");
     harness = await createHarness({
       logger,
-      config: { egressCaFile: certificate.caPath, ...config },
+      // On unless a case turns it off: the lines under test describe the
+      // interception, and the harness default is off (dl-134).
+      config: { egressCaFile: certificate.caPath, ffmpegTlsIntercept: true, ...config },
     });
     return { lines };
   }

@@ -309,6 +309,10 @@ export async function startFixtureServer(): Promise<FixtureServer> {
         [primary, secondary].map(
           (server) =>
             new Promise<void>((resolve, reject) => {
+              // As `chunk-server.ts` does: `close()` alone waits for keep-alive
+              // sockets to time out. It saved nothing when measured; it is a
+              // safeguard (dl-134).
+              server.closeAllConnections();
               server.close((error) => {
                 if (error) reject(error);
                 else resolve();

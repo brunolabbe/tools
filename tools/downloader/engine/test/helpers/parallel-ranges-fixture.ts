@@ -425,6 +425,8 @@ let runs = 0;
 export async function run(
   engine: ReturnType<typeof engineWith>,
   source: MediaVariant,
+  /** dl-108's check rides on the run that has the configuration, not on a copy of it (dl-134). */
+  samples?: (number | null)[],
 ): Promise<Ran> {
   const started = performance.now();
   const media: MediaStream = await engine.stream({
@@ -432,6 +434,9 @@ export async function run(
     variant: source,
     requestContext: CONTEXT,
     title: "dl98",
+    ...(samples === undefined
+      ? {}
+      : { onProgress: (progress) => samples.push(progress.originConnections) }),
   });
   const chunks: Buffer[] = [];
   media.body.on("data", (chunk: Buffer) => chunks.push(chunk));
@@ -619,23 +624,4 @@ export function readLoopback(
       } else reject(error);
     });
   });
-}
-
-/** `run`, keeping the `originConnections` of every progress snapshot the job reported (dl-108). */
-export async function runSampling(
-  engine: ReturnType<typeof engineWith>,
-  source: MediaVariant,
-): Promise<(number | null)[]> {
-  const samples: (number | null)[] = [];
-  runs += 1;
-  const media: MediaStream = await engine.stream({
-    jobId: `dl108-${runs}`,
-    variant: source,
-    requestContext: CONTEXT,
-    title: "dl108",
-    onProgress: (progress) => samples.push(progress.originConnections),
-  });
-  media.body.resume();
-  await media.done;
-  return samples;
 }

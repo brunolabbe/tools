@@ -42,16 +42,24 @@ afterAll(stopOrigin);
 afterEach(resetAfterEach);
 
 describe("dl-98: a host that refuses parallel ranges", () => {
-  const kinds: { kind: string; set: (b: Behaviour) => void }[] = [
+  // **Only the first row runs the second job.** Every kind reaches the engine's
+  // memory through `onRefused(host)` (`stream.ts`), which ignores the kind, so a
+  // second job per row proved the same line four times (dl-134).
+  const kinds: { kind: string; next: string; set: (b: Behaviour) => void }[] = [
     // 403 and 503 are in dl-98's Decision 5 beside 429 and go through the same
     // `REFUSAL_STATUSES` check, so their rows were replaced by the unit test
     // below, on the owner's answer of 2026-10-12 (dl-112): 429 stays the
     // end-to-end row for the set.
-    { kind: "a 429", set: (b) => (b.refuse = "429") },
-    { kind: "a reset", set: (b) => (b.refuse = "reset") },
-    { kind: "a 200 to a range request", set: (b) => (b.refuse = "200") },
+    {
+      kind: "a 429",
+      next: ", and the next job opens one",
+      set: (b) => (b.refuse = "429"),
+    },
+    { kind: "a reset", next: "", set: (b) => (b.refuse = "reset") },
+    { kind: "a 200 to a range request", next: "", set: (b) => (b.refuse = "200") },
     {
       kind: "no speed-up at 4 (a per-client throttle)",
+      next: "",
       set: (b) => {
         b.perConnectionBps = null;
         b.sharedBps = SLOW_AGAINST_HALF_A_SECOND;
@@ -60,8 +68,8 @@ describe("dl-98: a host that refuses parallel ranges", () => {
   ];
 
   test.each(kinds)(
-    "$kind: the job completes on one connection, identical in media, and the next job opens one",
-    async ({ set }) => {
+    "$kind: the job completes on one connection, identical in media$next",
+    async ({ set, next }) => {
       const expected = await reference("faststart.mp4");
       behaviour.perConnectionBps = SLOW_AGAINST_HALF_A_SECOND;
       set(behaviour);
@@ -78,6 +86,7 @@ describe("dl-98: a host that refuses parallel ranges", () => {
       expect(after.length).toBeGreaterThan(0);
       for (const entry of after) expect(entry.range).toMatch(/^bytes=\d+-$/u);
       if (behaviour.refuse !== null) expect(seen.some((entry) => entry.refused)).toBe(true);
+      if (next === "") return;
       resetCounts();
 
       // The host is remembered: the second job never opens a second connection.

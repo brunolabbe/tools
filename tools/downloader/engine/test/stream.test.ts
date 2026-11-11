@@ -2070,12 +2070,15 @@ describe("dl-103: an unanswered seek probe", () => {
     code: string;
     /** For the timer: the verdict must not wait for ffmpeg to exit. */
     withinMs?: number;
+    /** Shorter than the default when the stand-in ignores SIGTERM and the case need not wait 3 s for the kill. */
+    killGraceMs?: number;
   }
 
   const standIns: readonly StandInCase[] = [
     {
-      // The kill takes its 3 s grace (SIGTERM ignored), so the first chunk
-      // arrives after the verdict and before the process is gone.
+      // The kill takes its grace (SIGTERM ignored), so the first chunk arrives
+      // after the verdict and before the process is gone. 300 ms outlasts the
+      // chunk written at 100 ms; the default 3 s only made the case slower (dl-134).
       name: "an early end at the same offset, decided while the first chunk is on its way",
       statements: [
         'process.on("SIGTERM", () => undefined);',
@@ -2085,6 +2088,7 @@ describe("dl-103: an unanswered seek probe", () => {
       ],
       stops: "stream",
       code: "SOURCE_NOT_SEEKABLE",
+      killGraceMs: 300,
     },
     {
       // `partial file` first, the first chunk 50 ms later, its early end 250 ms
@@ -2162,7 +2166,10 @@ describe("dl-103: an unanswered seek probe", () => {
       `stand-in: ${standIn.name} is ${standIn.code}`,
       async () => {
         const started = performance.now();
-        const engine = engineWith({ ffmpegPath: await standIn103(standIn.statements) });
+        const engine = engineWith({
+          ffmpegPath: await standIn103(standIn.statements),
+          ...(standIn.killGraceMs === undefined ? {} : { killGraceMs: standIn.killGraceMs }),
+        });
         const variant = large(`${origin.origin}/large/moov-end.mp4`);
         const stopped = await engine
           .stream({ jobId: "dl-103-stand-in", variant, requestContext: CONTEXT })
@@ -2226,16 +2233,20 @@ describe("dl-103: an unanswered seek probe", () => {
     statements: readonly string[];
     abortAfterMs?: number;
     stageTimeoutMs?: number;
+    killGraceMs?: number;
     code: string;
   }[] = [
     { name: "a cancel", statements: held, abortAfterMs: 400, code: "JOB_CANCELED" },
     { name: "a stage timeout", statements: held, stageTimeoutMs: 500, code: "TIMEOUT" },
     {
-      // SIGTERM ignored: the kill takes its 3 s grace, so the hold's own 2 s
-      // runs out while the cancel is still killing ffmpeg.
+      // SIGTERM ignored: the kill takes its grace, so the hold's own 2 s
+      // (`PARTIAL_VERDICT_MS`, counted from the first byte at 50 ms) runs out
+      // while the cancel is still killing ffmpeg. The abort is at 400 ms, so a
+      // grace of 2000 ms ends the kill at 2400 ms, past the hold's 2050 ms (dl-134).
       name: "a cancel whose kill outlasts the hold",
       statements: ['process.on("SIGTERM", () => undefined);', ...held],
       abortAfterMs: 400,
+      killGraceMs: 2_000,
       code: "JOB_CANCELED",
     },
     {
@@ -2256,6 +2267,7 @@ describe("dl-103: an unanswered seek probe", () => {
         const error = await engineWith({
           ffmpegPath: await standIn103(end.statements),
           ...(end.stageTimeoutMs === undefined ? {} : { stageTimeoutMs: end.stageTimeoutMs }),
+          ...(end.killGraceMs === undefined ? {} : { killGraceMs: end.killGraceMs }),
         })
           .stream({
             jobId: "dl-103-hold-end",

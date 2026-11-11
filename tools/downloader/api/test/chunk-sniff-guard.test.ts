@@ -18,6 +18,7 @@ import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { startEgressProxy } from "../src/egress-proxy.ts";
 import type { EgressProxy } from "../src/egress-proxy.ts";
 import { createSsrfGuard } from "../src/ssrf.ts";
+import { AT_ONCE_WAITS } from "./helpers/at-once-waits.ts";
 
 const PROBE_TIMEOUT_MS = 25_000;
 const TEST_TIMEOUT_MS = 90_000;
@@ -100,7 +101,7 @@ describe("the chunk sniff behind the egress proxy (dl-90)", () => {
       logger: NOOP_LOGGER,
       resolve: async () => [{ address: "127.0.0.1", family: 4 }],
     });
-    resolver = new BrowserResolver({ maxConcurrentBrowsers: 1, headless: true, quietMs: 1200 });
+    resolver = new BrowserResolver({ maxConcurrentBrowsers: 1, headless: true, ...AT_ONCE_WAITS });
   }, TEST_TIMEOUT_MS);
 
   afterAll(async () => {

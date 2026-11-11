@@ -3,7 +3,7 @@ id: dl-134
 tool: downloader
 title: The unit suite pays for TLS keygens, production waits and duplicate cases it does not need
 kind: chore
-status: ready
+status: in-flight
 milestone: null
 depends_on: []
 difficulty: standard
@@ -155,6 +155,60 @@ times in the CI log unless marked measured.
 4. Steps 9, 11, 15 and 20 each carry their check's result in the Log, applied or
    not.
 
+## Review
+
+**Gate: CONCERNS** — 2026-11-10 · `e44644ad..60306eb9` (stacked on `downloader/dl-130-proxy-flake`) · Opus 5.5, depth full
+
+| Done when                                                                                                                                                                | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1. `npm test -- --project downloader` passes, and this PR's CI shows downloader's summed file time ≥ 90 s below run `40210503276`'s 631 s; the Log states the difference | **verified** — local run 126 passed, 1 skipped (127 files); 2596 passed, 2 skipped (2598 tests); exit 0. Re-derived with the gate's own parser from `gh run view --log`: 630.8 s at run `40210503276` against 466.6 s at `91278e41` (run `42734531994`) and 467.2 s at `60306eb9` (run `42735823958`). Both sides count the same 126 timed files plus one untimed skipped file, and no file appears on only one side. `91278e41..60306eb9` changes only the ticket |
+| 2. An ffmpeg TLS-interception test still boots with it on, still fails if it is not wired, and is named in the Log                                                       | `api/test/logging.test.ts` › "the proxy that ffmpeg gets is the terminating one, and the tiers' is not" ✓. Opts in with `ffmpegTlsIntercept: true`. Went red with ffmpeg pointed at the tiers' proxy (`expected 'http://127.0.0.1:41557' not to be …`) and red with the interception never created                                                                                                                                                                 |
+| 3. Each deleted or merged case is named in the Log, with the case that still covers its assertion                                                                        | **unproven (open decision)** — Build steps 6 and 10 delete cases and name survivors that do not cover one clause each (F1). Steps 5, 7, 8, 13, 15, 17 and 18 and `runSampling` hold: their named survivors went red under the planted regressions or cover the case by reading                                                                                                                                                                                     |
+| 4. Steps 9, 11, 15 and 20 each carry their check's result in the Log                                                                                                     | Steps 9, 15 and 20 **verified**. Step 9's trace is true: `stream.ts`'s `onRefused` ignores the kind. Step 15's trace is true: `dismissModal` presses only `CLOSE_TEXT` or Escape. Step 15's rows went red under a widened consent press. Step 20's case asserts `TIMEOUT` with `expectCode` and passed 10 of 10 runs. Step 11 is **unproven (scope)**: the owner held it until dl-133 (#781) lands (2026-11-10, ticket Log), and it is built in a later round      |
+
+- **med** · Done when 3 depends on it · `unproven (open decision)` · Two deletions the brief approved leave one clause with no test, against Build steps 6 and 10.
+  - **Step 6.** The deleted `api/test/stream-link.test.ts` › "an error after the first byte aborts the connection with the code on the job" was the only api test that set `stageTimeoutMs`. That makes it the only test of `createApp` handing `config.stageTimeoutMs` (`JOB_TIMEOUT_MS`) to `createEngine` in `api/src/server.ts`. With that line removed, the deleted case goes red (`received.aborted`: `expected false to be true`). The named api survivor stays green, and so does every case in `stream-link.test.ts` (16 of 16). The engine survivor sets `stageTimeoutMs` itself.
+  - **Step 10.** The dropped spawned row with `TURNSTILE_SITE_KEY` set was the only check that the boot output omits the site key when the key is set. The kept row's `not.toContain(PASS_SITE_KEY)` passes trivially, because its env holds no site key. The in-process refusal test hands over only the secret.
+  - The site key is public, so the second gap is about a value that is safe to leak. **Options:** (a) restore each clause cheaply: an api wiring check that ends before the first byte, and a site-key-absent assertion on the in-process `siteKeyOnly` error. (b) Record both as accepted losses in the Log, as step 13's `NO_MEDIA_FOUND` already is. **Recommended: (a).** It is the owner's call because the brief named these survivors.
+- **low** · `nfr:maintainability` · The Log and the commit subject say "164 s under the base", but the base there is run `40210503276` (2026-10-25). Against this branch's own base, `e44644ad` (#777's run `42731587914`, 577.2 s), the branch saves 110.7 s. The other 53.6 s is `main`'s drift. The figure overstates what the branch saves. Nothing is chosen on it, and 110.7 s still clears the 90 s bar.
+- **low** · `nfr:maintainability` · No test or production code sets `BrowserResolver`'s `clickTimeoutMs` option any more. `confirming(clickTimeoutMs?)` in `browser-resolver-press-targets.test.ts` is never given one. The step-13 deletion left the option's wiring to `provokePlayback` untested. The cap itself is still tested in `provoke.test.ts`. No live call site.
+- **low** · The comment on the faststart-only row in `engine/test/parallel-ranges.test.ts` says the first test has "the same configuration". It does not: 500 KB/s and the variant's own duration there, against 2 MB/s, `durationSec: 0.5` and a `digests.length > 100` companion in the dropped row. The comment is wrong about a detail that nothing relies on.
+- **low** · `nfr:reliability` · unmeasured · The builder's `The database connection is not open` from `JobStore.recordProgress` did not reproduce: 0 of 10 runs of "a stream that passes MAX_FILE_SIZE_MB…". On that path the diff changes only `realApp`'s `ffmpegTlsIntercept: false`. That routes ffmpeg through the tunnel and drops two awaited closes between `queue.close()` and `db.close()` in `shutdown`. `killGraceMs` (step 4) is in engine stand-ins only. Whether this predates the branch is unmeasured.
+- **dropped** · Tests that pass trivially after the default flip: none. With the interception forced off in `server.ts`, the api package failed the same 6 tests under the head's defaults as under the base's (6 of 850 each).
+- **dropped** · Step 2's two "not handed the proxy's root" cases assert that nothing was fetched while running with `AT_ONCE_WAITS`. Both still need the capture, and the fetches they forbid run after the quiet wait. With chain verification disabled in `manifest-fetch.ts`, both went red: `expected 1 to be +0` and `expected 2 to be +0`.
+- **dropped** · The second job deleted from step 5 is covered by composition. The first proxy case asserts `onRefused` with `FIXTURE_HOST`, and the "a 429" row asserts the engine remembers whatever host it is given.
+- **dropped** · Step 18's 300 ms and 1500 ms rows: the brief and the owner's gate-2 choice. Not a defect.
+- **findings** · the hunt returned 9: 5 carried, 4 dropped.
+- NFR: security ✓ (the secret clause of step 10 is still non-trivial) · performance ✓ (110.7 s against the stack base) · reliability — above; the step 19 and step 20 timing cases passed 10 of 10 · maintainability — above.
+- Steps not done, reasons checked: step 3 (`resolvers/src/index.ts` exports only `BrowserPoolStats`, and the package's `exports` allow no deep import) and `manifest-refetch.test.ts`'s registry case (`buildRegistry` passes no wait option).
+- CI at `60306eb9`: every check green, the Windows leg and `e2e`/`docker` included.
+
+### Gate 2
+
+**Gate: PASS** (one row stays `unproven (scope)`, as gate 1 left it) — 2026-11-10 · `60306eb9..774aedcc` (stacked on `downloader/dl-130-proxy-flake`, base `e44644ad`) · Opus 5.5, depth narrow
+
+| Done when                                                                                         | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Summed file time ≥ 90 s under run `40210503276`; the Log states the difference                 | **verified** — re-derived with gate 1's `mysum.mjs`. Run `42731587914` (`e44644ad`) sums to 577.2 s and run `42734531994` (`91278e41`) to 466.6 s, against 630.8 s at `40210503276`. The Log now gives 164.2 s against the bar's reference and a 110.7 s saving against `e44644ad`. Both figures are right. At this head, run `42738849857` sums to 437.2 s over 127 files, 193.6 s under the bar's reference and 140.0 s under `e44644ad`                                                                                                                                                                                                                                                                                                                                        |
+| 2. ffmpeg TLS-interception test boots with it on and fails if not wired                           | `api/test/logging.test.ts` › "the proxy that ffmpeg gets is the terminating one, and the tiers' is not" ✓. Gate 1's `apictl.sh` re-run at this head: 1 passed clean, 1 failed under `ffmpegtunnel`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| 3. Each deleted or merged case is named in the Log, with the case that still covers its assertion | Proven by composition. **Step 6:** `api/test/stream-link.test.ts` › "the job timeout reaches the engine as its stage timeout" carries the api-to-engine handoff. It went red under gate 1's `nostagetimeout` (`expected 3600000 to be 2000`). `engine/test/stream.test.ts` › "an error after the first byte cuts the connection and rejects `done` with its code" and › "a stage timeout while the first byte is held for a verdict keeps its code, TIMEOUT" carry the engine's use of the value. Both went red with the stream ignoring its config's value. **Step 10:** `api/test/human-check.test.ts` › "the thrown refusal under REQUIRE_HUMAN_CHECK carries variable names and no key value" went red with the site key planted in the message and, separately, in `details` |
+| 4. Steps 9, 11, 15 and 20 carry their check's result in the Log                                   | Gate 1's rows stand. Step 11 is **unproven (scope)**: the owner held it until dl-133 (#781) lands                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+
+- **F1** (med, Done when 3) · **fixed**.
+  - Step 6 is covered by two tests together. The api test proves that `server.ts` hands the value to `createEngine`. The engine tests prove that `stream.ts` hands `config.stageTimeoutMs` to ffmpeg.
+  - The new api test passes on its own when the engine ignores the value (1 passed under that plant). That is why the engine half counts.
+  - Step 10's assertion serializes both the message and `details`, so a plant in either goes red.
+- **F2** (low) · **fixed**. The Log now separates the bar's reference from the saving, and every number re-derives. The subject of `60306eb9` still says "164 s under the base". The squash merge drops it, and the PR title carries no figure.
+- **F3** (low) · **not fixed**, recorded by the owner's answer (2026-11-10, ticket Log).
+- **F4** (low) · **fixed**. The comment now matches the dropped row at `e44644ad`: 2 MB/s, `durationSec: 0.5`, and `digests.length > 100` against the first test's 500 KB/s and the variant's own duration.
+- **F5** (low) · **not fixed**, recorded by the owner's answer.
+- **dropped** · The F4 comment names the file's first test as the survivor. The egress-proxy test in the same file is closer to the dropped row (moov-end, 2 MB/s, 0.5 s, `reference()` digests). The comment is still true.
+- **dropped** · The new api test's title says "as its stage timeout", but its body reads only `engine.config`. The engine half is proven by the engine tests above, so the title is not false about the clause.
+- **dropped** · `60306eb9`'s commit subject: covered under F2.
+- **findings** · the hunt returned 3; 0 carried, 3 dropped. Nothing is a `high`.
+- NFR: security ✓ (both key values are now checked absent from the refusal) · performance ✓ (above) · reliability n/a (no wall-clock assertion added) · maintainability ✓.
+- CI at `774aedcc`: 11 of 11 SUCCESS, including the Windows leg, `e2e (direct)`, `e2e (sniffer)` and `docker`.
+
 ## Log
 
 - 2026-10-25: Filed from the test-suite audit; see
@@ -164,3 +218,251 @@ times in the CI log unless marked measured.
   over 300 ms, and Fastify 5's `forceCloseConnections: "idle"` explains why.
   `api/test/stream-link.test.ts:531,549` overlap partly with engine tests, but
   were left alone (medium coverage risk, low confidence).
+- 2026-11-10: Two owner answers, relayed by the orchestrator, recorded before
+  the build. This branch is stacked on `downloader/dl-130-proxy-flake`
+  (`e44644ad`), since dl-130 also edits
+  `api/test/tiers-on-the-terminating-proxy.test.ts`.
+  1. **Step 11 is held until dl-133 lands.** The question: step 11 edits
+     `web/test/app.test.tsx`, which dl-133 (PR #781, in review) rewrites
+     heavily; start dl-134 now? Options: yes, with step 11 held until dl-133
+     lands / no, keep the trio. The owner chose **yes, step 11 held**. Step 11
+     is **held, not "not applied"**: it is built in a later round on top of
+     dl-133, so Done when 4's step-11 part is expected `unproven` on this
+     branch (scope), and this ticket does not move to `done` here. Steps 9, 15
+     and 20 stay in this build.
+  2. **Step 2 skips `tiers-on-the-terminating-proxy.test.ts`.** The question:
+     step 2 applies `AT_ONCE_WAITS` at that file's line 105 (inside
+     `registryFor`, shared by all five tests there), which includes the flaky
+     dl-37 Done-when 2 test, and dl-130 is parked with an `awaiting:` line for
+     a real failure of it under today's timing; should step 2 touch it?
+     Options: exclude that file / apply it there too / apply, and note it on
+     dl-130. The owner chose **exclude that file**. Step 2's list above is
+     therefore read without its last site; a shorter wait would change the
+     timing dl-130 is measuring.
+- 2026-11-10: Built on `downloader/dl-134-cheaper-unit-suite`, stacked on
+  `downloader/dl-130-proxy-flake` (`e44644ad`), a draft against that branch.
+  Steps 1-10 and 12-21 applied except as noted. **Step 11 is held** (owner
+  answer above). Where the brief's line numbers had moved, the site was found
+  by its content; each is named below.
+  - **Step 1.** `createHarness` now defaults `ffmpegTlsIntercept: false`, and
+    the direct `createApp` boots that never read the interception say so:
+    `frame-grab-egress.test.ts` (the second `createApp`, the real-grab half),
+    `parallel-ranges-behind-the-proxy.test.ts` (the wiring case),
+    `stream-link.test.ts` (the restart, `realApp` and fresh-volume boots). Left
+    on, because they are about the interception: `frame-grab-egress.test.ts`'s
+    first boot and `range-ignoring-origin.test.ts` (both write `true` out),
+    `egress-ca.test.ts` and `two-origin-tls.test.ts` (their `wiredApp` calls
+    `createApp` with no key, so the production default), `queue-and-shutdown`'s
+    `loadApiConfig` cases. Turning it off first failed four cases in
+    `logging.test.ts` (`expected 'tunnel' to be 'terminate'`, `expected [] to
+    have a length of 1`): three boots and `bootWithCa` now pass
+    `ffmpegTlsIntercept: true` (its default, overridable by the case that
+    passes `false`). The grep for assertions that read the interception or its
+    CA (`ffmpegProxyUrl`, `ffmpegProxyTls`, `rootCaPath`, `tlsCaFile`,
+    `egressProxyUrl`, `terminate`) found no other harness user that does:
+    `tiers-behind-the-proxy.test.ts` reads `egressProxyUrl` on a harness with
+    the browser tier off, and passed unchanged.
+  - **Done when 2.** `logging.test.ts` "the proxy that ffmpeg gets is the
+    terminating one, and the tiers' is not" boots with the interception on
+    (explicitly) and asserts `ffmpegProxyTls` is `terminate` and the two proxy
+    URLs differ. It failed (`expected 'tunnel' to be 'terminate'`) while the
+    default was off and the case had not opted in, which is the fails-if-unwired
+    reading; "a verifying deployment is told the proxy is what verifies" and the
+    `bootWithCa` cases failed the same way. `egress-ca.test.ts` and
+    `two-origin-tls.test.ts` keep the production default.
+  - **Step 2.** `api/test/helpers/at-once-waits.ts` (a copy, with the rule and
+    a pointer to `resolvers/test/browser/helpers/stream-waits.ts`) applied at
+    `manifest-refetch.test.ts` (the three `new BrowserResolver` sites,
+    `quietMs: 1200` before), `size-probe-behind-the-proxy.test.ts` (three) and
+    `chunk-sniff-guard.test.ts` (one). **Not applied, on the owner's answer of
+    2026-11-10: `tiers-on-the-terminating-proxy.test.ts`**, whose `registryFor`
+    is shared by all five tests including dl-37's flaky Done-when 2 case, which
+    dl-130 is measuring under today's timing. `tiers-behind-the-proxy.test.ts`
+    untouched, as the brief says. **The brief's `manifest-refetch.test.ts:808`
+    has no wait to shorten**: it is `buildRegistry` built from `loadApiConfig`,
+    and `buildRegistry` passes the resolver no `quietMs` or `minWaitMs`; reaching
+    it would need an api config knob, which is a source change this ticket does
+    not name. Left as it is.
+  - **Step 3 not done.** `BrowserPool` is not exported from
+    `@downloader/resolvers` (`resolvers/src/index.ts` exports only
+    `BrowserPoolStats`), so the api test cannot build the shared pool the brief
+    asks for. Exporting it is a production-surface change for about 1 s; not
+    taken, and not folded in for that reason.
+  - **Step 4.** `engine/test/stream.test.ts`: the "early end ... first chunk is
+    on its way" stand-in takes `killGraceMs: 300`; "a cancel whose kill outlasts
+    the hold" takes `killGraceMs: 2000` (abort at 400 ms, hold ends at 2050 ms,
+    kill ends at 2400 ms). Both tables gained an optional field.
+  - **Step 5.** `parallel-ranges-behind-the-proxy.test.ts`: the origin trickles
+    at 2 MB/s, and the whole-job case runs its first job only. The "host is
+    remembered, the next job never fans out" assertion it dropped is
+    `parallel-ranges-refusals.test.ts` "a 429: ... and the next job opens one".
+  - **Step 6.** Deleted `stream-link.test.ts` "an error after the first byte
+    aborts the connection with the code on the job" (real ffmpeg, 9.5 s), with
+    the `lateSegmentDelayMs` fixture and `stageTimeoutMs` option only it used.
+    Still covers it: `stream-link.test.ts` "an error after the first byte cuts
+    the connection, and the job row carries the code" (api half) and
+    `engine/test/stream.test.ts` "an error after the first byte cuts the
+    connection and rejects `done` with its code" (real-ffmpeg half).
+  - **Step 7.** dl-108's three `runSampling` cases are gone from
+    `parallel-ranges-limits.test.ts`, and `runSampling` with them; `run` in
+    `helpers/parallel-ranges-fixture.ts` takes an optional `samples` array. Each
+    assertion rides on the dl-98 run of the same configuration, its message
+    starting `dl-108`: the split-reports-2-to-4 check on "a job that measures
+    slow switches to 4 connections and finishes at least 3x faster"; the
+    never-more-than-one-and-never-null check on "a fast origin stays on exactly
+    one connection, counted at the fixture"; the null-throughout check on "an
+    opted-out host stays on one connection, a subdomain of it too" (that row's
+    throttle and duration differ from dl-108's, which the null count does not
+    read).
+  - **Step 8.** `parallel-ranges.test.ts` "the output of a split %s is identical
+    in media": the `moov-end.mp4` row dropped; covered by the first test of the
+    file, which compares split to single digests on `moov-end.mp4`.
+  - **Step 9, checked.** The refusal memory does **not** branch on the kind:
+    `stream.ts` passes `onRefused: (host) => deps.refusedHosts?.add(...)` and
+    ignores the kind argument, and `parallel-ranges.ts` calls `onRefused` for
+    every `failure.refusal !== null`. So the second job ("the next job opens
+    one") runs in the "a 429" row only; the other three rows end after the first
+    job. Applied.
+  - **Step 10.** `human-check.test.ts`: one spawned `main.ts` row kept, the one
+    with `TURNSTILE_SECRET_KEY` set and the site key missing (the brief did not
+    name the row; this one keeps the "no key value in the output" assertion
+    non-vacuous, which the all-missing row would not). The other three are
+    covered by "one key without the other refuses to boot, naming the missing
+    variable only", "REQUIRE_HUMAN_CHECK with neither key refuses to boot,
+    naming the variables" and the blank-key case.
+  - **Step 11 held**, see the first entry. Not applied.
+  - **Step 12.** `makeBody` and `parseRangeStart` deleted from
+    `engine/test/helpers/http.ts` (grep over `tools/downloader`: no other user).
+  - **Step 13.** Deleted the three-row `test.each` in
+    `browser-resolver-press-targets.test.ts` ("accepted residue: %s is pressed
+    where play is a click, and nothing plays") and its `BLOCKED_CLICK_MS`.
+    Covered by `provoke.test.ts` "%s: the blocked clicks are given the cap, not
+    2000 ms", same three pages, `confirmAge: true`, the same `pressed` beacon
+    and `not.toContain("/beacon/play")`. The deleted rows also asserted
+    `NO_MEDIA_FOUND` at the resolver, which the `provoke` rows do not.
+  - **Step 14.** `browser-resolver-age-gate.test.ts` "meets a modal and a gate
+    that mount after the playback passes are over": `quietMs: 6000` replaced
+    by `STREAM_WAITS`; 3 of 3 runs of the file passed.
+  - **Step 15, checked: applied.** `dismissModal` (and so `revisitOverlays`)
+    presses only a control whose label matches `CLOSE_TEXT`, or sends Escape; it
+    never reads `CONSENT_TEXT`. `consent-bar-rows.html` has no dialog and no
+    close control, its buttons are "Ho capito", "Accetto e continua" and the
+    like. The five rows (r1, r1b, r2, r2b, r5b) now call `provokePlayback`
+    through a new `pressesOn(pathname, beacon)`, which `presses` wraps. The
+    check is not vacuous: the same helper on `row=r7` (a pressed row) returned
+    `expected 1 to be +0`. The age-gate rows in
+    `browser-resolver-consent-and-links.test.ts` untouched, as the brief says.
+  - **Step 16.** `AT_ONCE_WAITS` at "treats a manifest-level DRM verdict as
+    terminal too" (`browser-resolver-capture.test.ts`), and at
+    `chunk-streams.test.ts` "three whole files in one directory are all
+    offered" (was `STREAM_WAITS`) and "aborting while a head read is
+    outstanding" (was the default waits); the brief's `:111` and `:127` had
+    moved to those.
+  - **Step 17.** In `browser-resolver-departure-and-floor.test.ts`, dl-115's two
+    `quietWait` probes and dl-129's two `sleepsOf` probes are two:
+    `quietWait` now also returns the sleeps it saw. "a resolver given no
+    options hands the wait MIN_WAIT_MS ... and sleeps 500 ms after load and 900
+    ms between the passes" is the defaults probe; "a minWaitMs below it is the
+    one the wait is handed, and landingSettleMs and passPauseMs replace the two
+    sleeps and nothing else" sets all three. `sleepsOf` and its two tests are
+    gone; the constants test and the source scan stay.
+  - **Step 18.** `browser-resolver-player-input.test.ts`: `test.each([0, 3000])`.
+  - **Step 19.** `delayed-player.html` reads `?delay=<ms>` (6000 by default);
+    the dl-80 case uses `?delay=2500` with `emptyMinWaitMs: 4000`, and its
+    upper bound is `4500` (measured 2890, 2954 and 2981 ms on 3 runs; a floor
+    that is not dropped on a playable hit would end past 5.5 s).
+  - **Step 20, checked: applied.** `timeoutMs: 5000` in "a budget shorter than
+    the floor plus page load ends TIMEOUT": TIMEOUT on 10 of 10 local runs in a
+    row (`npx vitest run ... -t "a budget shorter than the floor"`, ten times,
+    each `Tests 1 passed | 18 skipped (19)`).
+  - **Step 21.** `closeAllConnections()` before `close()` in
+    `fixture-server.ts`'s `close`.
+  - **Done when 1.** `npm test -- --project downloader` locally: `Test Files 126
+    passed | 1 skipped (127)`, `Tests 2596 passed | 2 skipped (2598)`, 55.85 s
+    wall, exit 0. **How the file time is summed, so a gate can repeat it:**
+    `gh run view <run> --job <ubuntu test job id> --log`, strip the colour
+    codes, take every vitest default-reporter line
+    `<mark> downloader <path>.test.ts (<n> tests) <n>ms`, and add the `ms`
+    (one line per file; 126 files, every one with a duration). On run
+    `40210503276`'s ubuntu job that sum is 630.8 s over 126 files and 2594
+    tests, the ticket's 631 s. The same sum over this machine's local run is
+    480.6 s, which is **not** comparable (a different machine, 11 workers); the
+    reading Done when 1 asks for is this pull request's own CI run, below.
+  - **Not folded in.** No other already-specified piece became free; the
+    brief's own steps were the work.
+  - **Seams.** None of `dispatcher`, `egress-ca`, `embedded-ipv4` or
+    `proxied-https` `.test.ts`, `dispatcher.ts` or `server.ts` (dl-131's) is
+    touched. `tiers-on-the-terminating-proxy.test.ts` (dl-130's) is not.
+    `web/test/app.test.tsx` (dl-133's) is not.
+  - **Seen and not reproduced.** The first full `api` run (31 s, before the
+    `logging.test.ts` repair) reported one unhandled `The database connection is
+    not open` from `JobStore.recordProgress` via an ffmpeg progress chunk, at
+    `stream-link.test.ts` "a stream that passes MAX_FILE_SIZE_MB is cut ...".
+    Three further runs of that file and the whole downloader project run had
+    none. Whether it predates this branch is unmeasured.
+- 2026-11-10: Done when 1, read from this pull request's own CI run (#787,
+  head `91278e41`, run `42734531994`, job `test (ubuntu-latest)` `129560446626`),
+  by the sum described above: **466.6 s** over 126 downloader files and 2596
+  tests, against run `40210503276`'s **630.8 s** over 126 files and 2594 tests,
+  **164.2 s lower than that run, which is the bar's reference** (the bar was
+  90 s, and the ticket words it against run `40210503276`). **That is not what
+  the branch saves:** run `40210503276` is from 2026-10-25, and `main` has moved
+  since. Against this branch's own base, `e44644ad` (#777's run `42731587914`,
+  the same sum: 577.2 s over 126 files and 2608 tests), the branch saves
+  **110.7 s** (577.231 - 466.579), which also clears 90 s; the other 53.6 s is
+  `main`'s drift. (Corrected in round 1: this entry first read 164.2 s as the
+  saving, and one commit subject carries the same wording.) That job's whole run
+  (the projects the change reaches, 156 files) took 154.55 s wall. Every check
+  on that head was green, the informational Windows leg included.
+- 2026-11-10: Three owner answers after gate 1 (graded CONCERNS at `60306eb9`),
+  relayed by the orchestrator, recorded before the round's work.
+  1. **F1, two deletions that left a clause with no test.** Step 6's deleted
+     stream-link case was the only api test of `createApp` handing
+     `config.stageTimeoutMs` to `createEngine`; step 10's dropped spawned row was
+     the only check that the boot output omits the site key when it is set.
+     Options: (a) restore both clauses cheaply / (b) accept both as losses, as
+     step 13's `NO_MEDIA_FOUND` is. The owner chose **(a) restore both clauses**,
+     the gate's recommendation.
+  2. **Step 3, re-asked on a measurement.** The owner first chose "export
+     `BrowserPool` and build it". The re-ask carried the measurement that
+     `tools/downloader/resolvers/package.json` `exports` has only `"."` and
+     `src/index.ts` exports only `type { BrowserPoolStats }`, and the gate's
+     point that the SPKI pin is a Chromium launch flag riding on the pool.
+     Options: keep it (export and build) / drop step 3. The owner chose **drop
+     step 3**. Step 3 stays **not done**, for that reason.
+  3. **Lows.** Options: F2 and F4 in the round / F2, F3 and F4 / record all. The
+     owner chose **F2 and F4 in the round**. F3 and F5 stay recorded and are not
+     touched here.
+- 2026-11-10: Round 1, after gate 1 and the three answers above.
+  - **F1, step 6 restored.** `stream-link.test.ts` "the job timeout reaches the
+    engine as its stage timeout": `realApp({ stageTimeoutMs: 2_000 })` and
+    `app.context.engine.config.stageTimeoutMs` is `2000`. It ends before any
+    byte and boots no stream; both defaults are 3 600 000, so the non-default
+    value is the test. Red with `stageTimeoutMs: config.stageTimeoutMs` removed
+    from `createEngine`'s call in `api/src/server.ts` (`AssertionError: expected
+    3600000 to be 2000`, `Tests 1 failed | 16 skipped (17)`), green restored
+    (`Tests 1 passed | 16 skipped (17)`). `realApp` took its `stageTimeoutMs`
+    option back.
+  - **F1, step 10 restored.** `human-check.test.ts` "the thrown refusal under
+    REQUIRE_HUMAN_CHECK carries variable names and no key value" now also
+    refuses `{ REQUIRE_HUMAN_CHECK, TURNSTILE_SITE_KEY: PASS_SITE_KEY }`, checks
+    it names `TURNSTILE_SECRET_KEY`, and checks the refusal carries neither key.
+    Red with `(${siteKey})` planted into the message in `api/src/config.ts`
+    (`expected '{"error":"TURNSTILE_SECRET_KEY is not…' not to contain
+    '1x00000000000000000000AA'`, `Tests 1 failed | 19 passed (20)`), green
+    restored (`Tests 20 passed (20)`). The kept spawned row still carries the
+    secret; the site key is now read in-process, where it costs nothing.
+  - **F2.** The Log's reading of the saving is corrected above; the history is
+    not rewritten.
+  - **F4.** The comment on the faststart-only row in
+    `engine/test/parallel-ranges.test.ts` now says the first test runs at a
+    different throttle (500 KB/s against 2 MB/s) with the variant's own
+    duration, and that the dropped row also counted more than 100 digests.
+  - **Step 3** stays not done, on the owner's answer above. **F3 and F5** are
+    recorded by the gate and not touched.
+- 2026-11-10: Landing as `in-flight`; two things remain before this ticket
+  reaches `done`. (1) **Step 11**, built on top of dl-133 (PR #781) once it
+  merges, which settles Done when 4's step-11 part, now `unproven (scope)`.
+  (2) A merge of `main` into this branch once PR #777 (dl-130) squash-merges,
+  which retargets this draft (#787) to `main`; the draft holds for merge order
+  until then.

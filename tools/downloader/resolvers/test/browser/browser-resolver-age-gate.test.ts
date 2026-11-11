@@ -66,12 +66,13 @@ describe("BrowserResolver", () => {
       { timeout: TEST_TIMEOUT_MS },
       async () => {
         const hls = recordingHlsParser();
-        // A quiet window longer than the delay: the page is otherwise idle, and
-        // what is under test is that the wait looks again, not that it lasts.
+        // What is under test is that the wait looks again, not that it lasts. A
+        // quiet window longer than the delay was needed before dl-80; now the
+        // empty floor holds the wait, and the revisit rides on it (dl-134).
         const resolver = new BrowserResolver({
           pool,
           hlsParser: hls.parser,
-          quietMs: 6000,
+          ...STREAM_WAITS,
           confirmAge: true,
         });
         server.requests.length = 0;

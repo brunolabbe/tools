@@ -29,12 +29,13 @@
           }
         }
 
-        // Wait 6 seconds before attaching the player
-        // This simulates a page that has no media requests initially
-        // but attaches a player after a delay
+        // Wait before attaching the player, 6 seconds unless ?delay=<ms> says
+        // otherwise. This simulates a page that has no media requests initially
+        // but attaches a player after a delay.
+        const requested = Number(new URLSearchParams(location.search).get("delay"));
         setTimeout(function () {
           attachPlayer();
-        }, 6000);
+        }, requested > 0 ? requested : 6000);
       })();
     </script>
   </body>

@@ -28,6 +28,7 @@ import type { EgressProxy } from "../src/egress-proxy.ts";
 import { createSsrfGuard } from "../src/ssrf.ts";
 import { createTlsInterception } from "../src/tls-interception.ts";
 import type { TlsInterception } from "../src/tls-interception.ts";
+import { AT_ONCE_WAITS } from "./helpers/at-once-waits.ts";
 import { createFixtureCertificate, startTlsOrigin } from "./helpers/tls-origin.ts";
 import type { FixtureCertificate, TlsOrigin } from "./helpers/tls-origin.ts";
 
@@ -143,7 +144,7 @@ describe("the size probe behind the proxy that terminates its TLS (dl-101)", () 
       const resolver = new BrowserResolver({
         maxConcurrentBrowsers: 1,
         headless: true,
-        quietMs: 1200,
+        ...AT_ONCE_WAITS,
         proxyRootSpkiSha256: intercept.rootSpkiSha256,
         proxyRootCaPem: intercept.rootCaPem,
       });
@@ -166,7 +167,7 @@ describe("the size probe behind the proxy that terminates its TLS (dl-101)", () 
       const resolver = new BrowserResolver({
         maxConcurrentBrowsers: 1,
         headless: true,
-        quietMs: 1200,
+        ...AT_ONCE_WAITS,
         proxyRootSpkiSha256: intercept.rootSpkiSha256,
       });
 
@@ -239,7 +240,7 @@ describe("the size probe goes through the egress guard over plain HTTP (dl-101)"
     const resolver = new BrowserResolver({
       maxConcurrentBrowsers: 1,
       headless: true,
-      quietMs: 1200,
+      ...AT_ONCE_WAITS,
     });
     try {
       await resolver.resolve(new URL(`http://127.0.0.1:${String(port)}/watch`), {

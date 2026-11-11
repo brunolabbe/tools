@@ -132,7 +132,10 @@ beforeAll(async () => {
       "content-range": `bytes ${start}-${end}/${body.length}`,
       "content-length": String(end - start + 1),
     });
-    void trickle(response, body.subarray(start, end + 1), 1_000_000);
+    // 2 MB/s against roughly 4.5 MB/s of media is still too slow for the
+    // engine to call the origin fast, and the case is half as long as at
+    // 1 MB/s (dl-134).
+    void trickle(response, body.subarray(start, end + 1), 2_000_000);
   });
   originPort = await listen(origin);
 
@@ -234,12 +237,8 @@ describe("dl-98: the fan-out behind the guarded egress proxy", () => {
       expect(trapConnections).toBe(0);
       expect(seen.filter((entry) => isFanOut(entry.range)).length).toBeGreaterThan(0);
 
-      // The host is remembered on this engine: the next job never fans out.
-      seen.length = 0;
-      const again = await engine.stream({ jobId: "dl98-job-2", variant, requestContext: CONTEXT });
-      again.body.resume();
-      await again.done;
-      expect(seen.filter((entry) => isFanOut(entry.range))).toEqual([]);
+      // One job only. That the host is then remembered, so the next job never
+      // fans out, is `parallel-ranges-refusals.test.ts`'s "next job" check (dl-134).
     },
     SLOW,
   );
@@ -262,6 +261,8 @@ describe("dl-98: SINGLE_CONNECTION_HOSTS, from the environment to the engine (ga
         storageDir: path.join(storage, "storage"),
         enableBrowserResolver: false,
         enableYtdlpResolver: false,
+        // Off: nothing here reads the interception, and it costs two RSA keygens (dl-134).
+        ffmpegTlsIntercept: false,
         turnstile: undefined,
         singleConnectionHosts: config.singleConnectionHosts,
       },
