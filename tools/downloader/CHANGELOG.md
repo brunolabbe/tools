@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.12.0](https://github.com/brunolabbe/tools/compare/downloader-v0.11.0...downloader-v0.12.0) (2026-11-11)
+
+
+### Features
+
+* **downloader:** one box per analysis, several at once, queued in the browser (dl-133) ([#781](https://github.com/brunolabbe/tools/issues/781)) ([43026e1](https://github.com/brunolabbe/tools/commit/43026e1122268c13f980df19270c33f5e25a0ce3))
+
+
+### Fixes
+
+* **downloader:** an edge 429 reads as a rate limit, not INTERNAL (dl-136) ([#737](https://github.com/brunolabbe/tools/issues/737)) ([ab464a2](https://github.com/brunolabbe/tools/commit/ab464a28835d1d81cd80873ea41ee5c38ebe9197))
+* **downloader:** bump yt-dlp to 2026.10.26 ([#746](https://github.com/brunolabbe/tools/issues/746)) ([f7b31c4](https://github.com/brunolabbe/tools/commit/f7b31c4dc9eb61f796c5ad042be84576bada9e60))
+
 ## [0.11.0](https://github.com/brunolabbe/tools/compare/downloader-v0.10.0...downloader-v0.11.0) (2026-11-01)
 
 
