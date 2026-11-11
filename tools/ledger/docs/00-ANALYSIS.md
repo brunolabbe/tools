@@ -593,6 +593,12 @@ is on [lg-8's Log](./work/lg-8-receipts.md)).
   anyway. The local path would have added onnxruntime, a parser and a second
   code path to save almost nothing.
 
+**Amended by the owner on 2026-11-09 (lg-105): a reading the arithmetic check
+flags is read again, once, by Claude Sonnet 5.5.** Haiku still reads first, and
+a receipt that adds up is read by Haiku alone. The second reading is kept only
+when it is strictly better, and a second reading that fails or runs out of time
+leaves the first one; `RECEIPT_ESCALATION_MODEL` set empty turns it off.
+
 ### What a reader is trusted with
 
 Whether it is OCR or a model, a reader turns printed text into fields, and a

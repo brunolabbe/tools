@@ -30,6 +30,7 @@
  * joint-account row each person's items are a charge they owe the pot (lg-91).
  */
 
+import { performance } from "node:perf_hooks";
 import {
   checkReceipt,
   dropPrintedRebates,
@@ -42,6 +43,7 @@ import {
 import type { MatchableRow } from "@ledger/books";
 import { AppError, MAX_RECEIPTS_PER_PHOTO } from "@ledger/contract";
 import type {
+  CheckedProposal,
   FileReceiptRequest,
   ItemShare,
   ReadReceiptResponse,
@@ -55,6 +57,7 @@ import type {
 } from "@ledger/contract";
 import type { CategoryChoice, ReceiptReader } from "@ledger/receipts";
 import type { Database } from "better-sqlite3";
+import type { AppLogger } from "./logger.ts";
 import { addLine, addPotCharge } from "./periods.ts";
 import type { PeriodContext } from "./periods.ts";
 import type { PhotoStore } from "./receipt-photos.ts";
@@ -243,13 +246,23 @@ export async function uploadReceipt(context: UploadContext, body: unknown): Prom
  * A rebate the reader folded into a price that already held it is taken back
  * out here, before the check (lg-101, `dropPrintedRebates`), and only here:
  * filing takes the form as the person left it, a rebate typed back in included.
+ *
+ * **A reading the check flags is read again** (lg-105), once, by the escalation
+ * reader when one is configured: the whole photo, repaired and checked the same
+ * way, and kept only when it is strictly better (`isBetter`); `model` names the
+ * reader whose reading is answered. A second reading that fails, or that is
+ * still going at `READ_DEADLINE_MS`, leaves the first one answered, and is
+ * logged. A reading that adds up is read once. A rebate folded into the wrong
+ * item still adds up, so nothing here reads it again: only the person catches it.
  */
 export async function readReceipt(
   context: { db: Database; photos: PhotoStore; household: string },
-  reader: ReceiptReader | undefined,
+  readers: ReceiptReaders,
   id: number,
   signal?: AbortSignal,
 ): Promise<ReadReceiptResponse> {
+  const started = performance.now();
+  const { reader, escalation } = readers;
   const receipt = storedReceipt(context.db, id);
   const filed = context.db.prepare("SELECT id FROM receipt_filings WHERE receipt_id = ?").get(id);
   if (filed !== undefined) throw new AppError("RECEIPT_ALREADY_FILED");
@@ -258,13 +271,11 @@ export async function readReceipt(
     .filter((category) => !category.retired)
     .map(({ id: categoryId, name }) => ({ id: categoryId, name }));
   const bytes = await context.photos.load(context.household, receipt.photo);
-  const proposals = await reader.read({ bytes, mediaType: receipt.media_type }, signal, offered);
+  const photo = { bytes, mediaType: receipt.media_type };
   const ids = new Set(offered.map((category) => category.id));
-  return {
-    receiptId: receipt.id,
-    model: reader.model,
+  const checked = (proposals: readonly ReceiptProposal[]): CheckedProposal[] =>
     // No more than a photo can file, each as its part (gate 2, N2).
-    proposals: proposals.slice(0, MAX_RECEIPTS_PER_PHOTO).map((read) => {
+    proposals.slice(0, MAX_RECEIPTS_PER_PHOTO).map((read) => {
       // Before the check, so the flags and the screen see the repaired reading.
       const proposal = dropPrintedRebates(withOfferedCategories(read, ids));
       return {
@@ -272,8 +283,95 @@ export async function readReceipt(
         flags: checkReceipt(proposal),
         merchantCategoryId: merchantCategory(context.db, proposal.merchant, ids),
       };
-    }),
+    });
+
+  const first = checked(await reader.read(photo, signal, offered));
+  const answer = (model: string, proposals: CheckedProposal[]): ReadReceiptResponse => ({
+    receiptId: receipt.id,
+    model,
+    proposals,
+  });
+  if (escalation === undefined || !first.some((read) => read.flags.length > 0)) {
+    return answer(reader.model, first);
+  }
+
+  // lg-105: one more reading, of the whole photo, by the stronger model. Never
+  // a loop, and never at the cost of the reading already in hand.
+  const deadlineMs = readers.deadlineMs ?? READ_DEADLINE_MS;
+  // Whole milliseconds: `AbortSignal.timeout` refuses a fraction.
+  const left = Math.floor(deadlineMs - (performance.now() - started));
+  const keepFirst = (fields: Record<string, unknown>): ReadReceiptResponse => {
+    readers.logger?.warn("a flagged receipt was not read again; the first reading is kept", {
+      model: escalation.model,
+      ...fields,
+    });
+    return answer(reader.model, first);
   };
+  if (left <= 0) return keepFirst({ outOfTime: true });
+  let outOfTime: AbortSignal | undefined;
+  let second: CheckedProposal[];
+  // Everything the second reading takes is inside the `try`, so nothing it
+  // throws can cost the person the first.
+  try {
+    outOfTime = AbortSignal.timeout(left);
+    const either = signal === undefined ? outOfTime : AbortSignal.any([signal, outOfTime]);
+    second = checked(await escalation.read(photo, either, offered));
+  } catch (error: unknown) {
+    // The code and nothing else: an error's message or cause can carry what
+    // the SDK sent, key and photo included, and a log outlives the request.
+    return keepFirst({ code: AppError.from(error).code, outOfTime: outOfTime?.aborted === true });
+  }
+  return isBetter(second, first) ? answer(escalation.model, second) : answer(reader.model, first);
+}
+
+/**
+ * What reads a receipt (lg-8), and what reads a flagged one again (lg-105).
+ * `escalation` is `undefined` when none is configured, and then a flagged
+ * reading goes to the person as read.
+ */
+export interface ReceiptReaders {
+  reader: ReceiptReader | undefined;
+  escalation?: ReceiptReader | undefined;
+  /** Where a second reading that failed is told; never with the error's message. */
+  logger?: AppLogger | undefined;
+  /** Test-only: `READ_DEADLINE_MS` unless a test shortens it. */
+  deadlineMs?: number | undefined;
+}
+
+/**
+ * How long a read may have run before a second reading is given up on and the
+ * first answered (lg-105's step 5). Nothing in the API stops a slow request
+ * (Fastify's `requestTimeout` and `connectionTimeout` are both 0, measured on
+ * lg-105's Log); the edge does: Cloudflare answers `524` to an origin that
+ * sends nothing in time (`docs/02-DEPLOYMENT.md`, which keeps the downloader's
+ * longest wait under 100 s). A second reading still going at 100 s is
+ * abandoned, so the person gets the first one rather than the edge's error.
+ * The first reading is not bounded here: it already was not, before lg-105.
+ */
+export const READ_DEADLINE_MS = 100_000;
+
+/**
+ * Whether a second reading is strictly better than the first (lg-105): fewer
+ * proposals that do not add up (`items-differ`, which blocks filing), or as
+ * many and fewer flags in total. Whole readings, never proposals matched
+ * across them: a photo of two receipts may come back in another order or count.
+ *
+ * **A reading with fewer receipts than the first is never better.** It has
+ * fewer flags because it read less, and keeping it would take a receipt the
+ * person already had off the screen; an empty one ("not a receipt") has no
+ * flags at all.
+ */
+export function isBetter(
+  second: readonly CheckedProposal[],
+  first: readonly CheckedProposal[],
+): boolean {
+  if (second.length < first.length) return false;
+  const differ = (reading: readonly CheckedProposal[]): number =>
+    reading.filter((read) => read.flags.includes("items-differ")).length;
+  const flags = (reading: readonly CheckedProposal[]): number =>
+    reading.reduce((count, read) => count + read.flags.length, 0);
+  if (differ(second) !== differ(first)) return differ(second) < differ(first);
+  return flags(second) < flags(first);
 }
 
 /**

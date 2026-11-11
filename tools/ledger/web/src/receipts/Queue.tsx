@@ -587,7 +587,7 @@ export function ReceiptQueueView(props: ReceiptQueueViewProps): React.ReactEleme
   const uploading = photos.some((photo) => photo.phase === "uploading");
   const readCount = photos.filter((photo) => photo.phase === "read").length;
   const toRead = photos.filter((photo) => !typedIn(photo)).length;
-  // All photos of one server share one reader; the first kept one names it.
+  // All photos of one server share one reader; the first kept one says whether there is one.
   const reader = photos.find((photo) => photo.receipt !== null)?.receipt?.reader ?? null;
   const settled = photos.length > 0 && !uploading;
   // The words follow the count, so one photo reads as one photo.
@@ -791,8 +791,8 @@ export function ReceiptQueueView(props: ReceiptQueueViewProps): React.ReactEleme
         <div className="offer">
           <p className="hint">
             {one ? "Reading sends this photo" : "Reading sends these photos"} out of the house, to
-            Anthropic, where <strong>{reader}</strong>{" "}
-            {one ? "reads it." : "reads them, one at a time."} Typing a receipt in sends nothing.
+            Anthropic, where {one ? "it is" : "they are"} read by Claude
+            {one ? "." : ", one at a time."} Typing a receipt in sends nothing.
           </p>
           <div className="actions">
             <button className="primary" type="button" disabled={busy} onClick={onReadAll}>

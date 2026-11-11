@@ -44,8 +44,8 @@ off its shared amount, at the GST and QST rates in effect on its date
 (`splitReceipt` and the dated `SALES_TAX_RATES` table, lg-10: a rate change is an
 entry added there). The name is `books` because
 `ledger` is the tool. **`receipts`** is the receipt reader (lg-8): Claude Haiku
-5.5 through Anthropic's SDK, given its key and model by `api`, and reading no
-environment itself.
+5.5 through Anthropic's SDK, and Sonnet 5.5 for a flagged reading (lg-105), given
+its key and model by `api`, and reading no environment itself.
 
 ## Commands
 
@@ -247,12 +247,14 @@ names invented descriptions.
 **A receipt photo leaves the house only when the person asks** (lg-8). Upload
 keeps the photo, at `<data>/receipts/<household>/<uuid>.<ext>` under a name the
 API made — never one a request gave — and reads nothing; only
-`POST /api/receipts/:id/read` hands it to the reader, and the screen names the
-model beside that button; a receipt with anything filed from it is not read
-again. Filing is a third request and the only one that writes the books: a line
-paid by **whoever uploaded the photo**, unless the filing names another current
-member as payer (`paidBy`, lg-102), or the receipt attached to the row it
-documents. A photo of several receipts files each as its own `part`, once; a row
+`POST /api/receipts/:id/read` hands it to the reader, and the screen says,
+beside that button, that the photo goes to Anthropic to be read by Claude; a
+reading the arithmetic flags is read again, once, by `RECEIPT_ESCALATION_MODEL`
+(lg-105); a receipt with anything filed from it is not read again. Filing is a
+third request and the only one that writes the books: a line paid by **whoever
+uploaded the photo**, unless the filing names another current member as payer
+(`paidBy`, lg-102), or the receipt attached to the row it documents. A photo of
+several receipts files each as its own `part`, once; a row
 is documented by one receipt (`ROW_ALREADY_DOCUMENTED`). **A receipt's items
 must make its total or it is not filed** (`RECEIPT_DOES_NOT_ADD_UP`, lg-10): the
 line is what the card was charged less what the books compute its not-shared and

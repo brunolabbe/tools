@@ -1,11 +1,12 @@
 /**
  * The receipt reader (lg-8): one seam, one implementation, the model.
  *
- * **Claude Haiku 5.5 alone, no local OCR** — the owner's choice of 2026-10-12,
- * from fourteen real photos read by two local OCR engines and two models (the
- * table is on lg-8's Log). Haiku read the subtotal, GST, QST and total right on
- * all thirteen printed receipts; no engine was ever wrong in a way the
- * arithmetic check (`checkReceipt` in `books`) missed.
+ * **Claude Haiku 5.5, no local OCR** — the owner's choice of 2026-10-12, from
+ * fourteen real photos read by two local OCR engines and two models (the table
+ * is on lg-8's Log). Haiku read the subtotal, GST, QST and total right on all
+ * thirteen printed receipts; no engine was ever wrong in a way the arithmetic
+ * check (`checkReceipt` in `books`) missed. Haiku reads first; a reading that
+ * check flags is read again, once, by `DEFAULT_ESCALATION_MODEL` (lg-105).
  *
  * **It reads, and does nothing else.** No reader classifies, computes a share or
  * files anything (`docs/00-ANALYSIS.md` §6, _What a reader is trusted with_): its
@@ -57,7 +58,7 @@ export interface CategoryChoice {
  * anything else arrives with none (the owner's answer of 2026-10-16).
  */
 export interface ReceiptReader {
-  /** The model that reads, which the screen names before the photo is sent. */
+  /** The model that reads. The screen names Anthropic and Claude before the photo is sent, not the model (lg-105). */
   readonly model: string;
   read(
     photo: ReceiptPhoto,
@@ -68,6 +69,13 @@ export interface ReceiptReader {
 
 /** The measured model, and the default. */
 export const DEFAULT_RECEIPT_MODEL = "claude-haiku-5-5";
+
+/**
+ * The model a reading the arithmetic check flags is read again by (lg-105, the
+ * owner's choice of 2026-11-09), and the default. `api` decides when to ask it;
+ * a reader built with it is the same reader as any other.
+ */
+export const DEFAULT_ESCALATION_MODEL = "claude-sonnet-5-5";
 
 /** Explicit, so the SDK never reads `ANTHROPIC_BASE_URL`. */
 export const ANTHROPIC_BASE_URL = "https://api.anthropic.com";
