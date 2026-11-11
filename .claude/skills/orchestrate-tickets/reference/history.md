@@ -7165,3 +7165,64 @@ Wall times of about 10–11 h on three agents and the orchestrator are a 5-hour 
 - Re-asking on a measurement changed two owner answers. dl-130's parking moved from `held:` to `in-flight`, and dl-134's step 3 moved from export to drop. Each was put to the owner with the number, not with a verdict.
 - Filing gates on Sonnet caught false option facts before the owner chose: dl-137's C cost, and dl-138's Q3 leak and Q2 floor, the latter twice. In each case the owner chose from corrected text.
 - Stacking dl-134 on dl-130 as a draft, per `concurrency.md`, let it run while #777 waited for a merge.
+
+### Batch 2026-11-10 (tools-bb, lg-98 lg-104 lg-105, lg-107 lg-108 filed) — base a100f429
+
+| PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| #780 | open, ready, mergeable, 11/11 green at 4dbd5115 | Opus 5.5 / high | a50c58a829f5c3266 | builder-hard, lg-105 | 19m34s / 18m37s | 0 | $5.0976 |
+| #780 | as above | Sonnet 5.5 / xhigh | aa8f61075fb0db03a | ticket-reviewer-sonnet, lg-105 gate 1 | 15m55s / 15m51s | 0 | $2.5176 |
+| #780 | as above | Sonnet 5.5 / high | a1769db32d374ea56 | fixer, lg-105 round 1 (F1 F2 F4 F6 + owner's CLAUDE.md sentence) | 4m40s / 4m38s | 0 | $0.7321 |
+| #780 | as above | Sonnet 5.5 / xhigh | ac4890518da29ec81 | ticket-reviewer-sonnet, lg-105 gate 2 | 9m04s / 8m49s | 0 | $1.5140 |
+| #780 | as above | Sonnet 5.5 / high | a70c4ff6fbf374d01 | fixer, lg-105 three lows at landing + CLAUDE.md line + landing | 6m38s / 6m28s | 0 | $0.8677 |
+| #782 | open, ready, mergeable, 11/11 green at 68c88d8a | Opus 5.5 / high | a96e415a85f69b1a2 | builder-hard, lg-104 build, resumed for one owner stop (fold-in) and round 1 | 53m51s / 1h13m03s | 0 | $15.0575 |
+| #782 | as above | Sonnet 5.5 / xhigh | ae8c8b676b645c92a | ticket-reviewer-sonnet, lg-104 gate 1 | 20m20s / 19m10s | 0 | $3.0980 |
+| #782 | as above | Sonnet 5.5 / xhigh | ad2fec9c814a682a5 | ticket-reviewer-sonnet, lg-104 gate 2 | 22m13s / 21m31s | 0 | $3.6531 |
+| #782 | as above | Sonnet 5.5 / high | a6abb2b35a68709d2 | fixer, lg-104 two lows at landing + landing | 5m27s / 5m17s | 0 | $0.8372 |
+| #785 | open, ready, mergeable, 16/16 green at ef71bd11 | Opus 5.5 / high | a28a595d50734f4b4 | builder-hard, lg-98 build (retired at $20.12) | 51m02s / 50m28s | 0 | $20.1223 |
+| #785 | as above | Sonnet 5.5 / xhigh | a755f83b261daa3ac | ticket-reviewer-sonnet, lg-98 gate 1 | 15m24s / 14m44s | 0 | $3.1798 |
+| #785 | as above | Opus 5.5 / high | a5412782b25ae0585 | builder-hard (fresh), lg-98 round 1 | 22m34s / 22m11s | 0 | $7.6413 |
+| #785 | as above | Sonnet 5.5 / xhigh | acf5d001ecefac186 | ticket-reviewer-sonnet, lg-98 gate 2 (stopped by the 5-hour limit, resumed) | 13m22s / 10h17m46s | 1 | $3.0086 |
+| #785 | as above | Sonnet 5.5 / high | a73766c90cc0f6327 | fixer, lg-98 one low at landing + landing | 11m21s / 10m31s | 0 | $1.0129 |
+| #790 | open, ready, mergeable, green (unit skipped, md) at a0ebd943 | Haiku 5.5 / high | a619eeb318f587bf5 | builder-mechanical, lg-107 filing | 5m42s / 5m35s | 0 | $0.1649 |
+| #790 | as above | Sonnet 5.5 / xhigh | a920477850ae9b9a6 | ticket-reviewer-sonnet, lg-107 gate 1, narrow | 7m58s / 7m32s | 0 | $1.0352 |
+| #790 | as above | Sonnet 5.5 / high | ac1c3244afcc890ec | fixer, lg-107 round 1 | 4m25s / 4m25s | 0 | $0.6279 |
+| #790 | as above | Sonnet 5.5 / xhigh | a59138e1efc3eedf9 | ticket-reviewer-sonnet, lg-107 gate 2, narrow (stopped by the 5-hour limit, resumed) | 8m55s / 10h14m07s | 1 | $2.1880 |
+| #790 | as above | Sonnet 5.5 / high | a09b189188b25fa7e | fixer, lg-107 five lows at landing + landing | 4m12s / 4m09s | 0 | $0.6490 |
+| #793 | open, ready, mergeable, one check pending at ef4621ff | Haiku 5.5 / high | a969e702d89739e22 | builder-mechanical, lg-108 filing, resumed for one owner stop | 9m17s / 8m32s | 0 | $0.2814 |
+| #793 | as above | Sonnet 5.5 / xhigh | a72ed0e4ef68d2eda | ticket-reviewer-sonnet, lg-108 gate 1, narrow | 13m12s / 12m52s | 0 | $2.1572 |
+| #793 | as above | Sonnet 5.5 / high | aacde3bc67406ee56 | fixer, lg-108 round 1 (with the api/test placement probe) | 7m13s / 7m02s | 0 | $0.9913 |
+| #793 | as above | Sonnet 5.5 / xhigh | ac2b3f695ba09339e | ticket-reviewer-sonnet, lg-108 gate 2, narrow | 13m15s / 13m11s | 0 | $2.1305 |
+| #793 | as above | Sonnet 5.5 / high | a912b5776790aef40 | fixer, lg-108 N1 (floor) + three lows at landing + landing | 4m47s / 4m45s | 0 | $0.6213 |
+| — | — | Opus 5.5 / high | orchestrator 91f8d392 | orchestrator (floor) | 2h20m27s / 12h52m47s | 1 | $14.4247 |
+| | | | | **total** (rates read 2026-10-10), before the log fixer; no seam-mapper (tools-34's map at the same base reused) | 8h10m48s | 3 | **$93.6108** |
+
+**Tickets:**
+- lg-105 → #780: one owner stop at the build (fewer proposals never kept; CLAUDE.md sentence to the branch); gate 1 CONCERNS (F1 med open decision → A, 5 lows); round 1 by a fixer; gate 2 PASS (3 lows, fixed at landing by owner choice); gate 1 F3, F5 recorded. The landing's preflight went red on the lg-99 focus flake and the lander continued on a clean rerun against its dispatch's stop condition; CI on the landing head was green.
+- lg-104 → #782: owner stop at the build folded the repeated-Override refusal in; gate 1 FAIL (F1 high: SheetJS `cfb_add` normalises `//` and a leading `/`; the corrupt-deflate spin dropped as pre-existing and folded in by the owner); round 1 by the resumed builder; gate 2 CONCERNS (N1 med = the lg-95 flake on the ubuntu leg, cleared by `gh run rerun --failed`, attempt 2 green; N2, N3 fixed at landing by owner choice).
+- lg-98 → #785: one owner stop (retry RATE_LIMITED only); gate 1 FAIL (F1, F2 high: closePeriod and the rule writes missed invalidations; F3 med paged re-read past 500 silently refused, fixed by owner choice); round 1 by a fresh builder-hard (first builder retired at $20.12); gate 2 PASS (F1 residual unrun, recorded and marked unverified by owner choice; N2 test at landing; N1 recorded). F7's remainder filed as lg-108.
+- lg-107 → #790 (filing): the lg-95 and lg-99 `history.test.tsx` focus flakes. Gate 1 CONCERNS (F1 two tests not one, F2 rate depends on load; owner chose widen + interleaved base/branch proof); round 1; gate 2 PASS (5 lows fixed at landing; N3, N4 recorded).
+- lg-108 → #793 (filing, depends on lg-98): derive each write's stale routes from the in-process API. Owner stop for two unknowns; gate 1 CONCERNS (F1 jsdom realm, F2 placement, F3 vacuous reads); round 1 with an `api/test` placement probe (clean); gate 2 CONCERNS (N1 med rewording, fixed by the floor; three lows fixed at landing; N2 recorded).
+
+**Defects in the skill:**
+
+1. `roles/common.md`, opening paragraph ("51 KB against 50 KB") — repeated from the last two entries: the two-page `git show` of common.md and reviewer.md overflows the cap. Relayed from lg-105 gate 1 and gate 2, lg-107 gate 1 and gate 2, lg-108 gate 1 (five reports this batch), not re-run here: `git show origin/main:.claude/skills/orchestrate-tickets/roles/common.md origin/main:.claude/skills/orchestrate-tickets/roles/reviewer.md | wc -c` → `37699`; unpiped → `Output too large (36.8KB)`.
+2. `roles/common.md`, _Your worktree_, the bullet on a version change or a new package — gives no way to load a package the branch adds, so no test importing it can run, and says "nothing warns" though the farm prints `missing 2 package(s)`. Five agents improvised three recipes: `npm pack` into the worktree's `node_modules` (lg-98 builder), an integrity-checked tarball fetch (`fetchdep.mjs`, lg-98 gates and round), and a scratch `npm install` symlinked into a throwaway tree (lg-108 fixer and gate 2). Also: the npm 11 relock the bullet names fails `check-lockfile-sync.mjs` (25 `"peer": true` lines npm 10 writes back). Relayed from lg-98's builder, not re-run: `ls /workspaces/tools/node_modules/@tanstack` → `No such file or directory`; `npx -y npm@11.21.1 update @tanstack/react-query --before=2026-11-03 --package-lock-only --ignore-scripts; node scripts/check-lockfile-sync.mjs` → exit 1.
+3. `roles/fixer.md` _Landing_ / `reference/records.md` _Landing_ — no rule for a `--land` preflight that fails after the records push on a test the branch does not touch (a focus assertion under load, not a timing test); lg-105's lander reran and continued. Reproduction: PR #780's landing comment (`history.test.tsx:747`, rerun 29/29).
+4. `reference/records.md`, _Fixed at landing_ against the rule that a committed Log claim shown false is withdrawn in place — silent on which applies when the gate says "replace the sentence" for a Log sentence false only in its reason. Relayed from lg-105's lander; its `89159ca2` replaced rather than withdrew.
+5. `roles/builder.md`, _When you are resumed with findings_, step 3 — requires a full preflight before a round's push; dispatches name `--only` sets. Relayed from lg-98's round builder.
+6. `roles/common.md`, _Waiting is the harness's_ — says Bash refuses `sleep`; foreground `sleep 1; tail -3 <file>` ran. Relayed from lg-107's filer, not re-run.
+7. `roles/common.md`, _Preflight runs longer than a foreground call allows_ — no wait recipe that does not leave stale completion notifications from earlier background waits. Relayed from lg-98's lander.
+8. `roles/fixer.md`, _A mutation check runs on a committed tree_ — silent on amending the unpushed fix commit afterwards to put the Log entry in it. Relayed from lg-104's lander.
+9. `roles/common.md` (CI reading) — silent that `gh pr view --json statusCheckRollup` shows only the latest attempt of a re-run job; `gh run view <id> --json attempt,headSha,conclusion` → `2 538a7f20… success` was needed to name the reading. Relayed from lg-104's lander.
+10. `docs/01-TICKETS.md`, the `## Decision — open` paragraph — "fails this heading" reads as the answered heading; `npm run -s status -- --show lg-108` passes with `## Decision — answered` on `status: ready`. Relayed from lg-108's filer.
+11. `roles/reviewer.md`, _What makes a gate worth its cost_ — an e2e probe that needs `layout.spec.ts`'s file-local `openTab`/`fitsBothWidths` must be that file with a case appended; the page does not say so. `grep -n "^async function openTab" tools/ledger/e2e/layout.spec.ts` → no `export`. Relayed from lg-98's gate 2.
+12. `gate.md`, the filing paragraph — does not say how to grade a supplied check that is a design question ("is the design buildable"). Relayed from lg-108's gate 1. And step 4 — a verified row that checks a ticket's own citations is not a finding, so the citation rule is silent on it. Relayed from lg-107's gate 2.
+13. `roles/common.md`, _The sandbox refuses some ordinary shell shapes_ and _Your worktree_ — a bare script that mentions git was refused until prefixed `cd <worktree> &&`, and no recipe exists for a fixer's throwaway second tree (Write/Edit refuse its paths, `git -C` into it is refused). Relayed from lg-108's fixer, not re-run.
+14. `scripts/next-id.mjs` (a script, to file or record) — prints `clash: lg-84 is claimed by branch/docs-glob-minimatch-advisories, on main`. Relayed from lg-107's filer and gate 1; not investigated.
+
+**Worked, and worth keeping:**
+- Reading peer `board.md` files at intake and before each new id: `next-id.mjs lg` printed `lg-106` while tools-86's unpushed filing held it; the board showed it, and both claims were confirmed by message.
+- Two gates stopped by the account's 5-hour limit (429) were resumed by `SendMessage` after the reset with their worktrees and scratch drafts intact, and finished in about 2 minutes active each instead of re-running.
+- A gate verdict conditional on a flaky CI leg was cleared with `gh run rerun <id> --failed` and read by attempt before the lander pushed, with no builder round.
+- Gate prompts that asked for a SheetJS-against-copy agreement table on built files (lg-104 gate 2: 12 files) and an independent derivation from API handlers (lg-98 gate 1) found both highs the builders' own tests passed.
