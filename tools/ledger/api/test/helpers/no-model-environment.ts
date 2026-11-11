@@ -1,6 +1,6 @@
 /**
- * Run before every file of the ledger's vitest project (`setupFiles` in the root
- * `vitest.config.ts`): the host's Anthropic variables never reach a test (lg-8's
+ * Run before every file of the ledger's vitest project (`setupFiles` in
+ * `tools/ledger/vitest.config.ts`): the host's Anthropic variables never reach a test (lg-8's
  * gate 1, F6).
  *
  * `loadApiConfig` reads them, and a dozen files build an app without pinning
