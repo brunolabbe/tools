@@ -7037,6 +7037,67 @@ not a page, got wrong names the script and is filed or recorded, not fixed here.
 - Dispatching the `builder-web` facts step before gate 1 turned two remembered API shapes (fail open on the create body; workers.dev on by default) into owner decisions before a gate was spent on code that would change.
 - repo-143's Sonnet gate 1 ran the real setup CLI 18 times against a persistent fake account it wrote, which is how it found the F1 wedge the unit tests could not show.
 
+### Batch 2026-11-10 (tools-86, repo-138 repo-140 repo-129 repo-139, repo-144 lg-106 repo-145 filed) — base a100f429
+
+| PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| — | — | Sonnet 5.5 / high | a4a4d6f797066cddc | seam-mapper, eight candidates (repo-98 126 129 132 138 139 140 141) | 2m03s / 2m03s | 0 | $0.3270 |
+| #778 | open, ready, 7/7 green + test skipped at 8d55d5c8 | Haiku 5.5 / high | a2ab8d5cc4c26b55f | builder-mechanical, repo-138 build, resumed for one owner stop (Opus gate) | 7m37s / 19m43s | 0 | $0.3131 |
+| #778 | as above | Sonnet 5.5 / xhigh | aa4342c129a900a8a | ticket-reviewer-sonnet, repo-138 gate 1, narrow | 10m17s / 10m14s | 0 | $1.8721 |
+| #778 | as above | Sonnet 5.5 / high | ab626f078ad0c8307 | fixer, repo-138 five findings + docs-only row + awaiting at landing + landing | 3m49s / 3m43s | 0 | $0.6390 |
+| #786 | open, ready, 7/7 green + test skipped at 761ee59c | Haiku 5.5 / high | ab05b74f4fe18255c | builder-mechanical, repo-140 | 7m20s / 7m20s | 0 | $0.3403 |
+| #786 | as above | Sonnet 5.5 / xhigh | ad226f27f3cf8db46 | ticket-reviewer-sonnet, repo-140 gate 1, narrow | 6m33s / 6m32s | 0 | $1.2596 |
+| #786 | as above | Sonnet 5.5 / high | a7661a5a06d095a37 | fixer, repo-140 F2 clause + F1 F4 + awaiting at landing + landing | 4m48s / 4m39s | 0 | $0.7537 |
+| #783 | open, ready, 15/15 green at b06ff43f | Sonnet 5.5 / high | a30f1fddf434cd567 | builder-standard, repo-129 | 43m31s / 50m08s | 0 | $3.0179 |
+| #783 | as above | Sonnet 5.5 / xhigh | ab4e40f6d905a7cfe | ticket-reviewer-sonnet, repo-129 gate 1, medium (repo-139's measurement) | 18m17s / 17m58s | 0 | $2.7353 |
+| #783 | as above | Sonnet 5.5 / high | a7f5f56a3dd6b686a | fixer, repo-129 owner answers + F1 F3 F4 F5 F6 at landing + landing, resumed once to finish F1 | 14m48s / 13m56s | 0 | $1.3635 |
+| #788 | open, ready, 7/7 green + test skipped at 37c252b5 | Haiku 5.5 / high | ab142da0edabf6704 | builder-mechanical, repo-144 filing + round 1 | 10m19s / 20m29s | 0 | $0.4522 |
+| #788 | as above | Sonnet 5.5 / xhigh | ab5bba27059bb13ee | ticket-reviewer-sonnet, repo-144 filing gate 1, narrow | 8m40s / 8m30s | 0 | $1.3139 |
+| #788 | as above | Sonnet 5.5 / xhigh | ade17855845b34fea | ticket-reviewer-sonnet, repo-144 filing gate 2, narrow | 14m52s / 14m48s | 0 | $1.8450 |
+| #788 | as above | Sonnet 5.5 / high | a49ecd1f40b7372ce | fixer, repo-144 re-asked answer + six lows at landing + landing | 4m10s / 4m04s | 0 | $0.6576 |
+| #789 | open, ready, 7/7 green + test skipped at 30d0d6c0 | Haiku 5.5 / high | ac81db08a18a88bdd | builder-mechanical, lg-106 filing + round 1 | 12m36s / 26m18s | 0 | $0.5721 |
+| #789 | as above | Sonnet 5.5 / xhigh | ac8ae6b3a7249f26a | ticket-reviewer-sonnet, lg-106 filing gate 1, narrow | 13m13s / 12m21s | 0 | $1.5498 |
+| #789 | as above | Sonnet 5.5 / xhigh | a12a2922aff6c62ea | ticket-reviewer-sonnet, lg-106 filing gate 2, narrow (stopped on a 429, resumed) | 13m53s / 10h19m03s | 1 | $2.4353 |
+| #789 | as above | Sonnet 5.5 / high | adbfbfbeb653b440c | fixer, lg-106 two lows at landing + landing | 4m24s / 4m21s | 0 | $0.5588 |
+| #792 | open, ready, 5/7 green + test skipped + 1 pending at 6fcbac81 | Sonnet 5.5 / high | a151c818f684a4879 | builder-standard, repo-139 + repo-145 filing, resumed for round 1 | 12m08s / 10h32m57s | 1 | $2.5458 |
+| #792 | as above | Opus 5.5 / high | a782be2d002c97609 | ticket-reviewer-opus, repo-139 gate 1, medium (stopped on a 429, resumed) | 8m51s / 10h20m01s | 1 | $4.2990 |
+| #792 | as above | Sonnet 5.5 / high | ab05a1f1ce5b0895b | fixer, repo-139 round 2 (gate 2's high) | 3m56s / 3m48s | 0 | $0.6351 |
+| #792 | as above | Opus 5.5 / high | aa4cc6ff4cd988bfa | ticket-reviewer-opus, repo-139 gate 2, narrow | 9m55s / 9m55s | 0 | $3.4068 |
+| #792 | as above | Opus 5.5 / high | a5752cb94db40b7cc | ticket-reviewer-opus, repo-139 gate 3, narrow, scoped to gate 2's high | 4m55s / 4m55s | 0 | $1.8404 |
+| #792 | as above | Sonnet 5.5 / high | ab0d6d21fb4bf4801 | fixer, repo-139 gate 3's med + P1 at landing + awaiting + landing | 5m20s / 5m07s | 0 | $0.7645 |
+| — | — | Opus 5.5 / high | orchestrator ee00f5b4 | orchestrator (floor) | 1h41m46s / 12h31m43s | 1 | $11.8688 |
+| | | | | **total** (rates read 2026-10-10), before the log fixer | 5h48m03s | 4 | **$47.3666** |
+
+**Tickets:**
+- repo-138 → #778: owner answer (a) at intake; builder's open decision (a's filer and gate are both Sonnet 5.5, against "a different model") → owner chose (ii), Sonnet filer under an Opus gate, over (a); gate 1 CONCERNS (Sonnet narrow, F1 med, six lows); F1 F2 F4 F5 F7 fixed at landing, F3 F6 recorded; docs-only chore row's gate named `ticket-reviewer-opus` at landing by owner choice; Done when 2 awaiting the first three filings.
+- repo-140 → #786: owner answer (a) at intake; gate 1 PASS (Sonnet narrow, four lows); F2's clause in step 6 and F1 F4 fixed at landing, F3 recorded; Done when 2 awaiting the next `hard` entry.
+- repo-129 → #783: owner reworded Done when 2 (ubuntu import share and wall clock, 11 % → 4 % and 229.18 s → 198.63 s against `main` run 42525621981) and chose to file the three in-file order dependencies as repo-144 and lg-106; gate 1 PASS (Sonnet medium, six lows, repo-139's third row); F1 F3 F4 F5 F6 fixed at landing (F3 includes the one root `CLAUDE.md` and `testing.md` sentence, owner-authorised), F2 recorded; the first landing left F1's Build 2 and Done when 1 lines as written and was sent back once.
+- repo-144 → #788 (filing): gate 1 CONCERNS (F1 med open decision: the Build's `afterAll` floor turned `-t "repo-104"` and two other filtered runs red) → owner (a), drop the floor; round 1; gate 2 PASS (N1: (a) loses the whole-file guarantee) → F1 re-asked with that measurement, owner kept (a); six lows fixed at landing.
+- lg-106 → #789 (filing): gate 1 CONCERNS (four meds: Done when 2 passed on a `-t` matching nothing; Done when 5's grep could not fail; nothing guarded a filtered run; Build option (b) was not a fix) → owner deleted (b); round 1; gate 2 PASS, two lows fixed at landing.
+- repo-139 → #792, with repo-145 filed `needs-decision`: gate 1 FAIL (Opus medium; F1 high, repo-145's prices pooled full-depth Opus gates against medium Sonnet ones); round 1 by the resumed builder; gate 2 FAIL (N1 high, option (ii) priced as an added $2.26–$2.66 gate where it swaps a Sonnet gate 2, about $0.82); round 2 by a fixer; gate 3 CONCERNS (narrow, no high); its med and P1 fixed at landing by owner choice, no gate 4; Done when 3 awaiting this entry.
+- repo-139's rows: Sonnet gate 1 (xhigh, medium) on three `standard` tickets — repo-135 $1.2729 PASS 0/0/2, repo-143 $1.5398 CONCERNS 0/1/3, repo-129 $2.7353 PASS 0/0/6; $5.5480, mean $1.8493; 12 carried, 0 refuted. Opus gate 1 (high), ten gates — repo-130 $3.6669 full PASS 0/0/6, repo-133 $2.6522 full PASS 0/0/5, repo-120 $3.6215 full PASS 0/0/4, lg-69 $4.1441 standard-full PASS 0/0/4, lg-80 $3.1060 medium CONCERNS 0/1/1, lg-75 $2.6847 medium PASS 0/0/4, lg-72 $3.9194 full FAIL 1/0/4, repo-121 $3.2141 standard PASS 0/0/5, repo-124 $2.2586 standard FAIL 1/0/4, repo-128 $4.2579 full PASS 0/0/2; $33.5254, mean $3.3525; 42 carried, 0 refuted. Sonnet as a share of Opus: 55 % pooled, 51 % against `full` (n 5), 64 % against `medium` (n 2), 66 % against `medium` plus `standard` (n 4); the depth-matched saving, about $1.00 a gate, rests on two to four gates and is indicative. Three gates cannot show the rate of a `high` (0 in 3 has probability 51 % at 2 in 10) or what a gate misses.
+- repo-126: not offered; `node --version` → `v22.23.4` at intake.
+- repo-141: decision left open for the review session by owner choice.
+
+**Defects in the skill:**
+
+1. `roles/common.md`, opening paragraph ("51 KB against 50 KB") — repeated from the tools-ca entry's item 4: seven agents this batch (gates on repo-140, repo-144 ×2, lg-106, repo-139 ×2, and repo-129's builder on common + builder at 36.1 KB) report the two-page `git show` spilling to a file. Relayed from those agents' reports, not re-run; sizes re-run: `git show origin/main:.claude/skills/orchestrate-tickets/roles/common.md | wc -c` → `21138`, `…/roles/reviewer.md | wc -c` → `16561`, sum 37,699 bytes.
+2. `roles/builder.md`, _Push, then open a draft pull request_ — "A filing the pairing table gates with none opens ready" matches no row. Reproduction: `git show origin/main:.claude/skills/orchestrate-tickets/roles/builder.md | grep -n "gates with none"` → `197`; `git show origin/main:.claude/skills/orchestrate-tickets/SKILL.md | grep -n '| none |'` → `259`, the maintenance row only.
+3. `review-ticket/gate.md`, step 4 ("the downloader project runs nine minutes") — stale. Reproduction: `git show origin/main:.claude/skills/review-ticket/gate.md | grep -n "nine minutes"` → `130`; repo-129's gate 1 measured `npm test -- --project downloader --sequence.shuffle --sequence.seed=12` → `Duration 82.67s` (relayed, not re-run).
+4. `review-ticket/SKILL.md`, _A different model reviews_, and `SKILL.md`'s pairing table — the page says the landing `fixer` "is a different model from the gate", but on `mechanical` and `hard` tickets a Sonnet `fixer`'s round is gated by `ticket-reviewer-sonnet`. Reproduction: `git show origin/main:.claude/skills/review-ticket/SKILL.md | grep -n "different model from the gate"` → `148`; `git grep -n '^model' origin/main -- .claude/agents/fixer.md .claude/agents/ticket-reviewer-sonnet.md` → both `claude-sonnet-5-5`. Filed as repo-145's Question 2.
+5. `roles/builder.md`, _Scope_, the answered-`needs-decision` bullet — says the first commit records the answer and sets `ready`, but not that the `## Decision — open` heading must be reworded; `status --show` then fails. Relayed from repo-140's builder (`npm run status -- --show repo-140` at f3285fb0 → `has a "## Decision — open" heading, but its status is "ready"`, exit 1), not re-run.
+6. `reference/records.md`, _Fixed at landing_ — the regex warning names backticks, `[`, `.` and `*` but not `$` or `—`; and the wording-fix proof (edit in place) and the rule that a committed Log claim is withdrawn in place read differently for a Log line on an unmerged branch — three landers this batch chose differently (repo-140 edited in place, repo-144 marked `WITHDRAWN`, lg-106 edited in place). Relayed from those landers' reports, not re-run.
+7. `roles/common.md`, _Waiting is the harness's_ and _Preflight runs longer than a foreground call allows_ — the first does not say how to wait on an exit file (a background `cat` returned before the file existed; an `until [ -f … ]` loop worked, repo-140's lander); the second says a foreground `until … sleep` loop is blocked, but repo-144's gate 2 ran one with `timeout: 400000` and it returned when the job finished. Relayed, not re-run; one reading each.
+8. `roles/reviewer.md`, _When you are dispatched as gate 2, or later_ — "A finding that comes back unfixed keeps its number and severity" says nothing about a `fixed in part` remainder whose own text meets a higher row; repo-139's gate 3 kept `med` and flagged a possible `high`. Relayed from repo-139 gate 3, not re-run.
+9. Root `CLAUDE.md`, _Commands_ ("`npx vitest run <spec-file>` … the only vitest call to make directly") — repo-129's Done when 3 and its gate needed `npx vitest list --filesOnly --project <p>`, ungated and non-running. Relayed from repo-129's builder.
+10. `.claude/agents/seam-mapper.md`, _What you return_ — the forty-line cap does not exempt quoted options, which the step-2 checkpoint needs, and the page names no step to read a ticket's `note:` (repeated from the tools-ca entry's item 2). Relayed from the seam-mapper.
+11. `reference/history.md`, the tools-ca entry — its repo-139 line says "The third is repo-126's gate 1"; repo-126 did not start and repo-129's gate 1 is the third row. Reproduction: `git show origin/main:.claude/skills/orchestrate-tickets/reference/history.md | grep -n "third is repo-126"` → `7023`.
+
+**Worked, and worth keeping:**
+- Filing gates built the filed Build as a probe and ran it: repo-144's gate 1 and lg-106's gate 1 each found that a faithful build would turn filtered `-t` runs red while every `Done when` line passed, before any builder was dispatched.
+- Re-asking an owner answer when a later gate's measurement changed its premise (repo-144's N1) kept the owner's choice informed without reopening the round.
+- Gates stopped by the 5-hour usage limit resumed by `SendMessage` from their scratch files and redid nothing.
+
 ### Batch 2026-11-10 (tools-34, dl-130 dl-131 dl-133 dl-134, dl-137 dl-138 filed) — base a100f429
 
 | PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Cost |
