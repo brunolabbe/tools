@@ -15,77 +15,47 @@
  * waits in the inbox for want of one.
  */
 
-import { useCallback, useEffect, useId, useState } from "react";
+import { useId, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatCents } from "@ledger/books";
 import { AppError } from "@ledger/contract";
-import type { SpendingCategory, SpendingCategoryMapEntry, StoredRow } from "@ledger/contract";
-import {
-  addSpendingCategory,
-  fetchSpendingCategories,
-  fetchSpendingMap,
-  fetchUncategorisedRows,
-  renameSpendingCategory,
-  retireSpendingCategory,
-  setRowSpendingCategory,
-  setSpendingMapEntry,
-} from "../api/spending.ts";
+import { categoriesQuery, failureOf, spendingMapQuery, uncategorisedQuery } from "../queries.ts";
+import { SPENDING, invalidate, useWrite } from "../writes.ts";
 import { SpendingCategoryPicker } from "./Picker.tsx";
-
-interface Loaded {
-  categories: SpendingCategory[];
-  map: SpendingCategoryMapEntry[];
-  uncategorised: StoredRow[];
-  /** How many rows there are without one, of which `uncategorised` is the newest. */
-  total: number;
-}
-
-type Load =
-  | { state: "loading" }
-  | { state: "failed"; message: string }
-  | ({ state: "ready" } & Loaded);
 
 export function Spending(): React.ReactElement {
   const id = useId();
-  const [load, setLoad] = useState<Load>({ state: "loading" });
+  const client = useQueryClient();
   const [problem, setProblem] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [renaming, setRenaming] = useState<{ id: number; name: string } | null>(null);
+  const listed = useQuery(categoriesQuery);
+  const mapped = useQuery(spendingMapQuery);
+  const rows = useQuery(uncategorisedQuery);
+  const addSpendingCategory = useWrite("addSpendingCategory");
+  const renameSpendingCategory = useWrite("renameSpendingCategory");
+  const retireSpendingCategory = useWrite("retireSpendingCategory");
+  const setSpendingMapEntry = useWrite("setSpendingMapEntry");
+  const setRowSpendingCategory = useWrite("setRowSpendingCategory");
 
-  const refresh = useCallback(async (signal?: AbortSignal): Promise<void> => {
-    try {
-      const [categories, map, rows] = await Promise.all([
-        fetchSpendingCategories(signal),
-        fetchSpendingMap(signal),
-        fetchUncategorisedRows(signal),
-      ]);
-      setLoad({ state: "ready", categories, map, uncategorised: rows.rows, total: rows.total });
-    } catch (error: unknown) {
-      if (signal?.aborted === true) return;
-      setLoad({ state: "failed", message: AppError.from(error).message });
-    }
-  }, []);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    // oxlint-disable-next-line react/set-state-in-effect -- `refresh` sets state only after its request settles; the rule cannot see through the await.
-    void refresh(controller.signal);
-    return () => controller.abort();
-  }, [refresh]);
-
-  if (load.state === "loading") return <p className="muted">Loading the spending categories…</p>;
-  if (load.state === "failed") {
+  const failure = failureOf(listed, mapped, rows);
+  if (failure !== null) {
     return (
       <p className="bad" role="alert">
-        {load.message}
+        {failure}
       </p>
     );
   }
+  if (listed.data === undefined || mapped.data === undefined || rows.data === undefined) {
+    return <p className="muted">Loading the spending categories…</p>;
+  }
 
-  const { categories, map, uncategorised, total } = load;
+  const [categories, map] = [listed.data, mapped.data];
+  const { rows: uncategorised, total } = rows.data;
 
   /**
-   * Runs a change, then shows what the API now says — also when it was refused,
-   * which is how the other person's retirement shows up.
+   * Runs a change, which shows what the API now says (`writes.ts`) — also when it
+   * was refused, which is how the other person's retirement shows up.
    */
   const change = async (run: () => Promise<unknown>): Promise<void> => {
     setProblem(null);
@@ -93,8 +63,8 @@ export function Spending(): React.ReactElement {
       await run();
     } catch (error: unknown) {
       setProblem(AppError.from(error).message);
+      await invalidate(client, SPENDING);
     }
-    await refresh();
   };
 
   const submitName = (event: React.SyntheticEvent): void => {

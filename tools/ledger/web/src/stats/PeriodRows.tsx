@@ -9,20 +9,22 @@
  * line is corrected with a whole new line, which `PeriodLines` files.
  */
 
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useId, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatCents } from "@ledger/books";
 import { AppError } from "@ledger/contract";
-import type { SpendingCategory, StoredRow } from "@ledger/contract";
+import type { StoredRow } from "@ledger/contract";
+import { fetchSpendingRows } from "../api/spending.ts";
 import {
-  fetchSpendingCategories,
-  fetchSpendingRows,
-  setRowSpendingCategory,
-} from "../api/spending.ts";
+  PAGE,
+  categoriesQuery,
+  failureOf,
+  rereadFailureOf,
+  spendingRowsQuery,
+} from "../queries.ts";
 import { RowSpending } from "../spending/RowSpending.tsx";
+import { useWrite } from "../writes.ts";
 import { PeriodLines } from "./PeriodLines.tsx";
-
-/** How many rows one tap of "Show more" brings. */
-const PAGE = 25;
 
 type Filter = number | "none" | null;
 
@@ -31,8 +33,6 @@ export interface PeriodRowsProps {
   period: { name: string; start: string | null; end: string };
   /** The category the list starts on: one by id, `"none"`, or all of them. */
   category: Filter;
-  /** Called after a row's category was written, so the chart can be read again. */
-  onChanged: () => void;
   onClose: () => void;
 }
 
@@ -41,68 +41,54 @@ type Load =
   | { state: "failed"; message: string }
   | { state: "ready"; rows: StoredRow[]; total: number };
 
+/** Whether a cached list's key was asked under `filter`. */
+function sameFilter(key: readonly unknown[] | undefined, filter: Filter): boolean {
+  const asked = key?.[1];
+  return typeof asked === "object" && asked !== null && "category" in asked
+    ? asked.category === filter
+    : false;
+}
+
 /** What a row counts for in the list it is in: its slice of a receipt (lg-28), else its amount. */
 function shown(row: StoredRow): number {
   return row.sliceCents ?? row.amountCents;
 }
 
-export function PeriodRows({
-  period,
-  category,
-  onChanged,
-  onClose,
-}: PeriodRowsProps): React.ReactElement {
+export function PeriodRows({ period, category, onClose }: PeriodRowsProps): React.ReactElement {
   const id = useId();
+  const client = useQueryClient();
   const [filter, setFilter] = useState<Filter>(category);
-  const [categories, setCategories] = useState<SpendingCategory[]>([]);
-  const [load, setLoad] = useState<Load>({ state: "loading" });
-  const [version, setVersion] = useState(0);
   const [problem, setProblem] = useState<string | null>(null);
   const [more, setMore] = useState(false);
-  // How many rows the next read from the top should bring: a page, or everything
-  // already shown, so a row written to does not send the person back to the first page.
-  const wanted = useRef(PAGE);
   const { start, end } = period;
-
-  useEffect(() => {
-    const controller = new AbortController();
-    void (async (): Promise<void> => {
-      try {
-        setCategories(await fetchSpendingCategories(controller.signal));
-      } catch (error: unknown) {
-        if (!controller.signal.aborted) setProblem(AppError.from(error).message);
-      }
-    })();
-    return () => controller.abort();
-  }, []);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    void (async (): Promise<void> => {
-      try {
-        const answer = await fetchSpendingRows(
-          { from: start, to: end, category: filter, offset: 0, limit: wanted.current },
-          controller.signal,
-        );
-        setLoad({ state: "ready", rows: answer.rows, total: answer.total });
-      } catch (error: unknown) {
-        if (!controller.signal.aborted) {
-          setLoad({ state: "failed", message: AppError.from(error).message });
-        }
-      }
-    })();
-    return () => controller.abort();
-    // `version` is a trigger: a row written elsewhere bumps it, and the page is asked for again.
-    // oxlint-disable-next-line react/exhaustive-effect-dependencies
-  }, [start, end, filter, version]);
+  const listed = useQuery(categoriesQuery);
+  const categories = listed.data ?? [];
+  // A read from the top asks for as many rows as are shown, so a row written to does
+  // not send the person back to the first page (`spendingRowsQuery`).
+  const asked = spendingRowsQuery({ from: start, to: end, category: filter });
+  // The open period's last day moving on, as it does at midnight, keeps the list on
+  // screen while it is read again; another filter starts from "loading".
+  const read = useQuery({
+    ...asked,
+    placeholderData: (previous, before) =>
+      sameFilter(before?.queryKey, filter) ? previous : undefined,
+  });
+  const setRowSpendingCategory = useWrite("setRowSpendingCategory");
+  const failure = failureOf(read);
+  const load: Load =
+    failure !== null
+      ? { state: "failed", message: failure }
+      : read.data === undefined
+        ? { state: "loading" }
+        : { state: "ready", rows: read.data.rows, total: read.data.total };
+  const unlisted = failureOf(listed);
+  const reread = rereadFailureOf(read);
 
   const choose = (next: Filter): void => {
-    wanted.current = PAGE;
-    setLoad({ state: "loading" });
     setFilter(next);
   };
 
-  const showMore = useCallback(async (): Promise<void> => {
+  const showMore = async (): Promise<void> => {
     if (load.state !== "ready") return;
     setMore(true);
     setProblem(null);
@@ -114,23 +100,23 @@ export function PeriodRows({
         offset: load.rows.length,
         limit: PAGE,
       });
-      wanted.current = load.rows.length + answer.rows.length;
-      setLoad({ state: "ready", rows: [...load.rows, ...answer.rows], total: answer.total });
+      client.setQueryData(asked.queryKey, {
+        rows: [...load.rows, ...answer.rows],
+        total: answer.total,
+      });
     } catch (error: unknown) {
       setProblem(AppError.from(error).message);
     } finally {
       setMore(false);
     }
-  }, [load, start, end, filter]);
+  };
 
   const setSpending = async (row: StoredRow, spendingCategoryId: number | null): Promise<void> => {
     setProblem(null);
     try {
+      // Read again rather than patch: under a category filter the row may no longer
+      // belong. The write marks the rows, the lines and the chart stale (`writes.ts`).
       await setRowSpendingCategory(row.id, spendingCategoryId);
-      // Read again rather than patch: under a category filter the row may no longer belong.
-      wanted.current = Math.max(PAGE, load.state === "ready" ? load.rows.length : PAGE);
-      setVersion((current) => current + 1);
-      onChanged();
     } catch (error: unknown) {
       setProblem(AppError.from(error).message);
     }
@@ -164,9 +150,9 @@ export function PeriodRows({
           </option>
         ))}
       </select>
-      {problem !== null && (
+      {(problem ?? unlisted) !== null && (
         <p className="bad" role="alert">
-          {problem}
+          {problem ?? unlisted}
         </p>
       )}
       <h3>Bank rows</h3>
@@ -174,6 +160,11 @@ export function PeriodRows({
       {load.state === "failed" && (
         <p className="bad" role="alert">
           {load.message}
+        </p>
+      )}
+      {reread !== null && (
+        <p className="bad" role="alert">
+          {reread}
         </p>
       )}
       {load.state === "ready" && (
@@ -223,7 +214,6 @@ export function PeriodRows({
         end={end}
         filter={filter}
         categories={categories}
-        onChanged={onChanged}
       />
       <button type="button" onClick={onClose}>
         Close the rows

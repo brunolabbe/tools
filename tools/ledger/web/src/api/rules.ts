@@ -1,8 +1,10 @@
-/** The rules in force, and who they may name (lg-4). Every write is a `POST` that appends. */
+/**
+ * The rules in force (lg-4); who they may name is `GET /api/people`, in
+ * `people.ts`. Every write is a `POST` that appends.
+ */
 
 import { ROUTES } from "@ledger/contract";
-import type { PeopleResponse, Rule, RuleDraft, RulesResponse } from "@ledger/contract";
-import { byShownName } from "../people.tsx";
+import type { Rule, RuleDraft, RulesResponse } from "@ledger/contract";
 import { requestJson } from "./client.ts";
 
 /** `:id` in a route pattern is filled in here; the pattern itself lives in the contract. */
@@ -12,22 +14,6 @@ function forRule(route: string, id: number): string {
 
 export async function fetchRules(signal?: AbortSignal): Promise<Rule[]> {
   return (await requestJson<RulesResponse>(ROUTES.rules, { signal })).rules;
-}
-
-/**
- * Who is in from the open period on, which is what a screen offers to pick; or,
- * with `"everyone"`, those and everyone retired at a close besides (lg-35), for
- * a screen about the past — the history's filter, a stored row's owner.
- */
-export async function fetchPeople(
-  signal?: AbortSignal,
-  who: "in" | "everyone" = "in",
-): Promise<string[]> {
-  const answer = await requestJson<PeopleResponse>(ROUTES.people, { signal });
-  // Each list comes by shown name (lg-76); the two together are put back in that order.
-  return who === "in"
-    ? answer.people
-    : [...answer.people, ...answer.retired].toSorted(byShownName(answer.names));
 }
 
 export async function createRule(draft: RuleDraft): Promise<Rule> {

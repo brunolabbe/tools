@@ -21,20 +21,22 @@
  * is the whole of the shell, with no books tab at all.
  *
  * lg-33: the shell fetches how each person is shown and hands it to every
- * screen (`people.tsx`), again on every change of tab, so a rename made on the
- * admin's screen is on the next one opened. Until it answers, or if it fails,
- * each person is shown under their id.
+ * screen (`people.tsx`), so a rename made on the admin's screen is on the next
+ * one opened. Until it answers, or if it fails, each person is shown under their
+ * id.
+ *
+ * lg-98: the shell's reads are queries in the one cache (`queries.ts`), as every
+ * screen's are, so a change of tab asks for nothing. The rename marks the names
+ * stale and they are read again (`writes.ts`), and the inbox's count is the
+ * inbox's own answer, so a paste, a filing or an answer moves it as soon as the
+ * API has it (lg-54), on whichever tab the person is.
  */
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { AppError } from "@ledger/contract";
-import type { MeResponse } from "@ledger/contract";
 import { AppFooter, AppHeader, TOOL_VERSION } from "@webtools/ui";
 import { Admin } from "./admin/Admin.tsx";
-import { fetchAdminHouseholds } from "./api/households.ts";
-import { fetchInbox } from "./api/inbox.ts";
-import { fetchMe } from "./api/me.ts";
-import { fetchPeopleNames } from "./api/people.ts";
 import { Glyph } from "./Glyph.tsx";
 import { History } from "./history/History.tsx";
 import { Home } from "./home/Home.tsx";
@@ -43,8 +45,8 @@ import { ImportWorkbook } from "./import/ImportWorkbook.tsx";
 import { Inbox } from "./inbox/Inbox.tsx";
 import { NoHousehold } from "./NoHousehold.tsx";
 import { PeopleNamesProvider } from "./people.tsx";
-import type { ShownNames } from "./people.tsx";
 import { Periods } from "./periods/Periods.tsx";
+import { adminHouseholdsQuery, inboxQuery, meQuery, peopleQuery, shownNames } from "./queries.ts";
 import { Receipts } from "./receipts/Receipts.tsx";
 import { Rules } from "./rules/Rules.tsx";
 import { MortgageSplitCard } from "./salaries/MortgageSplit.tsx";
@@ -73,60 +75,24 @@ const HOUSEHOLD_TAGLINE = "The household\u2019s shared account.";
 
 export function App(): React.ReactElement {
   const [tab, setTab] = useState<Tab>("home");
-  const [waiting, setWaiting] = useState<number | null>(null);
-  // Bumped when a paste is stored, which leaves rows waiting with no change of tab.
-  const [stored, setStored] = useState(0);
-  const [inNoHousehold, setInNoHousehold] = useState(false);
-  const [me, setMe] = useState<MeResponse | null>(null);
-  const [adminOnly, setAdminOnly] = useState(false);
-  const [names, setNames] = useState<ShownNames>({});
+  const asked = useQuery(meQuery);
+  const me = asked.data ?? null;
+  // An admin in no household, or nobody the ledger knows: only the admin list's
+  // FORBIDDEN says the second. Any other failure of either leaves the shell, as
+  // /api/me's own does (lg-22's gate 1, F2).
+  const refused = asked.error !== null && AppError.from(asked.error).code === "FORBIDDEN";
+  const admin = useQuery({ ...adminHouseholdsQuery, enabled: refused });
+  const adminOnly = refused && admin.data !== undefined;
+  const inNoHousehold =
+    refused && admin.error !== null && AppError.from(admin.error).code === "FORBIDDEN";
 
-  useEffect(() => {
-    const controller = new AbortController();
-    fetchMe(controller.signal)
-      .then(setMe)
-      .catch(async (error: unknown) => {
-        if (controller.signal.aborted || AppError.from(error).code !== "FORBIDDEN") return;
-        // An admin in no household, or nobody the ledger knows: only the admin
-        // list's FORBIDDEN says the second. Any other failure of it leaves the
-        // shell, as /api/me's own does (lg-22's gate 1, F2).
-        try {
-          await fetchAdminHouseholds(controller.signal);
-          if (!controller.signal.aborted) setAdminOnly(true);
-        } catch (adminError: unknown) {
-          if (!controller.signal.aborted && AppError.from(adminError).code === "FORBIDDEN") {
-            setInNoHousehold(true);
-          }
-        }
-      });
-    return () => controller.abort();
-  }, []);
-
-  // Asked again on every change of tab, and when a paste is stored (lg-54): a
-  // person who stays on the paste screen sees the new number at once.
   // A failure keeps the number shown before: the inbox says what went wrong when opened.
-  useEffect(() => {
-    const controller = new AbortController();
-    fetchInbox(controller.signal)
-      .then((rows) => setWaiting(rows.length))
-      .catch(() => undefined);
-    return () => controller.abort();
-    // `tab` and `stored` are triggers: the request reads neither, and asks again when either changes.
-    // oxlint-disable-next-line react/exhaustive-effect-dependencies
-  }, [tab, stored]);
+  const inbox = useQuery(inboxQuery);
+  const waiting = inbox.data?.length ?? null;
 
   // Only a member has books to ask; a failure keeps the map it had.
-  const member = me !== null;
-  useEffect(() => {
-    if (!member) return;
-    const controller = new AbortController();
-    fetchPeopleNames(controller.signal)
-      .then(setNames)
-      .catch(() => undefined);
-    return () => controller.abort();
-    // `tab` is a trigger: the request does not read it, and asks again when it changes.
-    // oxlint-disable-next-line react/exhaustive-effect-dependencies
-  }, [tab, member]);
+  const people = useQuery({ ...peopleQuery, select: shownNames, enabled: me !== null });
+  const names = people.data ?? {};
 
   if (adminOnly) {
     return (
@@ -211,13 +177,8 @@ export function App(): React.ReactElement {
           {tab === "period" && <Periods />}
           {tab === "history" && <History />}
           {tab === "receipt" && <Receipts />}
-          {tab === "paste" && (
-            <StatementPaste
-              onStored={() => setStored((count) => count + 1)}
-              onOpenInbox={() => setTab("inbox")}
-            />
-          )}
-          {tab === "inbox" && <Inbox onCount={setWaiting} />}
+          {tab === "paste" && <StatementPaste onOpenInbox={() => setTab("inbox")} />}
+          {tab === "inbox" && <Inbox />}
           {tab === "rules" && <Rules />}
           {tab === "spending" && <Spending />}
           {tab === "salaries" && (

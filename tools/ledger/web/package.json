@@ -13,6 +13,7 @@
   "dependencies": {
     "@ledger/books": "*",
     "@ledger/contract": "*",
+    "@tanstack/react-query": "^5.105.3",
     "@webtools/ui": "*",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"

@@ -9,16 +9,13 @@
  * charts. What is left in the bucket after it is each person's own money.
  */
 
-import { useCallback, useEffect, useId, useState } from "react";
+import { useId, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { formatCents } from "@ledger/books";
 import { AppError, MORTGAGE_STATES } from "@ledger/contract";
 import type { MortgageResponse, MortgageState } from "@ledger/contract";
-import { fetchMortgage, saveMortgage } from "../api/mortgage.ts";
-
-type Load =
-  | { state: "loading" }
-  | { state: "failed"; message: string }
-  | { state: "ready"; mortgage: MortgageResponse };
+import { failureOf, mortgageQuery } from "../queries.ts";
+import { useWrite } from "../writes.ts";
 
 const CHOICES: Record<MortgageState, string> = {
   live: "The mortgage is still being paid",
@@ -46,40 +43,34 @@ export function mortgageStanding(mortgage: MortgageResponse): string {
 
 export function MortgageSetting(): React.ReactElement {
   const id = useId();
-  const [load, setLoad] = useState<Load>({ state: "loading" });
+  const read = useQuery(mortgageQuery);
+  const saveMortgage = useWrite("saveMortgage");
   const [choice, setChoice] = useState<MortgageState>("live");
   const [endedOn, setEndedOn] = useState("");
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // Only setters, which React keeps the same, so `show` is built once and the
-  // load effect below can name it without running again.
-  const show = useCallback((mortgage: MortgageResponse): void => {
-    setLoad({ state: "ready", mortgage });
-    setChoice(mortgage.state);
-    setEndedOn(mortgage.endedOn ?? "");
-  }, []);
+  // Derived state, set during render: the form starts from each answer the cache
+  // holds, the first read's and the one a save puts there.
+  const [shown, setShown] = useState<MortgageResponse | null>(null);
+  if (read.data !== undefined && read.data !== shown) {
+    setShown(read.data);
+    setChoice(read.data.state);
+    setEndedOn(read.data.endedOn ?? "");
+  }
 
-  useEffect(() => {
-    const controller = new AbortController();
-    fetchMortgage(controller.signal)
-      .then(show)
-      .catch((error: unknown) => {
-        if (controller.signal.aborted) return;
-        setLoad({ state: "failed", message: AppError.from(error).message });
-      });
-    return () => controller.abort();
-  }, [show]);
-
-  if (load.state === "loading")
-    return <p className="muted">Reading what is said of the mortgage…</p>;
-  if (load.state === "failed") {
+  const failure = failureOf(read);
+  if (failure !== null) {
     return (
       <p className="bad" role="alert">
-        {load.message}
+        {failure}
       </p>
     );
   }
+  if (read.data === undefined) {
+    return <p className="muted">Reading what is said of the mortgage…</p>;
+  }
+  const load = { mortgage: read.data };
 
   const submit = (event: React.SyntheticEvent): void => {
     event.preventDefault();
@@ -90,8 +81,8 @@ export function MortgageSetting(): React.ReactElement {
     setProblem(null);
     setBusy(true);
     const request = choice === "ended" ? { state: choice, endedOn } : { state: choice };
+    // The answer goes into the cache, and the form is shown from it.
     saveMortgage(request)
-      .then(show)
       .catch((error: unknown) => setProblem(AppError.from(error).message))
       .finally(() => setBusy(false));
   };

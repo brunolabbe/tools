@@ -7,7 +7,6 @@ import { ROUTES } from "@ledger/contract";
 import type {
   ClosePeriodRequest,
   ClosedPeriod,
-  MeResponse,
   OpenPeriodResponse,
   PeriodLine,
   PeriodLineDraft,
@@ -20,11 +19,6 @@ import { requestJson } from "./client.ts";
 
 function withId(route: string, id: number): string {
   return route.replace(":id", String(id));
-}
-
-/** Who is signed in: the person a new line is paid by, unless they choose another. */
-export async function fetchMe(signal?: AbortSignal): Promise<string> {
-  return (await requestJson<MeResponse>(ROUTES.me, { signal })).person.id;
 }
 
 /**

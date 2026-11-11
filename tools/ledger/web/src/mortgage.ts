@@ -11,11 +11,11 @@
  * for themselves when the API is not answering.
  */
 
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { formatCents } from "@ledger/books";
 import type { MortgageResponse, StatsRange } from "@ledger/contract";
-import { fetchMortgage } from "./api/mortgage.ts";
 import { shownName } from "./people.tsx";
+import { mortgageQuery } from "./queries.ts";
 import type { ShownNames } from "./people.tsx";
 
 export type MortgageLoad =
@@ -23,23 +23,16 @@ export type MortgageLoad =
   | { state: "ready"; mortgage: MortgageResponse | null };
 
 /**
- * The mortgage as the household has said it, read once when a screen opens: the form
- * that changes it is on another tab. A failed read leaves `mortgage` null.
+ * The mortgage as the household has said it, from the cache: the form that changes
+ * it is on another tab, and marks it stale when it does. A failed read leaves
+ * `mortgage` null.
  */
 export function useMortgage(): MortgageLoad {
-  const [load, setLoad] = useState<MortgageLoad>({ state: "loading" });
-  useEffect(() => {
-    const controller = new AbortController();
-    fetchMortgage(controller.signal)
-      .then((mortgage) => setLoad({ state: "ready", mortgage }))
-      .catch(() => {
-        if (controller.signal.aborted) return;
-        // Not a state of its own: the screens read as they always did.
-        setLoad({ state: "ready", mortgage: null });
-      });
-    return () => controller.abort();
-  }, []);
-  return load;
+  const read = useQuery(mortgageQuery);
+  if (read.data !== undefined) return { state: "ready", mortgage: read.data };
+  // Not a state of its own: the screens read as they always did.
+  if (read.error !== null) return { state: "ready", mortgage: null };
+  return { state: "loading" };
 }
 
 /** The range lies wholly after the close: it starts on a later day. */

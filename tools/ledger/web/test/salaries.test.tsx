@@ -7,15 +7,17 @@
  */
 
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { AppError } from "@ledger/contract";
 import type { Ratio, Salary } from "@ledger/contract";
-import { fetchPeople } from "../src/api/rules.ts";
+import { fetchPeople } from "../src/api/people.ts";
 import { confirmRatio, enterSalaries, fetchRatios, fetchSalaries } from "../src/api/salaries.ts";
 import { PeopleNamesProvider } from "../src/people.tsx";
 import { Salaries } from "../src/salaries/Salaries.tsx";
+import { peopleAnswer } from "./people-answer.ts";
+import { renderWithClient } from "./render-with-client.tsx";
 
-vi.mock("../src/api/rules.ts", () => ({ fetchPeople: vi.fn() }));
+vi.mock("../src/api/people.ts", () => ({ fetchPeople: vi.fn() }));
 vi.mock("../src/api/salaries.ts", () => ({
   fetchSalaries: vi.fn(),
   fetchRatios: vi.fn(),
@@ -52,7 +54,7 @@ const RATIO: Ratio = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(fetchPeople).mockResolvedValue(["alex", "sam"]);
+  vi.mocked(fetchPeople).mockResolvedValue(peopleAnswer(["alex", "sam"]));
   vi.mocked(fetchSalaries).mockResolvedValue([
     salary(1, "alex", 2025, 6_000_000),
     salary(2, "sam", 2025, 4_000_000),
@@ -71,7 +73,7 @@ function field(label: string): HTMLInputElement {
 }
 
 test("shows the ratio in effect, and fills in a year's salaries on record to correct from", async () => {
-  render(<Salaries />);
+  renderWithClient(<Salaries />);
 
   expect(
     await screen.findByText("Ratio in effect: alex 60.0000 % · sam 40.0000 %, since 2025-01-01."),
@@ -93,7 +95,7 @@ test("saving a year's salaries proposes the ratio, and confirming sends its reco
     },
   });
   confirmed.mockResolvedValue({ ...RATIO, id: 2, effectiveFrom: "2027-01-01" });
-  render(<Salaries />);
+  renderWithClient(<Salaries />);
   await screen.findByLabelText("Year");
 
   fireEvent.change(field("Year"), { target: { value: "2026" } });
@@ -101,13 +103,16 @@ test("saving a year's salaries proposes the ratio, and confirming sends its reco
   fireEvent.change(field("sam’s salary"), { target: { value: "40000" } });
   fireEvent.click(screen.getByRole("button", { name: "Save salaries" }));
 
-  expect(entered).toHaveBeenCalledWith({
-    year: 2026,
-    salaries: [
-      { personId: "alex", amountCents: 6_123_456 },
-      { personId: "sam", amountCents: 4_000_000 },
-    ],
-  });
+  // A mutation sends on the next tick (lg-98), so the request is waited for.
+  await waitFor(() =>
+    expect(entered).toHaveBeenCalledWith({
+      year: 2026,
+      salaries: [
+        { personId: "alex", amountCents: 6_123_456 },
+        { personId: "sam", amountCents: 4_000_000 },
+      ],
+    }),
+  );
   expect(await screen.findByText("alex 60.4877 % · sam 39.5123 %")).toBeTruthy();
   // Nothing is confirmed by saving: the person chooses the day, then confirms.
   expect(confirmed).not.toHaveBeenCalled();
@@ -123,7 +128,7 @@ test("saving a year's salaries proposes the ratio, and confirming sends its reco
 });
 
 test("an amount that is not one is refused before anything is sent", async () => {
-  render(<Salaries />);
+  renderWithClient(<Salaries />);
   await screen.findByLabelText("Year");
 
   fireEvent.change(field("alex’s salary"), { target: { value: "lots" } });
@@ -148,7 +153,7 @@ test("a salary corrected under the proposal says what the server said", async ()
   confirmed.mockRejectedValue(
     new AppError("SALARY_NOT_FOUND", "That salary is not the one on record."),
   );
-  render(<Salaries />);
+  renderWithClient(<Salaries />);
   await screen.findByLabelText("Year");
   fireEvent.change(field("alex’s salary"), { target: { value: "60000" } });
   fireEvent.change(field("sam’s salary"), { target: { value: "40000" } });
@@ -161,7 +166,7 @@ test("a salary corrected under the proposal says what the server said", async ()
 });
 
 test("a blank salary leaves the person out of the entry, and the screen says so (lg-29)", async () => {
-  vi.mocked(fetchPeople).mockResolvedValue(["alex", "casey", "sam"]);
+  vi.mocked(fetchPeople).mockResolvedValue(peopleAnswer(["alex", "casey", "sam"]));
   entered.mockResolvedValue({
     salaries: [salary(3, "alex", 2026, 6_000_000), salary(4, "casey", 2026, 4_000_000)],
     proposal: {
@@ -172,7 +177,7 @@ test("a blank salary leaves the person out of the entry, and the screen says so 
       ],
     },
   });
-  render(<Salaries />);
+  renderWithClient(<Salaries />);
   await screen.findByLabelText("Year");
   expect(
     screen.getByText(
@@ -199,8 +204,8 @@ test("a blank salary leaves the person out of the entry, and the screen says so 
 });
 
 test("text that is not an amount is refused even beside a blank, and nothing is sent (lg-29)", async () => {
-  vi.mocked(fetchPeople).mockResolvedValue(["alex", "casey", "sam"]);
-  render(<Salaries />);
+  vi.mocked(fetchPeople).mockResolvedValue(peopleAnswer(["alex", "casey", "sam"]));
+  renderWithClient(<Salaries />);
   await screen.findByLabelText("Year");
 
   fireEvent.change(field("alex’s salary"), { target: { value: "60000" } });
@@ -215,8 +220,8 @@ test("text that is not an amount is refused even beside a blank, and nothing is 
 });
 
 test("fewer than two salaries is refused, and nothing is sent (lg-29)", async () => {
-  vi.mocked(fetchPeople).mockResolvedValue(["alex", "casey", "sam"]);
-  render(<Salaries />);
+  vi.mocked(fetchPeople).mockResolvedValue(peopleAnswer(["alex", "casey", "sam"]));
+  renderWithClient(<Salaries />);
   await screen.findByLabelText("Year");
 
   fireEvent.change(field("alex’s salary"), { target: { value: "60000" } });
@@ -241,7 +246,7 @@ test("prints a person's shown name after a rename, never the id, and sends the i
       ],
     },
   });
-  render(
+  renderWithClient(
     <PeopleNamesProvider value={{ alex: "Alex", sam: "sam" }}>
       <Salaries />
     </PeopleNamesProvider>,
@@ -270,7 +275,7 @@ test("prints a person's shown name after a rename, never the id, and sends the i
 // lg-35: casey retired at a close is not asked for, and while the ratio in
 // effect names them the screen says a ratio without them is needed.
 test("asks only for the people in, and says a ratio without a retired person is needed", async () => {
-  vi.mocked(fetchPeople).mockResolvedValue(["alex", "sam"]);
+  vi.mocked(fetchPeople).mockResolvedValue(peopleAnswer(["alex", "sam"]));
   const withCasey: Ratio = {
     ...RATIO,
     shares: [
@@ -284,7 +289,7 @@ test("asks only for the people in, and says a ratio without a retired person is 
     ratios: [withCasey],
     inEffect: withCasey,
   });
-  render(
+  renderWithClient(
     <PeopleNamesProvider value={{ alex: "alex", casey: "Casey", sam: "sam" }}>
       <Salaries />
     </PeopleNamesProvider>,
@@ -298,7 +303,7 @@ test("asks only for the people in, and says a ratio without a retired person is 
 });
 
 test("says nothing of a retirement while everyone the ratio names is in", async () => {
-  render(<Salaries />);
+  renderWithClient(<Salaries />);
 
   await screen.findByText("Ratio in effect: alex 60.0000 % · sam 40.0000 %, since 2025-01-01.");
   expect(screen.queryByRole("status")).toBeNull();

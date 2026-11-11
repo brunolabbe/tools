@@ -7,13 +7,14 @@
  */
 
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { AppError } from "@ledger/contract";
 import type { HouseholdResponse } from "@ledger/contract";
 import { addHouseholdMember, fetchHousehold, renameHousehold } from "../src/api/households.ts";
 import { fetchMortgage } from "../src/api/mortgage.ts";
 import { Household } from "../src/household/Household.tsx";
 import { LIVE } from "./mortgage-fixtures.ts";
+import { renderWithClient } from "./render-with-client.tsx";
 
 vi.mock("../src/api/mortgage.ts", () => ({ fetchMortgage: vi.fn(), saveMortgage: vi.fn() }));
 vi.mock("../src/api/households.ts", () => ({
@@ -55,7 +56,7 @@ beforeEach(() => {
 afterEach(cleanup);
 
 test("shows the household's members and its history, newest first, with who made each change", async () => {
-  render(<Household id="home" />);
+  renderWithClient(<Household id="home" />);
 
   expect(await screen.findByRole("heading", { name: "The test household" })).toBeTruthy();
   expect(vi.mocked(fetchHousehold).mock.calls[0]?.[0]).toBe("home");
@@ -78,7 +79,7 @@ test("adds a member, tells them the address must be admitted on Access, and show
     person: "sam",
     name: "sam",
   });
-  render(<Household id="home" />);
+  renderWithClient(<Household id="home" />);
   await screen.findByRole("heading", { name: "The test household" });
   expect(screen.getByText(/must also be admitted on the ledger.s Access policy/u)).toBeTruthy();
 
@@ -101,7 +102,7 @@ test("adds a member, tells them the address must be admitted on Access, and show
 
 test("puts the server's one sentence in front of a refused address", async () => {
   vi.mocked(addHouseholdMember).mockRejectedValue(new AppError("MEMBER_NOT_ADDED"));
-  render(<Household id="home" />);
+  renderWithClient(<Household id="home" />);
   await screen.findByRole("heading", { name: "The test household" });
 
   fireEvent.change(screen.getByLabelText("Email"), { target: { value: "kim@away.test" } });
@@ -113,7 +114,7 @@ test("puts the server's one sentence in front of a refused address", async () =>
 });
 
 test("offers no way to remove anyone", async () => {
-  render(<Household id="home" />);
+  renderWithClient(<Household id="home" />);
   await screen.findByRole("heading", { name: "The test household" });
   await screen.findByRole("heading", { name: "Mortgage" });
 
@@ -151,7 +152,7 @@ test("shows a renamed person by name, and the rename as its own line", async () 
     person: "alex",
     name: "Alex",
   });
-  render(<Household id="home" />);
+  renderWithClient(<Household id="home" />);
   await screen.findByRole("heading", { name: "The test household" });
 
   const [members, history] = screen.getAllByRole("list");
@@ -184,7 +185,7 @@ test("shows a renamed person by name, and the rename as its own line", async () 
 // lg-71, Build 7: the member form's address field says Email, and no field on the
 // household page is labelled with the word address.
 test("labels no address field Address", async () => {
-  render(<Household id="home" />);
+  renderWithClient(<Household id="home" />);
   await screen.findByRole("heading", { name: "The test household" });
 
   const labels = [...document.querySelectorAll("label")].map((label) => label.textContent ?? "");
@@ -217,7 +218,7 @@ test("lists a person without an email by name with no email, and their add as a 
       },
     ],
   });
-  render(<Household id="home" />);
+  renderWithClient(<Household id="home" />);
   await screen.findByRole("heading", { name: "The test household" });
 
   const [members, history] = screen.getAllByRole("list");
@@ -231,7 +232,7 @@ test("lists a person without an email by name with no email, and their add as a 
 
 test("the Email field may be left empty: a name alone adds a person who cannot sign in", async () => {
   vi.mocked(addHouseholdMember).mockResolvedValue({ address: null, person: ROBIN, name: "Robin" });
-  render(<Household id="home" />);
+  renderWithClient(<Household id="home" />);
   await screen.findByRole("heading", { name: "The test household" });
   expect(
     screen.getByText(
@@ -250,7 +251,7 @@ test("the Email field may be left empty: a name alone adds a person who cannot s
 });
 
 test("with neither an email nor a name, nothing is sent", async () => {
-  render(<Household id="home" />);
+  renderWithClient(<Household id="home" />);
   await screen.findByRole("heading", { name: "The test household" });
 
   fireEvent.change(screen.getByLabelText("Person"), { target: { value: " " } });
@@ -273,7 +274,7 @@ function renameForm(): { field: HTMLInputElement; form: HTMLFormElement } {
 // lg-77: the household's name is the page's heading, with a Rename beside it.
 test("titles the page by the household's name, and a member renames it there", async () => {
   vi.mocked(renameHousehold).mockResolvedValue({ id: "home", name: "Our place" });
-  render(<Household id="home" />);
+  renderWithClient(<Household id="home" />);
   await screen.findByRole("heading", { name: "The test household", level: 2 });
   expect(screen.queryByRole("heading", { name: "Household" })).toBeNull();
 
@@ -309,7 +310,7 @@ test("a refused rename keeps the field open with the server's sentence, and an e
   vi.mocked(renameHousehold).mockRejectedValue(
     new AppError("BAD_REQUEST", "Send the name to call the household by, 1 to 80 characters."),
   );
-  render(<Household id="home" />);
+  renderWithClient(<Household id="home" />);
   await screen.findByRole("heading", { name: "The test household" });
 
   fireEvent.click(screen.getByRole("button", { name: "Rename The test household" }));

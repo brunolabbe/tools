@@ -9,14 +9,13 @@
  * rows on each read.
  */
 
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { formatCents } from "@ledger/books";
-import { AppError } from "@ledger/contract";
 import type { BucketsResponse } from "@ledger/contract";
-import { fetchBuckets } from "../api/buckets.ts";
 import { endedSentence, showsHomeSection, useMortgage } from "../mortgage.ts";
 import { inShownOrder, shownName, usePeopleNames } from "../people.tsx";
 import type { ShownNames } from "../people.tsx";
+import { bucketsQuery, failureOf } from "../queries.ts";
 
 type Load =
   | { state: "loading" }
@@ -40,20 +39,16 @@ export function leadSentence(mortgage: BucketsResponse["mortgage"], names: Shown
 }
 
 export function Home(): React.ReactElement {
-  const [load, setLoad] = useState<Load>({ state: "loading" });
+  const read = useQuery(bucketsQuery);
   const names = usePeopleNames();
   const said = useMortgage();
-
-  useEffect(() => {
-    const controller = new AbortController();
-    fetchBuckets(controller.signal)
-      .then((buckets) => setLoad({ state: "ready", buckets }))
-      .catch((error: unknown) => {
-        if (controller.signal.aborted) return;
-        setLoad({ state: "failed", message: AppError.from(error).message });
-      });
-    return () => controller.abort();
-  }, []);
+  const failure = failureOf(read);
+  const load: Load =
+    failure !== null
+      ? { state: "failed", message: failure }
+      : read.data === undefined
+        ? { state: "loading" }
+        : { state: "ready", buckets: read.data };
 
   if (load.state === "loading" || said.state === "loading") {
     return <p className="muted">Adding up the buckets…</p>;

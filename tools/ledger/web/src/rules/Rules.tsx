@@ -8,20 +8,16 @@
  * the list is reloaded rather than the edit forced through.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppError } from "@ledger/contract";
-import type { Rule, RuleDraft, SpendingCategory } from "@ledger/contract";
-import { createRule, editRule, fetchPeople, fetchRules, retireRule } from "../api/rules.ts";
-import { fetchSpendingCategories } from "../api/spending.ts";
+import type { Rule, RuleDraft } from "@ledger/contract";
 import { BUCKET_LABELS, answerLabel, criteriaLabel } from "../labels.ts";
 import { spendingNames } from "../spending/Picker.tsx";
 import { RuleForm } from "./RuleForm.tsx";
 import { usePeopleNames } from "../people.tsx";
-
-type Load =
-  | { state: "loading" }
-  | { state: "failed"; message: string }
-  | { state: "ready"; rules: Rule[]; people: string[]; categories: SpendingCategory[] };
+import { categoriesQuery, failureOf, peopleIn, peopleQuery, rulesQuery } from "../queries.ts";
+import { RULES, invalidate, useWrite } from "../writes.ts";
 
 /** Which form is open: a new rule, or the edit of one. */
 type Open = { kind: "none" } | { kind: "new" } | { kind: "edit"; id: number };
@@ -37,47 +33,35 @@ const BLANK = {
 
 export function Rules(): React.ReactElement {
   const shown = usePeopleNames();
-  const [load, setLoad] = useState<Load>({ state: "loading" });
+  const client = useQueryClient();
   const [open, setOpen] = useState<Open>({ kind: "none" });
   const [problem, setProblem] = useState<string | null>(null);
+  const read = useQuery(rulesQuery);
+  const asked = useQuery({ ...peopleQuery, select: peopleIn });
+  const listed = useQuery(categoriesQuery);
+  const createRule = useWrite("createRule");
+  const editRule = useWrite("editRule");
+  const retireRule = useWrite("retireRule");
 
-  const refresh = useCallback(async (signal?: AbortSignal): Promise<void> => {
-    try {
-      const [rules, people, categories] = await Promise.all([
-        fetchRules(signal),
-        fetchPeople(signal),
-        fetchSpendingCategories(signal),
-      ]);
-      setLoad({ state: "ready", rules, people, categories });
-    } catch (error: unknown) {
-      if (signal?.aborted === true) return;
-      setLoad({ state: "failed", message: AppError.from(error).message });
-    }
-  }, []);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    // oxlint-disable-next-line react/set-state-in-effect -- `refresh` sets state only after its request settles; the rule cannot see through the await.
-    void refresh(controller.signal);
-    return () => controller.abort();
-  }, [refresh]);
-
-  if (load.state === "loading") return <p className="muted">Loading the rules…</p>;
-  if (load.state === "failed") {
+  const failure = failureOf(read, asked, listed);
+  if (failure !== null) {
     return (
       <p className="bad" role="alert">
-        {load.message}
+        {failure}
       </p>
     );
   }
+  if (read.data === undefined || asked.data === undefined || listed.data === undefined) {
+    return <p className="muted">Loading the rules…</p>;
+  }
 
-  const { rules, people, categories } = load;
+  const [rules, people, categories] = [read.data, asked.data, listed.data];
   const names = spendingNames(categories);
 
   /**
-   * Runs a change, then shows the list as it now is — also when the change was
-   * refused, which is how the other person's edit shows up. A refusal is the
-   * page's to say, so the form that sent it does not say it again.
+   * Runs a change, which shows the list as it now is (`writes.ts`) — also when the
+   * change was refused, which is how the other person's edit shows up. A refusal
+   * is the page's to say, so the form that sent it does not say it again.
    */
   const change = async (run: () => Promise<unknown>): Promise<void> => {
     setProblem(null);
@@ -86,8 +70,8 @@ export function Rules(): React.ReactElement {
       setOpen({ kind: "none" });
     } catch (error: unknown) {
       setProblem(AppError.from(error).message);
+      await invalidate(client, RULES);
     }
-    await refresh();
   };
 
   const retire = (rule: Rule): void => {

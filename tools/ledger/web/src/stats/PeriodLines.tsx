@@ -11,17 +11,16 @@
  * from the first page without a reset of its own.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useState } from "react";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatCents } from "@ledger/books";
 import { AppError } from "@ledger/contract";
 import type { PeriodLine, SpendingCategory } from "@ledger/contract";
-import { correctLine } from "../api/periods.ts";
 import { fetchSpendingLines } from "../api/spending.ts";
 import { SpendingCategoryPicker } from "../spending/Picker.tsx";
 import { shownName, usePeopleNames } from "../people.tsx";
-
-/** How many lines one tap of "Show more" brings. */
-const PAGE = 25;
+import { PAGE, failureOf, rereadFailureOf, spendingLinesQuery } from "../queries.ts";
+import { useWrite } from "../writes.ts";
 
 type Load =
   | { state: "loading" }
@@ -35,8 +34,6 @@ export interface PeriodLinesProps {
   /** One category by id, `"none"` for the uncategorised, `null` for all. */
   filter: number | "none" | null;
   categories: readonly SpendingCategory[];
-  /** Called after a line was corrected, so the chart can be read again. */
-  onChanged: () => void;
 }
 
 /** What a line is called to a person and to a screen reader: its own words, or its day. */
@@ -49,38 +46,27 @@ export function PeriodLines({
   end,
   filter,
   categories,
-  onChanged,
 }: PeriodLinesProps): React.ReactElement {
   const names = usePeopleNames();
-  const [load, setLoad] = useState<Load>({ state: "loading" });
-  const [version, setVersion] = useState(0);
+  const client = useQueryClient();
   const [problem, setProblem] = useState<string | null>(null);
   const [more, setMore] = useState(false);
-  // How many lines the next read from the top should bring: a page, or everything
-  // already shown, so a line written to does not send the person back to the first page.
-  const wanted = useRef(PAGE);
+  // A read from the top asks for as many lines as are shown, so a line written to
+  // does not send the person back to the first page (`spendingLinesQuery`).
+  const asked = spendingLinesQuery({ from: start, to: end, category: filter });
+  // Mounted per filter, so a previous answer is only ever this filter's, for an earlier last day.
+  const read = useQuery({ ...asked, placeholderData: keepPreviousData });
+  const correctLine = useWrite("correctLine");
+  const failure = failureOf(read);
+  const load: Load =
+    failure !== null
+      ? { state: "failed", message: failure }
+      : read.data === undefined
+        ? { state: "loading" }
+        : { state: "ready", lines: read.data.lines, total: read.data.total };
+  const reread = rereadFailureOf(read);
 
-  useEffect(() => {
-    const controller = new AbortController();
-    void (async (): Promise<void> => {
-      try {
-        const answer = await fetchSpendingLines(
-          { from: start, to: end, category: filter, offset: 0, limit: wanted.current },
-          controller.signal,
-        );
-        setLoad({ state: "ready", lines: answer.lines, total: answer.total });
-      } catch (error: unknown) {
-        if (!controller.signal.aborted) {
-          setLoad({ state: "failed", message: AppError.from(error).message });
-        }
-      }
-    })();
-    return () => controller.abort();
-    // `version` is a trigger: a line written elsewhere bumps it, and the page is asked for again.
-    // oxlint-disable-next-line react/exhaustive-effect-dependencies
-  }, [start, end, filter, version]);
-
-  const showMore = useCallback(async (): Promise<void> => {
+  const showMore = async (): Promise<void> => {
     if (load.state !== "ready") return;
     setMore(true);
     setProblem(null);
@@ -92,14 +78,16 @@ export function PeriodLines({
         offset: load.lines.length,
         limit: PAGE,
       });
-      wanted.current = load.lines.length + answer.lines.length;
-      setLoad({ state: "ready", lines: [...load.lines, ...answer.lines], total: answer.total });
+      client.setQueryData(asked.queryKey, {
+        lines: [...load.lines, ...answer.lines],
+        total: answer.total,
+      });
     } catch (error: unknown) {
       setProblem(AppError.from(error).message);
     } finally {
       setMore(false);
     }
-  }, [load, start, end, filter]);
+  };
 
   const setSpending = async (
     line: PeriodLine,
@@ -117,10 +105,7 @@ export function PeriodLines({
         chargedTo: line.chargedTo,
       });
       // Read again rather than patch: the line has a new id, and under a category
-      // filter it may no longer belong.
-      wanted.current = Math.max(PAGE, load.state === "ready" ? load.lines.length : PAGE);
-      setVersion((current) => current + 1);
-      onChanged();
+      // filter it may no longer belong. The write marks the lines and the chart stale.
     } catch (error: unknown) {
       setProblem(AppError.from(error).message);
     }
@@ -138,6 +123,11 @@ export function PeriodLines({
       {load.state === "failed" && (
         <p className="bad" role="alert">
           {load.message}
+        </p>
+      )}
+      {reread !== null && (
+        <p className="bad" role="alert">
+          {reread}
         </p>
       )}
       {load.state === "ready" && (

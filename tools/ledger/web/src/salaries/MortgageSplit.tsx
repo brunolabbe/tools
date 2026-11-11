@@ -10,24 +10,15 @@
  * which the API checks; the form offers the people in from the open period on.
  */
 
-import { useCallback, useEffect, useId, useState } from "react";
+import { useId, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { AppError, MORTGAGE_SPLIT_MODES } from "@ledger/contract";
-import type {
-  MortgageSplit,
-  MortgageSplitMode,
-  MortgageSplitRequest,
-  MortgageSplitsResponse,
-} from "@ledger/contract";
-import { fetchPeople } from "../api/rules.ts";
-import { fetchMortgageSplits, fileMortgageSplit } from "../api/mortgage-splits.ts";
+import type { MortgageSplit, MortgageSplitMode, MortgageSplitRequest } from "@ledger/contract";
 import { SPLIT_MODE_LABELS, formatShare, parseShare, partsLabel } from "../labels.ts";
 import { shownName, usePeopleNames } from "../people.tsx";
 import type { ShownNames } from "../people.tsx";
-
-type Load =
-  | { state: "loading" }
-  | { state: "failed"; message: string }
-  | { state: "ready"; people: string[]; splits: MortgageSplitsResponse };
+import { failureOf, mortgageSplitsQuery, peopleIn, peopleQuery } from "../queries.ts";
+import { useWrite } from "../writes.ts";
 
 /** One record, in words. */
 export function recordLabel(split: MortgageSplit, names: ShownNames): string {
@@ -39,46 +30,36 @@ export function recordLabel(split: MortgageSplit, names: ShownNames): string {
 export function MortgageSplitCard(): React.ReactElement {
   const id = useId();
   const names = usePeopleNames();
-  const [load, setLoad] = useState<Load>({ state: "loading" });
   const [mode, setMode] = useState<MortgageSplitMode>("equal");
   const [effectiveFrom, setEffectiveFrom] = useState("");
   const [typed, setTyped] = useState<Record<string, string>>({});
   const [problem, setProblem] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const asked = useQuery({ ...peopleQuery, select: peopleIn });
+  const filed = useQuery(mortgageSplitsQuery);
+  const fileMortgageSplit = useWrite("fileMortgageSplit");
 
-  const refresh = useCallback(async (signal?: AbortSignal): Promise<void> => {
-    try {
-      const [people, splits] = await Promise.all([
-        fetchPeople(signal),
-        fetchMortgageSplits(signal),
-      ]);
-      setLoad({ state: "ready", people, splits });
-      setEffectiveFrom((held) => (held === "" ? splits.asOf : held));
-    } catch (error: unknown) {
-      if (signal?.aborted !== true) {
-        setLoad({ state: "failed", message: AppError.from(error).message });
-      }
-    }
-  }, []);
+  // Derived state, set during render: the day starts as the API's today, once it is known.
+  const [dated, setDated] = useState(false);
+  if (!dated && filed.data !== undefined) {
+    setDated(true);
+    setEffectiveFrom((held) => (held === "" ? filed.data.asOf : held));
+  }
 
-  useEffect(() => {
-    const controller = new AbortController();
-    // oxlint-disable-next-line react/set-state-in-effect -- `refresh` sets state only after its request settles; the rule cannot see through the await.
-    void refresh(controller.signal);
-    return () => controller.abort();
-  }, [refresh]);
-
-  if (load.state === "loading") return <p className="muted">Reading the mortgage split…</p>;
-  if (load.state === "failed") {
+  const failure = failureOf(asked, filed);
+  if (failure !== null) {
     return (
       <p className="bad" role="alert">
-        {load.message}
+        {failure}
       </p>
     );
   }
+  if (asked.data === undefined || filed.data === undefined) {
+    return <p className="muted">Reading the mortgage split…</p>;
+  }
 
-  const { people, splits } = load;
+  const [people, splits] = [asked.data, filed.data];
 
   const submit = (event: React.SyntheticEvent): void => {
     event.preventDefault();
@@ -113,7 +94,6 @@ export function MortgageSplitCard(): React.ReactElement {
       try {
         const split = await fileMortgageSplit(request);
         setNotice(`Split filed, in effect from ${split.effectiveFrom}.`);
-        await refresh();
       } catch (error: unknown) {
         setProblem(AppError.from(error).message);
       } finally {

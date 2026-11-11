@@ -37,8 +37,9 @@ import type {
   DescribeWorkbookResponse,
   WorkbookSampleRow,
 } from "@ledger/contract";
-import { base64Of, confirmWorkbook, describeWorkbook } from "../api/workbook.ts";
+import { base64Of } from "../api/workbook.ts";
 import { BUCKET_LABELS } from "../labels.ts";
+import { useWrite } from "../writes.ts";
 import { NameAnswers, answersOf, initialChoices } from "./NameAnswers.tsx";
 import type { NameChoice } from "./NameAnswers.tsx";
 
@@ -85,6 +86,9 @@ function SampleRows(props: { rows: readonly WorkbookSampleRow[]; label: string }
 
 export function ImportWorkbook(): React.ReactElement {
   const id = useId();
+  const describeWorkbook = useWrite("describeWorkbook");
+  // An import can store anything, so it marks every answer stale (lg-98).
+  const confirmWorkbook = useWrite("confirmWorkbook");
   const [stage, setStage] = useState<Stage>({ step: "choose" });
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);

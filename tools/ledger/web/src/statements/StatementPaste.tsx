@@ -30,7 +30,7 @@ import { formatCents, parseStatement } from "@ledger/books";
 import type { StatementRow } from "@ledger/books";
 import { AppError } from "@ledger/contract";
 import type { ImportStatementReport } from "@ledger/contract";
-import { importStatement } from "../api/statements.ts";
+import { useWrite } from "../writes.ts";
 
 type Step =
   | { kind: "editing" }
@@ -39,13 +39,13 @@ type Step =
   | { kind: "stored"; report: ImportStatementReport };
 
 export interface StatementPasteProps {
-  /** Called once a paste is stored, so the shell can ask for the inbox's count again. */
-  onStored: () => void;
   /** Takes the person to the inbox tab. */
   onOpenInbox: () => void;
 }
 
-export function StatementPaste({ onStored, onOpenInbox }: StatementPasteProps): React.ReactElement {
+export function StatementPaste({ onOpenInbox }: StatementPasteProps): React.ReactElement {
+  // The report shows once the paste is stored; the inbox's count moves when its read lands (lg-54).
+  const importStatement = useWrite("importStatement", { wait: false });
   const [text, setText] = useState("");
   const [step, setStep] = useState<Step>({ kind: "editing" });
   const [problem, setProblem] = useState<string | null>(null);
@@ -71,8 +71,6 @@ export function StatementPaste({ onStored, onOpenInbox }: StatementPasteProps): 
     setStep({ kind: "storing", rows });
     importStatement(text)
       .then((report) => setStep({ kind: "stored", report }))
-      // After the store answered, so the shell asks for a count that includes it.
-      .then(onStored)
       .catch((error: unknown) => {
         // The API's own sentence: it names the row, or the unexplained amount.
         setProblem(AppError.from(error).message);

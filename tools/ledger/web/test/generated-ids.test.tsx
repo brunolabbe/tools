@@ -19,7 +19,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import type {
   AdminHousehold,
   AutoFiledRow,
@@ -50,10 +50,11 @@ import { fetchAutoFiled, fetchInbox } from "../src/api/inbox.ts";
 import { fetchMe as fetchMeResponse } from "../src/api/me.ts";
 import { fetchMortgage } from "../src/api/mortgage.ts";
 import { fetchMortgageSplits } from "../src/api/mortgage-splits.ts";
-import { fetchMe, fetchOpenPeriod, fetchPeriods, fetchRecurring } from "../src/api/periods.ts";
+import { fetchPeople } from "../src/api/people.ts";
+import { fetchOpenPeriod, fetchPeriods, fetchRecurring } from "../src/api/periods.ts";
 import { uploadReceipt } from "../src/api/receipts.ts";
 import { fetchRows } from "../src/api/rows.ts";
-import { fetchPeople, fetchRules } from "../src/api/rules.ts";
+import { fetchRules } from "../src/api/rules.ts";
 import { fetchRatios, fetchSalaries } from "../src/api/salaries.ts";
 import { fetchSpendingCategories, fetchSpendingLines } from "../src/api/spending.ts";
 import {
@@ -82,6 +83,8 @@ import {
 } from "../src/stats/Cards.tsx";
 import { PeriodLines } from "../src/stats/PeriodLines.tsx";
 import { EQUAL_SPLIT, LIVE } from "./mortgage-fixtures.ts";
+import { peopleAnswer } from "./people-answer.ts";
+import { renderWithClient } from "./render-with-client.tsx";
 
 vi.mock("../src/api/buckets.ts");
 vi.mock("../src/api/households.ts");
@@ -89,6 +92,7 @@ vi.mock("../src/api/inbox.ts");
 vi.mock("../src/api/me.ts");
 vi.mock("../src/api/mortgage.ts");
 vi.mock("../src/api/mortgage-splits.ts");
+vi.mock("../src/api/people.ts");
 vi.mock("../src/api/periods.ts");
 vi.mock("../src/api/receipts.ts");
 vi.mock("../src/api/rows.ts");
@@ -171,7 +175,7 @@ const RULE: Rule = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(fetchPeople).mockResolvedValue(generated(["alex", "sam"]));
+  vi.mocked(fetchPeople).mockResolvedValue(peopleAnswer(generated(["alex", "sam"])));
   vi.mocked(fetchSpendingCategories).mockResolvedValue(CATEGORIES);
   vi.mocked(fetchMortgage).mockResolvedValue(generated(LIVE));
 });
@@ -201,7 +205,7 @@ describe("no generated id reaches a screen (lg-76)", () => {
       unclassified: 0,
     };
     vi.mocked(fetchBuckets).mockResolvedValue(generated(figures));
-    render(withNames(<Home />));
+    renderWithClient(withNames(<Home />));
 
     await showsNamesOnly("Alex has paid 99.99 $ more.");
   });
@@ -221,7 +225,7 @@ describe("no generated id reaches a screen (lg-76)", () => {
     vi.mocked(fetchRows).mockResolvedValue(generated({ rows: [row], total: 1 }));
     // lg-95: History reads the closed periods to say when a row is in one.
     vi.mocked(fetchPeriods).mockResolvedValue([]);
-    render(withNames(<History />));
+    renderWithClient(withNames(<History />));
 
     await showsNamesOnly("Alex · Mortgage");
   });
@@ -271,7 +275,7 @@ describe("no generated id reaches a screen (lg-76)", () => {
     };
     vi.mocked(fetchInbox).mockResolvedValue(generated([odd]));
     vi.mocked(fetchAutoFiled).mockResolvedValue(generated([filed]));
-    render(withNames(<Inbox />));
+    renderWithClient(withNames(<Inbox />));
 
     await showsNamesOnly("Alex · Current expenses, last time");
     fireEvent.click(await screen.findByRole("button", { name: "Review 1 filed automatically" }));
@@ -281,7 +285,7 @@ describe("no generated id reaches a screen (lg-76)", () => {
   // rules/Rules.tsx — Rules; rules/RuleForm.tsx — RuleForm, opened to edit.
   test("rules/Rules.tsx: Rules; rules/RuleForm.tsx: RuleForm", async () => {
     vi.mocked(fetchRules).mockResolvedValue(generated([RULE]));
-    render(withNames(<Rules />));
+    renderWithClient(withNames(<Rules />));
 
     await showsNamesOnly("Virements, 400.00 $ → Sam · Mortgage", ["Sam"]);
     fireEvent.click(await screen.findByRole("button", { name: `Edit ${RULE.descriptionPattern}` }));
@@ -344,11 +348,14 @@ describe("no generated id reaches a screen (lg-76)", () => {
         deposits: [{ personId: "alex", depositCents: 15_000, status: "expected", rowId: null }],
       },
     };
-    vi.mocked(fetchMe).mockResolvedValue(SAM);
+    vi.mocked(fetchMeResponse).mockResolvedValue({
+      person: { id: SAM, email: "sam@example.test", household: "home" },
+      admin: false,
+    });
     vi.mocked(fetchOpenPeriod).mockResolvedValue(generated(open));
     vi.mocked(fetchPeriods).mockResolvedValue(generated([closed]));
     vi.mocked(fetchRecurring).mockResolvedValue(generated([item]));
-    render(withNames(<Periods />));
+    renderWithClient(withNames(<Periods />));
 
     await showsNamesOnly("Paid by Sam");
     // LineForm, for sam: the line is the other person's, alex's.
@@ -385,7 +392,7 @@ describe("no generated id reaches a screen (lg-76)", () => {
     vi.mocked(fetchRatios).mockResolvedValue(
       generated({ asOf: "2026-10-03", ratios: [ratio], inEffect: ratio }),
     );
-    render(withNames(<Salaries />));
+    renderWithClient(withNames(<Salaries />));
 
     await showsNamesOnly("Ratio in effect: Alex 60.0000 % · Sam 40.0000 %, since 2025-01-01.");
   });
@@ -407,7 +414,7 @@ describe("no generated id reaches a screen (lg-76)", () => {
     vi.mocked(fetchMortgageSplits).mockResolvedValue(
       generated({ asOf: "2026-10-03", splits: [split], inEffect: split }),
     );
-    render(withNames(<MortgageSplitCard />));
+    renderWithClient(withNames(<MortgageSplitCard />));
 
     await showsNamesOnly("by shares: Alex 25.0000 % · Sam 75.0000 %");
   });
@@ -438,7 +445,7 @@ describe("no generated id reaches a screen (lg-76)", () => {
     );
     vi.mocked(fetchHousehold).mockResolvedValue(generated(household));
     vi.mocked(uploadReceipt).mockResolvedValue(generated(receipt));
-    render(withNames(<Receipts />));
+    renderWithClient(withNames(<Receipts />));
     const camera = screen.getByLabelText("Take a photo of a receipt");
     const photo = new File([new Uint8Array(1_234)], "receipt.jpg", { type: "image/jpeg" });
     fireEvent.change(camera, { target: { files: [photo] } });
@@ -530,7 +537,7 @@ describe("no generated id reaches a screen (lg-76)", () => {
     vi.mocked(fetchContributions).mockResolvedValue(generated(contributions));
     vi.mocked(fetchSalariesStats).mockResolvedValue(generated(salaries));
     vi.mocked(fetchSettlementsStats).mockResolvedValue(generated(settlements));
-    render(
+    renderWithClient(
       withNames(
         <>
           <MortgageOwnCard range={NONE} mortgage={generated(LIVE)} />
@@ -574,15 +581,9 @@ describe("no generated id reaches a screen (lg-76)", () => {
       enteredBy: "alex",
     };
     vi.mocked(fetchSpendingLines).mockResolvedValue(generated({ lines: [line], total: 1 }));
-    render(
+    renderWithClient(
       withNames(
-        <PeriodLines
-          start="2026-02-01"
-          end="2026-02-28"
-          filter={null}
-          categories={CATEGORIES}
-          onChanged={() => undefined}
-        />,
+        <PeriodLines start="2026-02-01" end="2026-02-28" filter={null} categories={CATEGORIES} />,
       ),
     );
 
@@ -605,7 +606,7 @@ describe("no generated id reaches a screen (lg-76)", () => {
     };
     vi.mocked(fetchAdminHouseholds).mockResolvedValue(generated([household]));
     // An admin may be in no household, so has no map from the shell.
-    render(<Admin />);
+    renderWithClient(<Admin />);
 
     await showsNamesOnly("Home: Alex and Sam");
     fireEvent.click(screen.getByRole("button", { name: "Rename Alex" }));
@@ -631,7 +632,7 @@ describe("no generated id reaches a screen (lg-76)", () => {
     };
     vi.mocked(fetchHousehold).mockResolvedValue(generated(household));
     vi.mocked(fetchMortgage).mockResolvedValue(LIVE);
-    render(withNames(<Household id="home" />, {}));
+    renderWithClient(withNames(<Household id="home" />, {}));
 
     await showsNamesOnly("Sam renamed Samuel, by admin@example.test", ["Alex", "Samuel"]);
     // A first name is no change of its own: four lines, not six.
@@ -643,7 +644,7 @@ describe("no generated id reaches a screen (lg-76)", () => {
   // household/MemberForm.tsx — MemberForm, on its own: the people it offers, and
   // the one it starts with.
   test("household/MemberForm.tsx: MemberForm", async () => {
-    render(
+    renderWithClient(
       <MemberForm
         people={[ALEX, SAM]}
         names={NAMES}
@@ -665,7 +666,7 @@ describe("no generated id reaches a screen (lg-76)", () => {
         unclassified: 0,
       } satisfies BucketsResponse),
     );
-    render(withNames(<Home />, {}));
+    renderWithClient(withNames(<Home />, {}));
 
     await showsNamesOnly(`${UNNAMED} has paid 1.00 $ more.`, [UNNAMED]);
   });
@@ -705,7 +706,7 @@ describe("people listed in a sentence read by shown name (lg-76)", () => {
       ratios: [ratio],
       inEffect: ratio,
     });
-    render(withNames(<Salaries />));
+    renderWithClient(withNames(<Salaries />));
 
     await showsNamesOnly("Ratio in effect: Alex 60.0000 % · Sam 40.0000 %, since 2025-01-01.");
     const records = [...document.querySelectorAll("ul.figures li")].map((item) => item.textContent);
@@ -730,7 +731,7 @@ describe("people listed in a sentence read by shown name (lg-76)", () => {
       splits: [split],
       inEffect: split,
     });
-    render(withNames(<MortgageSplitCard />));
+    renderWithClient(withNames(<MortgageSplitCard />));
 
     await showsNamesOnly("by shares: Alex 60.0000 % · Sam 40.0000 %");
   });

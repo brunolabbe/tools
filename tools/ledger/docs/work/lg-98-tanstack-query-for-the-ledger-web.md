@@ -3,7 +3,7 @@ id: lg-98
 tool: ledger
 title: Fetch the ledger's data through TanStack Query, so a tab switch asks only for what is stale
 kind: work-package
-status: ready
+status: done
 milestone: null
 depends_on: [lg-97]
 difficulty: hard
@@ -58,6 +58,29 @@ lg-98 was not in a batch.
 
 The Done when line quoted above is superseded by that choice. It stays as written
 until lg-98's builder rewords it in that builder's first commit. Status stays `ready`.
+
+## Decision — answered again 2026-11-10 by the owner, at the batch's intake
+
+**Question.** The same line, put again at intake with a recount at `a100f429`:
+`grep -rhoE "method: *['\"](POST|PUT|PATCH|DELETE)['\"]" tools/ledger/web/src | sort | uniq -c`
+→ `34 method: "POST"`. How should the line be scoped?
+
+**Options**
+
+1. **All 34 POSTs, listed.** Reword the line to "each of the 34 POST calls in
+   `web/src/api/*.ts` at `a100f429`". The builder lists them in the Log, each mapped
+   to a test, and writes sharing one invalidation key may share a test.
+2. One write per `api/` module, the other writes out of scope.
+3. Keep the wording.
+
+**Chosen: option 1**, the orchestrator's recommendation, by the owner on
+2026-11-10. It is the 2026-11-07 answer with two things added: the base is
+`a100f429`, and writes that invalidate the same keys may share one test. The
+question counted the calls in 10 files; `grep -rlE` over the same pattern lists
+11 (`households`, `inbox`, `mortgage-splits`, `mortgage`, `periods`, `receipts`,
+`rules`, `salaries`, `spending`, `statements`, `workbook`), as the 2026-11-07 count
+did. The 34 are the same either way. The Done when line is reworded below, with
+the line it replaces kept beside it, struck.
 
 ## Build
 
@@ -122,12 +145,72 @@ Traps worth knowing:
   tab switches.
 - Opening every tab once, in order, from a cold start sends each distinct
   `ROUTES.*` GET once, which proves people and categories are asked for once each.
-- Every write's invalidations are tested: after the write, the affected screen
-  shows the new data without a reload.
+- Each of the 34 POST calls in `web/src/api/*.ts` at `a100f429` has its
+  invalidations tested: after the write, the affected screen shows the new data
+  without a reload. The Log lists the 34, each with its file, its function, the keys
+  it invalidates and the test that proves it; writes that invalidate the same keys
+  may share a test (owner, 2026-11-10).
+- ~~Every write's invalidations are tested: after the write, the affected screen
+  shows the new data without a reload.~~ Superseded by the line above (owner,
+  2026-11-07 and 2026-11-10).
 - The lg-33 and lg-54 tests in `app.test.tsx` pass.
 - A `RATE_LIMITED` query retries once after `retryAfterSec`, and any other failure
   is shown as before. Both are tested.
 - `npm run e2e:ledger`'s layout spec passes, with its screenshots opened.
+
+## Review
+
+**Gate: FAIL** — 2026-11-10 · `a100f429..70b129cc` (merge-base is the base; no `main` merged in) · Sonnet 5.5, depth full
+
+| Done when                                                                                                                                              | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A tab switch back to a screen opened within `staleTime` sends no `/api/` request                                                                       | `web/test/query-cache.test.tsx` › "a tab switch back to a screen opened within staleTime sends no request (lg-98)" ✓ — `expect(sent.slice(before)).toEqual([])` over a stubbed `fetch` through 19 tab switches (stricter than counting mocked `fetch*`). Positive control: `STALE_MS = 0` fails it and the cold-start test (2 of 24 in the two files)                                                                                                                     |
+| Opening every tab once from a cold start sends each distinct `ROUTES.*` GET once                                                                       | `web/test/query-cache.test.tsx` › "opening every tab once, in order, from a cold start sends each distinct GET once (lg-98)" ✓ — no GET twice, `/api/people` and `/api/spending-categories` once each, 25 or more distinct paths                                                                                                                                                                                                                                          |
+| Each of the 34 POST calls has its invalidations tested: after the write, the affected screen shows the new data without a reload; the Log lists the 34 | **not met** for 4 of the 34 — `closePeriod`, `createRule`, `editRule`, `retireRule` leave a screen stale after the write (F1, F2). The other 30: `web/test/writes.test.tsx` › "after each write, what it changes is read again and shown, and nothing else is (lg-98)" passes for each, and I found no GET they can change that their list omits, for the routes I reached (full report names those not reached). The Log lists all 34 with file, function, keys and test |
+| The lg-33 and lg-54 tests in `app.test.tsx` pass                                                                                                       | `web/test/app.test.tsx` › "the shell hands every screen the shown names, and a rename is on the next tab opened (lg-33)" and "the inbox tab's count changes when a paste is stored, with no change of tab (lg-54)" ✓. Controls: `ROUTES.people` out of `DIRECTORY` fails lg-33; `ROUTES.inbox` out of `BOOKS` fails lg-54                                                                                                                                                 |
+| A `RATE_LIMITED` query retries once after `retryAfterSec`, any other failure is shown as before; both tested                                           | `web/test/query-retry.test.tsx` › "a screen whose read is rate limited reads again after retryAfterSec, and shows the answer (lg-98)", "a read rate limited twice is shown as refused after its one retry (lg-98)", and the `UNREACHABLE`/`INTERNAL` cases ✓                                                                                                                                                                                                              |
+| `npm run e2e:ledger`'s layout spec passes, with its screenshots opened                                                                                 | CI `e2e` (workflow `ledger`) success at `70b129cc`; local run on port 8157: 37 of 37. I opened Home-360, Period-1280, History (stored change unread)-360 and Admin-1280: whole, no horizontal scroll ✓                                                                                                                                                                                                                                                                    |
+| The ledger suite passes (dispatch)                                                                                                                     | CI `test (ubuntu-latest)` and the informational `test (windows-latest)` success at `70b129cc`; local `tools/ledger/web`: 451 of 451 in 29 files ✓                                                                                                                                                                                                                                                                                                                         |
+
+- **high** · Done when 3 depends on it · **F1** `closePeriod` is `BOOKS` only. A close changes `GET /api/people` (a person retired at the close moves from `people` to `retired`, and the open period's start moves) and `GET /api/admin/households` (the person's `standing` goes from `retiring` to `retired`); neither is in `BOOKS`. The Period tab, where the close happens, keeps offering the retired person in its pickers, and the admin list says `retiring`, until the next mount after 30 s. The old Periods screen re-asked people on a close. The API's own `api/test/retire-person.test.ts` › "a person retired while a period is open" › "takes part in its settlement, and from the day after its close is no longer offered" asserts both answers change; the probe shows `useWrite("closePeriod")` reads `/api/people` and `/api/admin/households` once, and `/api/periods` twice. The branch's table in `writes.test.tsx` is a hand copy of `writes.ts`, so the test cannot see an omission (F7).
+- **high** · Done when 3 depends on it · **F2** `createRule`, `editRule` and `retireRule` are `RULES` = rules + inbox, and `writes.ts` says "A rule changes no filing … only what the inbox suggests". That is false in the unsafe direction: `GET /api/rows` gives a row no one has filed the spending category of the rule that would file it, so a rule changes `rows[].spendingCategory` and the `?spendingCategory=none` list the Spending tab shows. `api/test/spending-categories.test.ts` › "a rule that matches a row filed before the rule existed" › "gives the unfiled row its category in the inbox and in the rows list alike" asserts it. The probe shows `/api/rules` and `/api/inbox` read twice and `/api/rows` once. Visible path: Spending (read at t) → Rules, add a rule with a category → Spending within 30 s shows the row still uncategorised.
+- **med** · no `Done when` line names it; line 3 is the nearest · **F3** A paged list re-reads from the top with `limit` = rows shown (`shownSoFar` in `queries.ts`), and the API's `rowsQuerySchema` and `periodLinesQuerySchema` refuse `limit` above 500. After 10 taps of History's "Show more" (50 a page, 550 shown) or 20 on the spending rows and lines (25 a page, 525 shown), every re-read, after a write or on a remount past `staleTime`, is refused with `BAD_REQUEST`, and `failureOf` hides it because data is held: the list stays old without a word. Measured: the schema says "Too big: expected number to be <=500" for 550 and 525, and accepts 500. Not run through a screen; History's own re-read path would at least print "could not be read again".
+- **low** · `nfr:reliability` · **F4** Nothing asserts that a write is never retried. With `mutations: { retry: false }` changed to `retry: 3` the three spec files that touch it pass, 46 of 46. The config is right and the probe saw one call 1.5 s after a `RATE_LIMITED` rejection of `addSpendingCategory`; the library's own default is no retry. No live call site.
+- **low** · `nfr:reliability` · **F5** `useWrite` resolves only after the active re-reads settle, and a re-read refused as `RATE_LIMITED` waits 10 to 15 s for its retry, so a stored write can look unfinished for that long. Not run; read from `useWrite` and from how `invalidateQueries` awaits a retried fetch. No live call site until the edge rule trips.
+- **low** · `nfr:security` · **F6** No key carries a household, and the cache is never cleared. The only way one session's household changes is an admin who is a member removing themself and adding themself elsewhere; then an inactive route shows the old household's answer until its re-read lands. There is no in-app sign-out or household switch (grep of `web/src`). Not run; no live call site short of that operator step.
+- **low** · `nfr:maintainability` · **F7** The case that carries Done when 3 compares `WRITES` with an `EXPECTED` table typed out from the same intent, so a wrong list passes in both places; both F1 and F2 passed through it. It proves the mechanism and the lists' internal consistency, not that a list is complete. Shares its mechanism with F1 and F2.
+- **low** · `nfr:reliability` · **F8** "Show more" appends to the `load.rows` it held when tapped, so a tap that lands while a write's re-read is in flight can repeat or skip a row at the seam. The re-read itself keeps the opened pages and the order, and a row added above pushes the last old row off the end without repeat or gap. Not run; no test; the window is the length of one request.
+- **dropped** · bundle over 500 kB: settled by the owner. Measured for the record: 541.11 kB, gzip 158.31 kB at head against 504.43 kB, gzip 147.06 kB at the base, so +36.68 kB (+7.3 %) and +11.25 kB gzip (+7.7 %).
+- **dropped** · `@types/react` and `csstype` change from `dev` to `devOptional` in the lockfile: a flag, not a version, and the optional peer of `@tanstack/react-query` is why.
+- **dropped** · `uploadReceipt` and `readReceipt` are sent from `receipts/Queue.tsx` outside `useWrite`: their list is empty, so nothing goes stale, and the ticket leaves the queue alone.
+- **dropped** · `createHousehold` does not mark `/api/me`: an admin with no household who creates their own gets the same stale `me` the old shell had, which asked once at mount. Not a regression.
+- **findings** · the hunt returned 12; 8 carried (2 high, 1 med, 5 low), 4 dropped. F7 shares a mechanism with F1 and F2.
+- Dependency: `@tanstack/react-query` and `query-core` 5.105.3 were published 2026-11-02T20:39Z, 7.2 days before the build; `node scripts/check-lockfile-sync.mjs` exits 0; no package version or integrity moved besides the two added. Lockfile diff: 2 added, 2 flags flipped, one `dependencies` line in the `tools/ledger/web` entry.
+- NFR: security — F6 · performance — request counts proven in `query-cache.test.tsx`, bundle growth measured above · reliability — F1, F2, F3, F4, F5, F8 · maintainability — F7; no `any`, no `console`, `import type` used, no cross-tool import in the diff.
+
+### Gate 2
+
+**Gate: PASS** — 2026-11-10 · `70b129cc..5cba3623` (base `a100f429`; no `main` merged in, so the round is the five first-parent commits 892b0f9c, b26dbfe6, dee08a2e, 71e27721, 5cba3623) · Sonnet 5.5, depth medium (the dispatch's five attacks, all run); nothing above `low`
+
+| Done when (the lines this round touches)                                                                        | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 3. Each of the 34 POSTs has its invalidations tested; the Log lists the 34 (scoped to the 34 by the owner)      | **proven** for what I could establish, one residual unrun (F1, below). `closePeriod` (row 13): `web/test/periods.test.tsx` › "a person retired at the close is no longer offered on the Period tab once it is closed (lg-98)" ✓ — the "Paid by" options read `alex, casey, sam` then `alex, sam`; it fails with `writes.ts` at `70b129cc` (control A, 6 of 59 fail) and with `closePeriod` alone put back to `BOOKS` (control B, 1 of 21). `createRule` (22): `web/test/rule-rows.test.tsx` › "a rule added on the Rules tab takes its row off the Spending tab's uncategorised list (lg-98)" ✓ — fails with `RULES` put back to rules+inbox (control C, 1 of 1). `editRule` and `retireRule` (23, 24) share the constant and are caught by `web/test/writes.test.tsx` › "after each write, what it changes is read again and shown, and nothing else is (lg-98)" › `editRule` / `retireRule` (control C2: 3 of 37 fail, createRule included). The Log's rows 13 and 22–24 say what the code does |
+| 5. A `RATE_LIMITED` query retries once after `retryAfterSec`, any other failure is shown as before; both tested | unchanged by the round; `web/test/query-retry.test.tsx` 8 of 8 ✓. The round adds the write half under F4                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| 1, 2, 4                                                                                                         | unchanged by the round; the lg-33 and lg-54 controls, `STALE_MS = 0` and the cold-start and tab-switch counts re-run on the head with gate 1's `mutate.mjs`: same results as gate 1 (2, 9, 18 tests fail), and `query-cache.test.tsx` still passes with every list under 500 rows at one request                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| 6. The layout spec passes, screenshots opened                                                                   | CI `e2e` (workflow `ledger`) success at `5cba3623`; the round changes no layout and no e2e file. I opened `gate2 History (reread failed)-360.png` for the one new line (F3)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| The ledger suite passes (dispatch)                                                                              | CI `test (ubuntu-latest)` and the informational `test (windows-latest)` success at `5cba3623` (read twice; both were in progress at the first read); local `tools/ledger/web`: 459 of 459 in 30 files ✓                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+
+- **F1** (high at gate 1) · **fixed in part.** Fixed and run: the probe on the head reads `/api/people` 2 and `/api/admin/households` 2 after `closePeriod` (gate 1: 1 and 1), and `WRITES.closePeriod.changes` includes both. The screen test's fake answers as the cited API test asserts (casey in before the close, `{alex, sam}` and `retired: [casey]` after). **Residual clause, `low`, read from the code and not run:** `GET /api/households/:id` carries `members`, which include each person held without an email while their standing is `in` (`directory.ts` `withoutEmail`, `routes/households.ts` `membersOf`), and a close is what turns `returning` into `in` (`markApplied`). So a close that applies the return of a retired no-email person adds them to that list, and `closePeriod` does not mark `ROUTES.household`. The Log says "the household's own route carries no standing, so a close does not change it", which is false for this path in the unsafe direction, narrowly. It needs a no-email person retired in one close and returned in a later one, and the Household card read within 30 s before it. No `Done when` line depends on it as graded; if a run shows the list stale it reopens as a `med` that Done when 3 depends on. My one attempt to run it failed at setup (see the full report), so it is unverified.
+- **F2** (high at gate 1) · **fixed.** The probe reads `/api/rows` 2 after `createRule` (gate 1: 1); `RULES` is rules, inbox and rows; the screen test's fake follows the rules it holds, as the cited API test asserts (the unfiled row's category comes from the rule, and `?spendingCategory=none` stops listing it). Of the eight `stats/*` computations, none reads `currentRules`, and spending counts only filed rows (`countsAsSpending`), which cite the rule version that filed them: a rule moves no series. For `closePeriod` all eight are in `STATS`, inside `BOOKS`.
+- **F3** (med at gate 1) · **fixed**, at the query layer (run) and at the screens (the builder's four tests, run in the suite; their two mutations re-run). Sizes 25, 500, 501, 550, 1,000 and 2,000 read again: 1, 1, 2, 2, 2 and 4 requests, every `limit` at most 500, the rows contiguous and all new. Under 500 is one request. A refused middle chunk (`BAD_REQUEST`, `UNREACHABLE`, `RATE_LIMITED` twice) leaves the held list whole and old (550 of 550, 1,000 of 1,000, 2,000 of 2,000 old, none new) with the error set, so it is never shown half-new; `RATE_LIMITED` once re-runs from the top and ends whole and new in 4 requests. The new line fits at 360 px on History (left 33, right 327 of 360, `scrollWidth` 346 = `clientWidth` 346).
+- **F4** (low at gate 1) · **fixed.** With `mutations: { retry: 3 }` the two new tests fail on the count: `expected "vi.fn()" to be called 1 times, but got 4 times`; `retry: 1` fails both on `got 2 times`, `retry: retryRead` fails the `RATE_LIMITED` one (`got 2 times`), `retry: true` fails both on the 20 s timeout (retries without end); removing the line passes 8 of 8, as the library's default is no retry.
+- **low** · `nfr:reliability` · **N1** `readFromTop` reads its chunks one request after another, so a row added or removed above the seam between two chunks is read twice or not at all. Run: 1,000 shown, a row inserted above between chunk 1 and chunk 2 gives id 500 twice and leaves out the new top row; one removed gives a gap at id 501. Nothing is lost (the next read, at most 30 s on, is whole), but the list can show a bank row twice for that time. It needs more than 500 rows shown and another person's write inside one round trip. A direction, not a remedy: chunk 1's `total` and the last chunk's differ in both runs; I have not run a fix. Not F8 (a local "Show more" tap against a write's re-read) but the same class, on a path this round added.
+- **low** · `nfr:maintainability` · **N2** The doc comment says `readFromTop` "stops early when the list is shorter" and nothing asserts it: with `if (answer.items.length < limit) break;` removed, `history.test.tsx`, `stats-rows.test.tsx` and `query-cache.test.tsx` pass 56 of 56. The cost of the missing stop is extra requests for a list that shrank, not a wrong list. No live call site.
+- **dropped** · a `RATE_LIMITED` middle chunk re-runs the read from the top and pays chunk 1 again (2,000 rows refused on chunk 3: 3 + 4 = 7 requests): it is bounded by the one retry and by sequential requests, and no budget line fails. Recorded under performance.
+- **dropped** · the `no-shadow` renames in `History.tsx`, `PeriodRows.tsx` and `PeriodLines.tsx`: the diff of the three is only the added `reread` constant and its paragraph and an import list reflowed; no behaviour moved, and CI `check` is green at `5cba3623`.
+- **findings** · the hunt returned 5 (counting F1's residual clause); 3 carried (F1's residual `low`, N1, N2), 2 dropped. No `high`.
+- Gate 1's F5, F6, F7 (beyond F1 and F2) and F8: settled by the owner, not re-raised.
+- NFR: security n/a (no new input; the added line prints `AppError.from(...).message`, already shown by `failureOf`) · performance — one request up to 500 rows, 4 for 2,000, a list would need 10,000 shown to spend 20 requests alone · reliability — F1 residual, N1 · maintainability — N2; no `any`, no `console`, `import type` used, no cross-tool import in the round's diff.
 
 ## Log
 
@@ -136,3 +219,307 @@ Traps worth knowing:
   `origin/main` `08f78f69`: 34 lines, and 11 files with `-l`, both as the
   orchestrator counted. No Build or Done when line changed; status left `ready`.
   lg-98's builder rewords the Done when line in its first commit.
+
+### 2026-11-10 — built
+
+Branch `lg-98-tanstack-query`, from `a100f429`. The owner's 2026-11-10 answer is
+recorded above (first commit). Everything else below is the build.
+
+**What it is.**
+
+- `@tanstack/react-query` `^5.105.3` in `web/package.json`. 5.105.3 and its
+  `@tanstack/query-core` 5.105.3 were both published 2026-11-02 (`npm view … time`),
+  eight days before the build. The lockfile was relocked with
+  `npx -y npm@11.21.1 update @tanstack/react-query --before=2026-11-03 --package-lock-only --ignore-scripts`,
+  then regenerated with npm 10.9.9 in a staging directory holding only the manifests
+  and the lockfile, as `scripts/check-lockfile-sync.mjs` does, because the npm 11
+  lockfile dropped 25 `"peer": true` lines that npm 10 writes back and the sync check
+  failed on them. `node scripts/check-lockfile-sync.mjs` passes after.
+  `npm audit --package-lock-only` → `found 0 vulnerabilities`.
+- `web/src/query.ts`: the one client, made in `main.tsx`. `staleTime` 30 s, no
+  refetch on focus or on reconnect, and `retry`: a `RATE_LIMITED` read once more
+  after `details.retryAfterSec` capped at 15 s (10 s when none is named). Nothing
+  else retries, `UNREACHABLE` and `TIMEOUT` included (see the open question below).
+- `web/src/queries.ts`: every read as a query, keyed `[ROUTES.x, params]`, each key
+  built by one function from one `queryFn`.
+- `web/src/writes.ts`: the 34 writes, each with the routes it marks stale, sent
+  through `useWrite`, which is a `useMutation`. On success, the write marks stale
+  every query under those routes, and the queries a mounted screen shows are read
+  again. A refused write marks nothing; Rules, Categories and the Inbox still read
+  their lists again after a refusal that means someone else changed them, as they did
+  before.
+- Every screen reads through the cache. The shell no longer asks again on a change of
+  tab. The inbox count is the inbox query's own length, and the names are `select`ed
+  from the people query.
+
+**What the brief had wrong, or left open.**
+
+- Build 3, "the cache entry holds the route's whole response", is followed where it
+  decides something: `people` and `me`, the two routes read in two shapes. Both are
+  cached whole: `api/people.ts`'s `fetchPeople` now returns `PeopleResponse`, and
+  `peopleIn`, `everyone` and `shownNames` are the `select`s. `rules.ts`'s
+  `fetchPeople`, `people.ts`'s `fetchPeopleNames` and `periods.ts`'s `fetchMe` are
+  gone. Every other key keeps its `fetch*` function's shape, as Build 4 says. That is
+  safe because one function in `queries.ts` builds each key from one `queryFn`, so no
+  key can hold two shapes.
+- The paged lists (History's rows, the rows and card lines under a spending chart)
+  are one cache entry each, without `offset` or `limit` in the key. Their `queryFn`
+  asks for as many as the entry already holds, and "Show more" adds its page to the
+  entry. So a read after a write keeps the pages the person opened, as lg-95's and
+  lg-18's re-reads did.
+- The dispatch's question counted the POSTs in 10 files. There are 11 (the Decision
+  above).
+- Four props are gone because the cache does their work: `Inbox`'s `onCount`,
+  `StatementPaste`'s `onStored`, the `onChanged` of `PeriodRows` and `PeriodLines`,
+  and `SpendingCard`'s `reload` counter.
+- Two existing tests described the old cost and were changed to the new one.
+  `stats-rows.test.tsx`: going back to a range read within `staleTime` now draws its
+  cached answer, where it used to ask again and fail. `history.test.tsx`'s Clear
+  filters test: the unfiltered list comes from the cache. Tests that waited
+  synchronously for a write now `waitFor` it, because a mutation sends on the next
+  tick (`salaries.test.tsx`).
+- A write marks the inbox stale, and the shell's count is always mounted, so most
+  writes on any tab cost one extra GET of `/api/inbox`. That is lg-54's guarantee,
+  kept on every tab. An answer in the inbox costs no read at all: `classifyRow` and
+  `setRowSpendingCategory` patch the inbox and the auto-filed review with their
+  answers and only mark them stale. Classifying ten rows is ten requests, as it was
+  before.
+
+**Fold-ins.** Build 8, `receipts/Queue.tsx`: only its `fileReceipt` moved to
+`useWrite`, because a filing has to mark the books stale. The queue's own wait on
+`RATE_LIMITED` (lg-92) and its uploads and reads are untouched. `fetchReceiptMatches`
+is not cached: it is read on a tap, per receipt, not when a screen opens. The
+receipt screen's "read by" wording, which lg-105 rewords, is not touched. Nothing
+else was free.
+
+**The 34 writes** (the Done when line). Every row is proved by the case of the same
+name in `web/test/writes.test.tsx` › "after each write, what it changes is read again
+and shown, and nothing else is (lg-98)". The case mounts one screen per route, sends
+the write through `useWrite`, and checks three things. Every route the write changes
+is read again, and its screen shows the second answer. A route the write patches
+holds the answer, unread, and is marked stale. Every other route is neither read nor
+marked. The expected lists are written out in the test, apart from `writes.ts`.
+`web/test/writes-source.test.ts` holds `WRITES` to the 34 `method: "POST"` calls in
+`web/src/api/*.ts`. Where a screen test shows the same write on a real screen, it is
+named as well.
+
+The sets are as `writes.ts` names them:
+
+- `BOOKS`: buckets, inbox, inbox/auto-filed, rows, periods, periods/open,
+  period-lines, mortgage, spending-category-map and the eight `stats/*` routes.
+- `RULES`: rules, inbox and rows (rows added in fix round 1, gate 1's F2).
+- `SPENDING`: spending-categories, spending-category-map, rows, inbox,
+  inbox/auto-filed, period-lines and stats/spending.
+- `DIRECTORY`: me, households/:id, admin/households and people.
+- `EVERYTHING`: every route.
+
+| #   | File                 | Function                 | Marks stale (patched instead of read)                | Screen test besides                                                                                                                                                                                   |
+| --- | -------------------- | ------------------------ | ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | `households.ts`      | `addHouseholdMember`     | `DIRECTORY` + `BOOKS`                                | `household.test.tsx` › adds a member, tells them the address must be admitted on Access, and shows the list again                                                                                     |
+| 2   | `households.ts`      | `renameHousehold`        | `DIRECTORY`                                          | `household.test.tsx` › titles the page by the household's name, and a member renames it there                                                                                                         |
+| 3   | `households.ts`      | `adminRenameHousehold`   | `DIRECTORY`                                          | —                                                                                                                                                                                                     |
+| 4   | `households.ts`      | `createHousehold`        | admin/households (patched with the answer)           | `writes.test.tsx` › the patches put the answer where the inbox and the admin list show it                                                                                                             |
+| 5   | `households.ts`      | `adminAddMember`         | `DIRECTORY` + `BOOKS`                                | —                                                                                                                                                                                                     |
+| 6   | `households.ts`      | `adminRemoveMember`      | `DIRECTORY` + `BOOKS`                                | —                                                                                                                                                                                                     |
+| 7   | `households.ts`      | `adminChangeAddress`     | `DIRECTORY`                                          | —                                                                                                                                                                                                     |
+| 8   | `households.ts`      | `adminRetirePerson`      | `DIRECTORY` + `BOOKS`                                | —                                                                                                                                                                                                     |
+| 9   | `households.ts`      | `adminRenamePerson`      | `DIRECTORY`                                          | `app.test.tsx` › the shell hands every screen the shown names, and a rename is on the next tab opened (lg-33)                                                                                         |
+| 10  | `inbox.ts`           | `classifyRow`            | `BOOKS` (inbox, inbox/auto-filed patched)            | `history.test.tsx` › a row answered by a person is filed again from the history, the list is read again, … (lg-95); `writes.test.tsx` › the patches …                                                 |
+| 11  | `mortgage-splits.ts` | `fileMortgageSplit`      | mortgage-splits + `BOOKS`                            | —                                                                                                                                                                                                     |
+| 12  | `mortgage.ts`        | `saveMortgage`           | `BOOKS` (mortgage patched with the answer)           | —                                                                                                                                                                                                     |
+| 13  | `periods.ts`         | `closePeriod`            | people, admin/households + `BOOKS` (fix round 1, F1) | `periods.test.tsx` › a person retired at the close is no longer offered on the Period tab once it is closed (lg-98); › the close button shows who deposits what, and closing sends the period as seen |
+| 14  | `periods.ts`         | `addLine`                | `BOOKS`                                              | —                                                                                                                                                                                                     |
+| 15  | `periods.ts`         | `correctLine`            | `BOOKS`                                              | —                                                                                                                                                                                                     |
+| 16  | `periods.ts`         | `retireLine`             | `BOOKS`                                              | —                                                                                                                                                                                                     |
+| 17  | `periods.ts`         | `addRecurring`           | recurring + `BOOKS`                                  | —                                                                                                                                                                                                     |
+| 18  | `periods.ts`         | `changeRecurring`        | recurring + `BOOKS`                                  | —                                                                                                                                                                                                     |
+| 19  | `receipts.ts`        | `uploadReceipt`          | nothing                                              | —                                                                                                                                                                                                     |
+| 20  | `receipts.ts`        | `readReceipt`            | nothing                                              | —                                                                                                                                                                                                     |
+| 21  | `receipts.ts`        | `fileReceipt`            | `BOOKS`                                              | —                                                                                                                                                                                                     |
+| 22  | `rules.ts`           | `createRule`             | `RULES`                                              | `rule-rows.test.tsx` › a rule added on the Rules tab takes its row off the Spending tab's uncategorised list (lg-98)                                                                                  |
+| 23  | `rules.ts`           | `editRule`               | `RULES`                                              | shares 22's test: the same keys                                                                                                                                                                       |
+| 24  | `rules.ts`           | `retireRule`             | `RULES`                                              | shares 22's test: the same keys; `rules.test.tsx` › retiring a rule asks the API and reloads what is in force                                                                                         |
+| 25  | `salaries.ts`        | `enterSalaries`          | salaries, ratios + `BOOKS`                           | —                                                                                                                                                                                                     |
+| 26  | `salaries.ts`        | `confirmRatio`           | salaries, ratios + `BOOKS`                           | —                                                                                                                                                                                                     |
+| 27  | `spending.ts`        | `addSpendingCategory`    | `SPENDING`                                           | —                                                                                                                                                                                                     |
+| 28  | `spending.ts`        | `renameSpendingCategory` | `SPENDING`                                           | —                                                                                                                                                                                                     |
+| 29  | `spending.ts`        | `retireSpendingCategory` | `SPENDING`                                           | —                                                                                                                                                                                                     |
+| 30  | `spending.ts`        | `setSpendingMapEntry`    | `SPENDING`                                           | —                                                                                                                                                                                                     |
+| 31  | `spending.ts`        | `setRowSpendingCategory` | `SPENDING` (inbox, inbox/auto-filed patched)         | `writes.test.tsx` › the patches put the answer where the inbox and the admin list show it                                                                                                             |
+| 32  | `statements.ts`      | `importStatement`        | `BOOKS`                                              | `app.test.tsx` › the inbox tab's count changes when a paste is stored, with no change of tab (lg-54)                                                                                                  |
+| 33  | `workbook.ts`        | `describeWorkbook`       | nothing                                              | —                                                                                                                                                                                                     |
+| 34  | `workbook.ts`        | `confirmWorkbook`        | `EVERYTHING`                                         | —                                                                                                                                                                                                     |
+
+`writes.test.tsx` › "a refused write marks nothing stale" covers the refusal.
+`npx vitest run tools/ledger/web/test/writes.test.tsx tools/ledger/web/test/writes-source.test.ts`
+→ 38 of 38. As a mutation, `createRule` was cut to `[ROUTES.rules]` in `writes.ts`:
+1 of 37 failed (`createRule`), and the file was then restored from `8a3aa6b0`.
+
+**The other Done when lines.**
+
+- **A tab switch back within `staleTime` sends no request.**
+  `web/test/query-cache.test.tsx` › "a tab switch back to a screen opened within
+  staleTime sends no request (lg-98)". It renders `<App/>` over the real `api/`
+  modules and a stubbed `fetch` that records every request, opens every tab, then
+  switches back across all 13 and on through six more: 0 requests. As a mutation,
+  `STALE_MS = 0` in `query.ts` gave 72 requests on those switches, and the
+  cold-start test below failed too. `query.ts` was then restored from `8a3aa6b0`.
+  A third test in the file shows a screen asking again after `staleTime`, and for its
+  own three reads only.
+- **A cold start sends each distinct GET once.** The same file › "opening every tab
+  once, in order, from a cold start sends each distinct GET once (lg-98)". No GET is
+  sent twice. `/api/people` and `/api/spending-categories` are sent once each, and
+  25 distinct routes or more are read.
+- **lg-33 and lg-54.** In `app.test.tsx`, lg-54's test is unchanged apart from its
+  comment. lg-33's test is reworded and now proves its guarantee through a rename:
+  the admin renames alex on the Admin tab, and the Salaries tab opened next prints
+  "Alex". It used to change the names fake between tabs and rely on the shell asking
+  again on a change of tab. `npx vitest run tools/ledger/web/test/app.test.tsx` → 21
+  of 21.
+- **`RATE_LIMITED`.** `web/test/query-retry.test.tsx`, on the app's own client with
+  retries on, 6 of 6. A read refused with `retryAfterSec: 4` is not asked again at
+  3.5 s, is asked again by 4.5 s, and its screen shows the answer. A read refused
+  twice is shown as refused after one retry, with two calls. `UNREACHABLE` and
+  `INTERNAL` show their own words at once, with one call.
+
+- **`npm run e2e:ledger`.** `E2E_PORT=8128 npm run e2e:ledger`, on a port of its
+  own because a peer session was running the downloader's e2e: 37 passed (54.3 s),
+  over a bundle built by the run. These screenshots in `e2e/.artifacts/layout/` were
+  opened and are whole: Home-360, Paste (stored)-360, Inbox-360, Period-1280,
+  Stats-1280 and History (stored change unread)-360. The last one shows the lg-99
+  line, drawn through the new path in which the re-read is the write's own
+  (`settledRead`). Vite now warns that the one chunk is over 500 kB: it is 541.11 kB
+  minified, 158.31 kB gzipped. The shared checkout's bundle, built 2026-11-01 and
+  so not this base, is 485 kB. This was not measured at `a100f429`.
+
+**Open question for the owner, not settled here.** Build 2 says "don't retry
+anything else that the taxonomy does not mark `retryable`". `UNREACHABLE` and
+`TIMEOUT` are marked retryable, so the line allows retrying them, but it does not
+require it. Done when 5 says any other failure is "shown as before", and before
+nothing was retried. The build retries neither. The report puts the choice to the
+orchestrator.
+
+### 2026-11-10 — the owner's answers after gate 1
+
+Relayed by the orchestrator in the dispatch of gate 1's fix round, 2026-11-10.
+
+- **The retry, the open question above.** Answered by the owner: a `RATE_LIMITED`
+  read is retried once, and `UNREACHABLE` and `TIMEOUT` are not retried. The
+  options were the two the question named: retry neither (as built), or retry
+  those two as well, since the taxonomy marks them retryable. The build already
+  does what was chosen, so nothing changes. The dispatch said this answer was on
+  the ticket already; at `70b129cc` it was not, so it is written here.
+- **Gate 1's F3** (a paged list read again past 500 rows asks for more than the
+  API's `limit` allows, and the refusal is not shown). Answered by the owner: fix
+  it in this round. The options were: fix it in this round (chosen, the
+  orchestrator's recommendation); record it unfixed in the gate's record; or file
+  a ticket for it.
+
+### 2026-11-10 — fix round 1, gate 1's F1, F2, F3, F4 and F7
+
+A new builder; the one that built the branch is retired. Every new test below was
+first run against the source at `70b129cc`, unchanged in the tree at `892b0f9c`
+(the commit above, a Log entry only): 6 of 6 new screen tests failed there, and 14
+of 14 new and changed `lg-98` tests pass at the round's head.
+
+- **F1, `closePeriod`.** It now marks `people` and `admin/households` stale besides
+  `BOOKS`. A close applies the retirements waiting for it, so who `GET /api/people`
+  says is in changes, and so does each person's standing in the admin's list
+  (`api/test/retire-person.test.ts` › "a person retired while a period is open" ›
+  "takes part in its settlement, and from the day after its close is no longer
+  offered" asserts both). `periods.test.tsx` › "a person retired at the close is no
+  longer offered on the Period tab once it is closed (lg-98)": a fake that answers
+  casey as in before the close and as retired after it; the Add a line form's
+  "Paid by" offers alex, casey, sam, then alex, sam. At `70b129cc` it still offered
+  casey after the close.
+- **F2, the three rule writes.** `RULES` is now rules, inbox and rows. A rule files
+  nothing already stored, but `GET /api/rows` gives an unfiled row the category of
+  the rule that would file it (`api/test/spending-categories.test.ts` › "a rule that
+  matches a row filed before the rule existed" › "gives the unfiled row its
+  category in the inbox and in the rows list alike"). The comment in `writes.ts`
+  that said a rule changes only what the inbox suggests was wrong, and is
+  rewritten. New `rule-rows.test.tsx` › "a rule added on the Rules tab takes its row
+  off the Spending tab's uncategorised list (lg-98)": Spending read, Rules opened and
+  a rule with a category added, Spending opened again within `staleTime`; the fake's
+  rows list follows the rules it holds. At `70b129cc` the row was still listed.
+  `editRule` and `retireRule` invalidate the same keys and share the test, as the
+  owner's 2026-11-10 answer allows.
+- **Another omission of the same kind: none found.** Read for it: every `INSERT`
+  in `api/src` and the GET handlers in `api/src/routes/`; who reads
+  `people_retirements` (`/api/people` and, through `stats.ts`, `buckets.ts` and
+  `periods.ts`, only routes already in `BOOKS`); who reads the current rules
+  (`/api/inbox` and `/api/rows` only; `classifyAdded` is the paste); and the eight
+  `stats/*` computations in `stats.ts` against each write. Spending counts only
+  filed rows, which cite the rule version that filed them, so a rule moves no
+  chart; `ratiosAsOf` and `splitsAsOf` read no periods or retirements; the
+  household's own route carries no standing, so a close does not change it.
+  UNVERIFIED: read from the code, not run; see gate 2's F1 residual.
+- **F3, a paged list read again past 500.** History's rows, and the bank rows and
+  card lines under a spending chart, are read again from the top with as many as
+  are shown, and the API refuses `limit` above 500 (`rowsQuerySchema`,
+  `periodLinesQuerySchema`). The remedy: `queries.ts`'s `readFromTop` reads them in
+  requests of at most `READ_LIMIT_MAX` (500), one after another, and stops at a
+  short answer; up to 500 shown it is the one request it was. And a read again that
+  fails over a list still shown now says so on all three
+  (`rereadFailureOf`, "The list could not be read again, so it shows what was read
+  before."), where `failureOf` hid it. Rejected:
+  - reading only the first page again after a write: one request, but the person
+    is sent back to the top, which lg-95's and lg-18's re-reads were written not to
+    do;
+  - capping the re-read at 500 and dropping the rest: one request, but rows the
+    person opened disappear without a word;
+  - `useInfiniteQuery`: it reads every page again, one request per page of 25 or
+    50, so 22 requests for 550 History rows against an edge rule of 20 in 10
+    seconds, and it is a rewrite of three screens;
+  - raising the API's 500: an API contract change, not this round's.
+    The tests serve 600 rows (and 700 lines) through fakes that refuse what the
+    contract's own schemas refuse, and put the first 500 in the cache entry as Show
+    more would leave them, then tap Show more once past 500, to keep each to
+    seconds. `history.test.tsx` › "past 500 rows shown, the history is read again
+    whole after a change and after staleTime (lg-98)" and › "a history read again
+    that is refused says so, over the rows it still shows (lg-98)";
+    `stats-rows.test.tsx` › "past 500 shown, the rows and card lines under the chart
+    are read again whole after a write and after staleTime (lg-98)" and › "rows and
+    card lines read again and refused say so, over what they still show (lg-98)". At
+    `70b129cc` the History change ended in "The change was saved, but the list could
+    not be read again", the spending row kept its old category, and neither refused
+    re-read showed an alert.
+- **F4.** `query-retry.test.tsx` › "a write refused as RATE_LIMITED is never sent
+  again on its own (lg-98)" and the same for `UNREACHABLE`: a `saveMortgage` through
+  `useWrite` on the app's own client, refused, then two minutes of fake time, one
+  call. It passes at `70b129cc` (the config was right), and fails under
+  `mutations: { retry: 3 }` (below).
+- **F7.** The two new screen tests are grounded in the API, not in `writes.ts`: each
+  cites the API test that asserts the answer changes, and each drives the change
+  through a fake that answers differently after the write. `writes.test.tsx`'s
+  `EXPECTED` gains the same two changes, each with a comment naming the screen test
+  that grounds it. The rest of the table is still typed out from the same intent as
+  `writes.ts`; whether to ground every row the same way is put to the owner in the
+  round's report, not settled here.
+- **The 34-write table above** has rows 13 and 22 to 24 changed to match.
+
+Mutation controls on the round's head, each planted, run and restored by a
+script (`git status` clean after):
+
+| Mutation                        | Result                                                |
+| ------------------------------- | ----------------------------------------------------- |
+| none (`app`, `query-cache`)     | 24 of 24 pass                                         |
+| `STALE_MS = 0`                  | 2 of 24 fail: both `query-cache.test.tsx` count tests |
+| `DIRECTORY` without `people`    | 9 of 58 fail, lg-33's among them                      |
+| `BOOKS` without `inbox`         | 18 of 58 fail, lg-54's among them                     |
+| `closePeriod` without `people`  | 1 of 21 fails: the F1 test                            |
+| `RULES` without `rows`          | 1 of 1 fails: the F2 test                             |
+| `READ_LIMIT_MAX = 1000`         | 2 of 53 fail: the two "read again whole" tests        |
+| `rereadFailureOf` always `null` | 2 of 53 fail: the two "refused says so" tests         |
+| `mutations: { retry: 3 }`       | 2 of 45 fail: the two F4 tests                        |
+
+Checks at the round's head: `npx vitest run --project ledger tools/ledger/web` → 459
+of 459 in 30 files; `npm run check` → exit 0; `E2E_PORT=8163 npm run e2e:ledger` at
+`71e27721` → 37 passed (60.0 s). Opened: History (stored change unread)-360, which
+shows the one line "The change was saved, but the list could not be read again",
+not a second one from the new re-read line, and Period-360; both whole.
+
+### 2026-11-10 — landing, the owner's answers after gate 2
+
+- 2026-11-10 — Fixed at landing by owner choice: gate 2, F1 residual — "`GET /api/households/:id` may stay stale after a close that applies a returning person held without an email". The owner chose to land as is and record it, not to run the scenario or fix it; the sentence in fix round 1's F1 entry saying the household's own route carries no standing is marked unverified in place, not deleted, and the residual stays open, read from the code and not run. Proof: `git diff 5cba3623 HEAD -- tools/ledger/docs/work/lg-98-tanstack-query-for-the-ledger-web.md | grep -v 'Fixed at landing' | grep -c '^+.*UNVERIFIED'` → `1`.
+- 2026-11-10 — Fixed at landing by owner choice: gate 2, N2 — "nothing asserts it: with `if (answer.items.length < limit) break;` removed, `history.test.tsx`, `stats-rows.test.tsx` and `query-cache.test.tsx` pass 56 of 56". Proof: `history.test.tsx` › "a history read again that finds the list shorter than one request asks for nothing more (lg-98, gate 2's N2)": 550 shown, the list shrunk to 300, read again after staleTime, one request (offset 0, limit 500) and none at offset 500. It passes on the head (1 of 1, `-t "shorter than one request"`). With that line removed, gate 2's `mutate4.mjs` on the committed tree fails it, and only it: 1 of 57 in the three files, the other two variants as gate 2 ran them (`READ_LIMIT_MAX = 100_000`: 3 fail; `rereadFailureOf` always null: 2 fail). `git status` clean after.

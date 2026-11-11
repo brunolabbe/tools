@@ -7,7 +7,7 @@
  */
 
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, screen, within } from "@testing-library/react";
 import { AppError } from "@ledger/contract";
 import type { BucketsResponse } from "@ledger/contract";
 import { fetchBuckets } from "../src/api/buckets.ts";
@@ -15,6 +15,7 @@ import { fetchMortgage } from "../src/api/mortgage.ts";
 import { Home } from "../src/home/Home.tsx";
 import { PeopleNamesProvider } from "../src/people.tsx";
 import { LIVE } from "./mortgage-fixtures.ts";
+import { renderWithClient } from "./render-with-client.tsx";
 
 vi.mock("../src/api/buckets.ts", () => ({ fetchBuckets: vi.fn() }));
 vi.mock("../src/api/mortgage.ts", () => ({ fetchMortgage: vi.fn(), saveMortgage: vi.fn() }));
@@ -58,7 +59,7 @@ function section(name: string): ReturnType<typeof within> {
 test("shows each person's own money in the mortgage, who has paid extra, and the buffer's balance", async () => {
   buckets.mockResolvedValue(FIGURES);
 
-  render(<Home />);
+  renderWithClient(<Home />);
 
   await screen.findByRole("heading", { name: "Mortgage" });
   const mortgage = section("Mortgage");
@@ -84,7 +85,7 @@ test("shows each person's own money in the mortgage, who has paid extra, and the
 test("says when the two have paid the same", async () => {
   buckets.mockResolvedValue({ ...FIGURES, mortgage: { ...FIGURES.mortgage, lead: null } });
 
-  render(<Home />);
+  renderWithClient(<Home />);
 
   expect(await screen.findByText("Both have paid the same.")).toBeTruthy();
 });
@@ -92,7 +93,7 @@ test("says when the two have paid the same", async () => {
 test("says what the server said when the figures cannot be read", async () => {
   buckets.mockRejectedValue(new AppError("UNREACHABLE", "The ledger API is not answering."));
 
-  render(<Home />);
+  renderWithClient(<Home />);
 
   expect((await screen.findByRole("alert")).textContent).toBe("The ledger API is not answering.");
 });
@@ -110,7 +111,7 @@ test("between three people, says who has paid the most and by how much over the 
   };
   buckets.mockResolvedValue({ ...FIGURES, mortgage: three });
 
-  render(<Home />);
+  renderWithClient(<Home />);
 
   expect(
     await screen.findByText("alex has paid the most, 99.99 $ more than the next."),
@@ -118,7 +119,7 @@ test("between three people, says who has paid the most and by how much over the 
   cleanup();
 
   buckets.mockResolvedValue({ ...FIGURES, mortgage: { ...three, lead: null } });
-  render(<Home />);
+  renderWithClient(<Home />);
   expect(await screen.findByText("The two who have paid the most are level.")).toBeTruthy();
 });
 
@@ -145,7 +146,7 @@ test("lists each person's own money and what they put in by shown name, not by i
     },
   });
 
-  render(
+  renderWithClient(
     <PeopleNamesProvider value={{ [FIRST]: "Zoe", [SECOND]: "Alex" }}>
       <Home />
     </PeopleNamesProvider>,
