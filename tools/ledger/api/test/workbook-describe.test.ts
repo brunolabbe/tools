@@ -55,11 +55,17 @@ import {
 } from "./helpers/access.ts";
 import {
   SheetWriter,
+  commentsPart,
   entriesOf,
+  listedLinkWorkbook,
+  localNameWorkbook,
   paddedDeflate,
   rawZip,
   reEnded,
+  relatedWorkbook,
+  relationshipType,
   sharedPartWorkbook,
+  textPart,
   workbookOf,
   xlsxOf,
   zipOf,
@@ -846,8 +852,10 @@ describe("stored entries, counted before the sheet reader (lg-66 gate 1, F1)", (
           '<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheets/></workbook>',
         ),
       },
+      // One name for all forty since lg-104, which refuses a name the local header does
+      // not repeat; the count is what this test is about.
       ...Array.from({ length: 40 }, (_, index) => ({
-        name: `xl/worksheets/sheet${String(index + 1)}.xml`,
+        name: "xl/worksheets/sheet1.xml",
         data: block,
         method: 0,
         declaredSize: 0,
@@ -1151,5 +1159,67 @@ describe("a sheet past the reader's bounds, through the real reader (lg-96)", ()
       expect(errorOf(response).code).toBe("WORKBOOK_NOT_XLSX");
     }
     expect(model.requests).toHaveLength(0);
+  });
+});
+
+// lg-104: the two shapes gate 3 of lg-96 read past the shared-part check, through the
+// route. The local-name decoy stops at the zip check, before the reader is called; the
+// shared comments part stops in the reader, before SheetJS parses a sheet (`xlsx.test.ts`
+// tells the two refusals apart by their message, which the route does not pass on).
+describe("a part SheetJS would read for many sheets, through the route (lg-104)", () => {
+  const decoy = localNameWorkbook(14, textPart("BIG"));
+  const sharedComments = relatedWorkbook(
+    14,
+    () =>
+      `<Relationship Id="c1" Type="${relationshipType("comments")}" Target="../comments1.xml"/>`,
+    [{ name: "xl/comments1.xml", data: commentsPart(200) }],
+  );
+
+  test.each([
+    ["the local-name decoy", decoy, 0],
+    ["one comments part named by 14 sheets", sharedComments, 2],
+  ])(
+    "%s is WORKBOOK_NOT_XLSX by Describe and by Confirm, and nothing is asked or written",
+    async (_what, file, readerCalls) => {
+      const model = fake(answering(fixture("lg7").layout));
+      const started = await start({ ask: model.ask });
+      const before = counts(started);
+
+      const described = await describeFile(started, file);
+      const confirmed = await confirmFile(started, file, validLayout());
+
+      for (const response of [described, confirmed]) {
+        expect(response.statusCode).toBe(415);
+        expect(errorOf(response).code).toBe("WORKBOOK_NOT_XLSX");
+      }
+      expect(started.reader.calls).toBe(readerCalls);
+      expect(model.requests).toHaveLength(0);
+      expect(counts(started)).toEqual(before);
+    },
+  );
+});
+
+// lg-104, the owner's answer of 2026-11-10: an external link listed 50 times in the content
+// types, whose `.rels` SheetJS would parse 50 times, through the route.
+describe("a part the content types list more than once, through the route (lg-104)", () => {
+  test("is WORKBOOK_NOT_XLSX by Describe and by Confirm, and nothing is asked or written", async () => {
+    const listed = listedLinkWorkbook(
+      Array.from({ length: 50 }, () => "/xl/externalLinks/externalLink1.xml"),
+      10,
+    );
+    const model = fake(answering(fixture("lg7").layout));
+    const started = await start({ ask: model.ask });
+    const before = counts(started);
+
+    const described = await describeFile(started, listed);
+    const confirmed = await confirmFile(started, listed, validLayout());
+
+    for (const response of [described, confirmed]) {
+      expect(response.statusCode).toBe(415);
+      expect(errorOf(response).code).toBe("WORKBOOK_NOT_XLSX");
+    }
+    expect(started.reader.calls).toBe(2);
+    expect(model.requests).toHaveLength(0);
+    expect(counts(started)).toEqual(before);
   });
 });

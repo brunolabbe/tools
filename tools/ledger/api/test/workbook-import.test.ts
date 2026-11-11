@@ -45,10 +45,17 @@ import {
 import { history, render } from "./helpers/workbook.ts";
 import {
   SheetWriter,
+  commentsPart,
+  entriesOf,
+  localNameWorkbook,
+  relatedWorkbook,
+  relationshipType,
   rewiredWorkbook,
   sharedPartWorkbook,
+  textPart,
   workbookOf,
   worksheetRelationship,
+  zipOf,
 } from "./helpers/xlsx-file.ts";
 import { layoutFixtures } from "./layout/fixtures.ts";
 import { importWorkbook } from "../src/workbook-import.ts";
@@ -1430,6 +1437,65 @@ describe("a workbook past the reader's bounds, through the command (lg-96)", () 
         rename: { "xl/workbook.xml": "XL/Workbook.xml" },
       }),
     );
+
+    const ran = await run("classeur.xlsx", "--as", "alex", "--write");
+
+    expect(ran.code, ran.err).toBe(2);
+    expect(ran.err).toContain("Only an .xlsx workbook");
+    expect(existsSync(dataDir)).toBe(false);
+  });
+});
+
+// lg-104: the two shapes gate 3 of lg-96 read past the shared-part check, through the
+// command, which reads the file only through `readSheets`.
+describe("a part SheetJS would read for many sheets, through the command (lg-104)", () => {
+  test.each([
+    [
+      "the local-name decoy, refused by the zip check",
+      "Only an .xlsx workbook",
+      () => localNameWorkbook(14, textPart("BIG")),
+    ],
+    [
+      "one comments part named by 14 sheets, refused before a sheet is parsed",
+      "names one of its parts from more than one place in its sheets",
+      () =>
+        relatedWorkbook(
+          14,
+          () =>
+            `<Relationship Id="c1" Type="${relationshipType("comments")}" Target="../comments1.xml"/>`,
+          [{ name: "xl/comments1.xml", data: commentsPart(200) }],
+        ),
+    ],
+  ])("%s, and nothing is created", async (_what, message, file) => {
+    writeFileSync(path.join(dir, "classeur.xlsx"), file());
+
+    const ran = await run("classeur.xlsx", "--as", "alex", "--write");
+
+    expect(ran.code, ran.err).toBe(2);
+    expect(ran.err).toContain(message);
+    expect(existsSync(dataDir)).toBe(false);
+  });
+});
+
+// lg-104, the owner's answer of 2026-11-10: the command, which counts nothing before the
+// reader, met SheetJS's inflate spinning on a corrupt stream; it is refused first now.
+describe("a deflate stream that does not inflate, through the command (lg-104)", () => {
+  test("a workbook .rels whose stream is corrupt is refused, and nothing is created", async () => {
+    const bytes = zipOf(
+      entriesOf(workbookOf([new SheetWriter("2022")])).map((entry) =>
+        entry.name === "xl/_rels/workbook.xml.rels"
+          ? {
+              name: entry.name,
+              deflated: {
+                bytes: Buffer.from([0xff, 0xff, 0xff, 0xff]),
+                crc: 0,
+                size: entry.data?.length ?? 0,
+              },
+            }
+          : entry,
+      ),
+    );
+    writeFileSync(path.join(dir, "classeur.xlsx"), bytes);
 
     const ran = await run("classeur.xlsx", "--as", "alex", "--write");
 

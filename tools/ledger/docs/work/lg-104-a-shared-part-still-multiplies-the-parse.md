@@ -3,7 +3,7 @@ id: lg-104
 tool: ledger
 title: A worksheet part SheetJS still parses once per sheet past lg-96's check
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: [lg-96]
 difficulty: hard
@@ -661,6 +661,70 @@ builder.
    the Log, and the honest controls read the same as above.
 6. **Under any answer:** `npm run check` and `npm test -- --project ledger` pass.
 
+## Review
+
+**Gate: FAIL** — 2026-11-10 · `a100f429..2c48efa3` (merge-base is `a100f429`) · Sonnet 5.5, depth full
+
+| Done when                                                                                                             | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. One test per shape, `WORKBOOK_NOT_XLSX` before SheetJS parses, through `readSheets`, the route and the command     | **proven** for the two named files: `xlsx.test.ts` › "the local-name decoy: 14 sheets that SheetJS reads from one part are refused, by the zip check" (asserts `workbookEntries` throws, `readSheets` code, and SheetJS reads the big part 14 times) and › "one comments part named by 14 sheets' .rels, which SheetJS parses for each, is refused" (code and the pre-parse message); `workbook-describe.test.ts` › "a part SheetJS would read for many sheets, through the route (lg-104)" (Describe and Confirm, both shapes); `workbook-import.test.ts` › "a part SheetJS would read for many sheets, through the command (lg-104)" (exit 2 and the message, not the code string). The line's population, any workbook in which two sheets' `.rels` name one part, is **not closed**: F1 |
+| 1. `localname.sh 2 14` and `comments.sh 50000 1 14` on the head refuse both 14-sheet files; honest controls unchanged | **verified** — run on the head: `localname-decoy-14` and `comments-comments-14` both `WORKBOOK_NOT_XLSX`; `localname-control-14` read 14 sheets, 140,013 cells; `comments-distinct-14` read 14 sheets, 14 cells                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| 1. Removing the new check fails the tests                                                                             | **verified** by mutation: `eachPartReadOnce` refusal off, 10 of 204 fail (the comments-14 tests through `readSheets`, the route and the command among them); `localNameIs` answering true, 7 of 204; `eachPartListedOnce` refusal off, 5 of 204; baseline 204 of 204                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| 1. A real Excel workbook, both refusals in place, same sheet and cell counts as `origin/main`                         | **verified** — `/workspaces/tools/workbook.xlsx`, Microsoft Excel Online 16.0300: 14 sheets, 3,513 cells at the head and at `a100f429`; 32 entries, 14 worksheets, 1 drawing, 1 chart, 0 comments, 0 VML, 0 threaded, 0 external links. The drawing is named by a sheet's `.rels`, so the second refusal had a part to decide; the chartsheet branch, comments and VML are unproven on a real file                                                                                                                                                                                                                                                                                                                                                                                          |
+| 2. Option 2's before/after table                                                                                      | n/a — option not chosen                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| 3. Option 3's texts                                                                                                   | n/a — option not chosen                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| 4. `git grep -n "cannot multiply" -- tools/ledger/api/src/workbook-parts.ts` matches nothing                          | **verified** — exit 1 on the head                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| 5. The probes re-run at the head, controls unchanged                                                                  | **verified** — as the second row                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| 6. `npm run check` and `npm test -- --project ledger` pass                                                            | **proven (gate)** by `2c48efa3`'s own CI: `check`, `test (ubuntu-latest)`, `test (windows-latest, informational)`, `e2e`, `docker`, `codeql` all pass; I ran the four spec files (204 of 204), not `npm run check`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+
+- **high** · `nfr:security` · A zip entry whose stored name SheetJS's CFB normalises is found by SheetJS and not by the copy, so the copy counts it as "no such part" and the shared-part and listed-once refusals do not fire. `cfb_add` builds each entry's path as `("Root Entry/" + name).replace("//", "/")`; `workbook-parts.ts`'s `zipOf` keys on the raw name with only a `Root Entry/` prefix stripped. A comments part stored as `xl//comments1.xml` or `/xl/comments1.xml` and named by 14 sheets' `.rels` is shape (b): `readSheets` reads it, +329.5 MB and +338.5 MB (peak 412.9 and 423.5), against the 512 MB container; the same file spelled `xl/comments1.xml` is refused. A `[Content_Types].xml` stored as `/[Content_Types].xml` and placed before a benign exact one lists a link 50 times to SheetJS and once to the copy: read in 1,847 ms against 77 ms listed once, so the owner's fold-in is bypassed by one character. The same mechanism lets the sheet-part lookup see distinct parts where SheetJS finds one (unbuilt, unmeasured, by reading: a few spellings per part, so a small multiplier). Shipped text is false in the unsafe direction: the `workbook-parts.ts` header says the zip "is searched as `safegetzipfile` does", and `workbook-bounds.ts` says the two shapes "no longer get here". No test builds such a name. A candidate remedy is in the full report; it was run, not merely stated.
+- **dropped** · `readSheets` spins (30 s, 100% CPU, killed) on a workbook whose `xl/_rels/workbook.xml.rels` is a corrupt deflate stream. Same at `a100f429`; reached from the import command, which does not call `countInflated`, not from the route. Out of the reviewed range.
+- **dropped** · two `Override`s differing only in case are refused. OPC part names are case-insensitive, so that is one part listed twice, not a false refusal.
+- **dropped** · a sheet part with a non-ASCII name goes from refused to read. Checked: it reads the sheet's own content and cannot multiply, since identity is by entry.
+- **dropped** · two existing tests changed from forty distinct names to one. Both still assert the count they asserted; the comment says why.
+- **findings** · the hunt returned 5; 1 carried (F1, with the header text and the missing test as part of it), 4 dropped.
+- NFR: security — F1 · performance — F1 is +330 MB (comments) and 1.8 s at 5,000 relationships (the listing), the rest holds · reliability — dropped item 1 is pre-existing · maintainability — the copy keeps being one rule short, which the Observation in the ticket predicted.
+
+### Gate 2
+
+**Gate: CONCERNS** — 2026-11-10 · `2c48efa3..538a7f20` (base `a100f429`; the round is f88b82a9, 76429ea5, 75d10327, 538a7f20) · Sonnet 5.5, depth medium (the dispatch's six attacks, one round)
+
+Nothing found is a `high`. The one `med` is a red CI leg on a test the branch does not touch; the gate is PASS when that leg reads green on this head, or on a later head that differs only by the ticket file.
+
+| Check                                                                                                                                                                                                    | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Gate 1's F1 (a stored name SheetJS normalises is not found by the copy)                                                                                                                                  | **fixed** — see the verdict below; 12 files built, SheetJS and the copy agree on all 12                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| Gate 1's reproductions on the head (from the dispatch)                                                                                                                                                   | **verified** — `slash.sh`: `plain`, `doubleslash`, `leadingslash` refused (69, 104, 77 ms), negative control `triple` reads; `shadow.mts`: `ct-listed-50-plain` and `ct-listed-50-shadowed` refused (17 ms, 6 ms), `ct-listed-once` reads (102 ms); the builder's sheet-part helper `storedSlashWorkbook`, both sizes, refused (104 ms, 129 ms), where `2c48efa3` read 3 sheets (+111.6 MB) and refused the larger only after the parse, at +419.3 MB (peak 505.4)                                                                                                                                                                                                                                                                                                                            |
+| Owner's fold-in of the corrupt-stream spin (from the dispatch, 2026-11-10): a typed refusal or a bounded failure through `readSheets` and the command, with a test that fails or times out at `2c48efa3` | **proven** — `xlsx.test.ts` › "a deflate stream that does not inflate is refused before SheetJS reads it (lg-104)" › "a workbook .rels whose stream is corrupt is WORKBOOK_NOT_XLSX, at once" (asserts the code and under 5 s) and `workbook-import.test.ts` › "a deflate stream that does not inflate, through the command (lg-104)" › "a workbook .rels whose stream is corrupt is refused, and nothing is created" (exit 2, the message, no books directory). Both hit `timeout 60` (exit 124) with the pre-read removed and on `2c48efa3`'s source. The route: **verified** by running the file, 32 ms `WORKBOOK_NOT_XLSX`; no route test names a corrupt stream, and `workbook-zip.test.ts` › "a deflated entry that will not inflate is not an .xlsx" covers the shared `countInflated` |
+| Done when 1, "removing the new check fails the tests" (the round's part)                                                                                                                                 | **verified** by mutation: the old key restored, 4 of 210 fail, exactly the four new regression tests; the pre-read removed, both spin tests hang (exit 124). Baseline 210 of 210                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| Done when 1, the real workbook                                                                                                                                                                           | **verified** — `/workspaces/tools/workbook.xlsx`, read in place, counts only: 14 sheets, 3,513 cells (raw SheetJS 14 and 3,513); 32 entries, 14 worksheets, 1 drawing, 1 chart, 0 comments, 0 VML, 0 threaded, 0 external links                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| Done when 4, `git grep -n "cannot multiply"` in `workbook-parts.ts` matches nothing                                                                                                                      | **verified** — exit 1 on the head                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| Done when 6, `npm run check` and `npm test -- --project ledger`                                                                                                                                          | **unproven (gate)** — I ran both on the head: `check` exit 0; the ledger project exit 0, 2,335 of 2,335 in 99 files. But `test (ubuntu-latest)` at `538a7f20` is red (N1). `check`, `e2e`, `docker`, `codeql`, `dependency-review`, `test (windows-latest, informational)` and `pr-title` pass                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+
+**Verdicts on gate 1**
+
+- **F1 (high) · fixed.** Every clause:
+  - _Comments_: stored as `xl//comments1.xml` or `/xl/comments1.xml`, 14 sheets: refused, +10.2 and +9.3 MB (were +329.5 and +338.5).
+  - _Owner's fold-in_: `/[Content_Types].xml` before a benign exact one: refused in 6 ms (was read in 1,847 ms).
+  - _Sheet-part lookup_: refused, at the helper's small size and its large one.
+  - _False text_: the `workbook-parts.ts` header now says the zip is searched under the path `cfb_add` keeps, after the two seeded entries, and that the count of reads is as exact as the lookup; the "no longer get here" sentence in `workbook-bounds.ts` is replaced by "what keeps them from it is the copy, not the cap". Both are true of the 12 files. The phrase "searched as `safegetzipfile` does" appears nowhere in `tools/ledger/api/src`.
+  - _No test_: four added; with the old key all four fail, and with the round's tests on `2c48efa3`'s source they fail 4 of 4 (`-t "CFB normalises"`).
+- **Gate 1's dropped corrupt-stream spin · fixed (the owner's fold-in).** `fold-F-wb-rels-corrupt.xlsx` is refused in 9 ms; at `2c48efa3` it is still running at 60 s. Four more corrupt shapes (truncated, random, empty, a corrupt sheet part) are refused in at most 73 ms at the head; at `2c48efa3` the sheet-part one also spins, and the empty one refuses after 7,252 ms.
+
+**New findings, in the round's lines**
+
+- **N1 · med** · Done when 6 depends on it · `test (ubuntu-latest)` on `538a7f20` (run 42735904398, attempt 1) failed 1 of 3,043: `tools/ledger/web/test/history.test.tsx` › "the button reports whether its control is open, and takes focus back when it closes (lg-95)". The branch touches no `tools/ledger/web` path (`git diff --name-only a100f429...538a7f20 -- tools/ledger/web` lists none), the same project passes locally 2,335 of 2,335 and on the Windows leg, and the dispatch names the same test. A branch `lg-107-flaky-history-focus-test` exists for it (its CI run not read here). The line stays `unproven (gate)` until a re-run is green on this head, or on a later head differing only by the ticket file.
+- **N2 · low** · `nfr:maintainability` · Three sub-rules of the new key are asserted by no test, and each mutant flips a SheetJS-faithful file. `.replace("//", "/")` made global: a part stored as `xl//c//d.xml` and named `/xl/c//d.xml` by 14 sheets (SheetJS parses it for all 14) goes from refused to **read**. The `Root Entry/` exception removed: a part stored as `Root Entry/xl/comments1.xml` (SheetJS parses it for 14) goes from refused to **read**. The seeded names removed: a zip entry named `\u0001Sh33tJ5` goes from read to refused (SheetJS parses it for 0), the safe direction. All three mutants pass 210 of 210. The code is right on every one (the 12 files); this is a missing fixture, no live call site. Also: `storedSlashWorkbook`'s `more` branch is exercised by no test (only the builder's probe), and the `/[Content_Types].xml` test asserts the copy's refusal but not, as the comments tests do, that SheetJS reads the first part (I measured it both ways: 1,847 ms with the slash name first, gate 1's reading; 423 ms with the exact name first, against 11 ms listed once).
+- **N3 · low** · `nfr:maintainability` · Shipped text understates what the command now refuses, in the safe direction. The new comment in `xlsx.ts`, and the Log, say the command "gets no bound here, only the refusal of a stream that does not inflate". The pre-read goes through `compressedOf`, which also refuses a local header that disagrees with the directory on method or sizes, the encryption bit, a zip64 extra field in the local header, and a range past the end of the file; until now only the route met those. The JSDoc of `refuseUnlessEachSheetIsItsOwn` lists its order and omits the step. I built no file that a real writer produces and that the command now wrongly refuses (below); nothing relies on the sentence.
+
+**Dropped**
+
+- The pre-read's cost on the command, which has no inflate bound. 500 MB of zeros, deflated (509,598 bytes), through `readSheets`: head +531.8 MB (peak 614.8), 5,937 ms; `2c48efa3` +496.2 MB (peak 580.2), 2,450 ms. 100 MB, three runs each: head +141.0 to +143.1 MB and 1,079 to 1,443 ms; `2c48efa3` +107.8 to +111.3 MB and 521 to 672 ms. About 7 ms per MiB inflated, so about 28 ms at 4 MiB, and about +35 MB. The file is over the 512 MB container at `2c48efa3` already, SheetJS inflating it whole; the pre-read adds a native pass that keeps nothing. Smaller files: no difference beyond noise.
+- A stored entry with a data descriptor is `BAD_REQUEST` through `readSheets`; the same at `2c48efa3` (SheetJS cannot read it), so not this round's.
+- A zip64 extra field in the local headers only: not built (my Python file carried it in the central directory too and was refused at both trees), so unmeasured.
+- **findings** · the hunt returned 5 new; 3 carried (N1 med, N2 low, N3 low), 2 dropped. Gate 1's F1 and its dropped spin carry verdicts above and are not counted again.
+- NFR: security ✓ (F1 closed on 12 files; the copy of SheetJS's rules is still a copy, as the header says) · performance — the route now inflates twice, the first against its bound, about 28 ms more at the bound by the 7 ms/MiB figure (not measured through the route on a legitimate file); the command +7 ms/MiB · reliability ✓ (spin fixed, five corrupt shapes) · maintainability — N2 and N3.
+
 ## Log
 
 ### 2026-11-08, filing
@@ -805,3 +869,307 @@ builder.
   worktree or a fixture (real bank data never enters the repository), and record only its
   application, its part counts and its sheet and cell counts. If it is gone at build time,
   ask the owner for it.
+
+### 2026-11-10, build (Claude Opus 5.5)
+
+Built option 1 on `lg-104-refuse-shared-parts` from `origin/main` `a100f429`, farmed and
+built (both exit 0). The code is commit `08c22e7a`.
+
+- **Build 1, shape (a).** `workbookEntries` compares each entry's local-header name with
+  its directory name, byte for byte, at the local header's offset, and refuses a mismatch
+  or a header that does not fit as `WORKBOOK_NOT_XLSX`. `compressedOf` compares them again.
+  `ZipEntry` gains `rawName`, the name with one character per byte, which is how SheetJS's
+  CFB reads it.
+- **Build 1, shape (b).** `eachPartReadOnce` in `workbook-parts.ts` is called by
+  `refuseUnlessEachSheetIsItsOwn` after the shared-sheet check, before any sheet is
+  parsed. For each sheet it counts the sheet's part, its `.rels`, and every part a
+  relationship there names. For a chartsheet it also counts each named part's `.rels`,
+  what those name, and their `.rels`. It refuses when one part is counted twice, whether
+  by two sheets or twice by one. It counts every relationship type, not only comments,
+  VML, drawing and chart, so it reads more than SheetJS does. The extra counting can only
+  add refusals, and only in a file where two sheets name one part. The refusal message is
+  its own: "names one of its parts from more than one place in its sheets".
+- **What the brief had wrong, or did not say.** "Two sheets' `.rels` name one part" is not
+  the whole shape. SheetJS keys a sheet's relationships by their raw target, so one
+  sheet's `.rels` naming one comments part twice in two cases (`../comments1.xml`,
+  `../COMMENTS1.xml`) parses it twice. The check counts within a sheet too. A test covers
+  it (SheetJS hangs 2 comments on `A1`).
+- **The copy was made exact where the new count depends on it, and that found two more
+  ways past lg-96's check.** Both are folded in because the new count needs the same
+  fixes to be sound:
+  - **Part names.** The finder compared targets, which SheetJS decodes one character per
+    byte, with directory names decoded as UTF-8. A part whose name is not ASCII was never
+    found. For a sheet that meant a refusal, but in the new count it would have been a
+    miss. Names are now compared one character per byte, and a `Map` gives each lookup in
+    one step.
+  - **UTF-16 parts.** SheetJS's `cc2str` reads a part that opens with a UTF-16
+    byte-order mark as UTF-16. The copy read it one byte per character, found no tags,
+    and treated a UTF-16 workbook `.rels` as empty, so it read the sheets by position.
+    Probe `bom.mts` on the base (`a100f429`): SheetJS read `["BIG","BIG"]`,
+    `sheetPartsOf` gave `[4,5]`, and `readSheets` read both sheets from the one part. Such
+    a part is now "cannot tell". `[Content_Types].xml` and a workbook `.rels` that exist
+    and cannot be read are refused, no longer read as empty.
+  - **CDATA in a target.** `unescapexml` turns `sheet<![CDATA[1]]>.xml` into `sheet1.xml`,
+    and lg-96's `ESCAPED` test did not see it. Probe `cdata.mts` on the base: SheetJS read
+    `["P1","P1"]`, `sheetPartsOf` gave `[3,10]`, and `readSheets` read both sheets.
+    `unescapexml` and `resolve_path` are now ported. A workbook target is refused when
+    the port would change it, which replaces `ESCAPED`. A sheet relationship's target is
+    decoded and resolved as SheetJS does, so a hyperlink with `&amp;` is not refused.
+- **Tests.** There are 23 new tests in four files, plus two existing tests changed.
+  - `xlsx.test.ts`, the describe block "a part SheetJS would read more than once for the
+    sheets…": the decoy at 14 sheets and its honest control; comments named by 14 sheets
+    and their control; one sheet naming comments twice; five two-sheet variants (an
+    entity, a non-ASCII name, VML through `legacyDrawing`, threaded comments, a drawing);
+    two chartsheets sharing a chart, with the control; CDATA; UTF-16 `.rels`; a non-ASCII
+    sheet part that is read.
+  - `workbook-zip.test.ts`, "the name an entry's local header carries": the control, three
+    mismatches, and `compressedOf`.
+  - `workbook-describe.test.ts`, "a part SheetJS would read for many sheets, through the
+    route": both shapes, through Describe and Confirm.
+  - `workbook-import.test.ts`, "… through the command": both shapes.
+  - Changed: the two existing "forty directory entries over one stored block" tests
+    (`workbook-zip.test.ts`, `workbook-describe.test.ts`). Their forty directory names
+    over one local header are now refused as shape (a), so all forty now carry the
+    header's name. The test still checks the count.
+  - The tests use the two shapes at 14 sheets with a small part. The 3.84 MB part and the
+    50,000 comments are the probes' to measure (below).
+- **Red runs.**
+  - The head's four spec files and helper, copied over the base source in a second tree
+    at `a100f429`: 20 of 198 failed, every one of them a new test. The three controls
+    passed.
+  - On the head, with `localNameIs` answering `true`: 7 of 198 failed (the four zip
+    tests and the decoy through `readSheets`, the route and the command).
+  - With the `eachPartReadOnce` call disabled: 10 of 198 failed (every shape (b) test).
+    Each mutation was restored from `08c22e7a`, and `git status` was clean after.
+- **Done when 1 and 5, the probes at the head.** The six pasted files were extracted from
+  this ticket. `localname.sh <head> <out> 2 14` exit 0. `comments.sh <head> <out> 50000 1 14`
+  exit 0. Both `inspect.mts` runs and the comments route run exit 0. All ran under
+  `--max-old-space-size=900`, one at a time.
+
+  | File                           | At the head                                          |
+  | ------------------------------ | ---------------------------------------------------- |
+  | `localname-decoy-2`, reader    | `WORKBOOK_NOT_XLSX`; +0.4 MB; 1 ms                   |
+  | `localname-control-2`, reader  | 2 sheets, 140,001 cells; +60.2 MB                    |
+  | `localname-decoy-14`, reader   | `WORKBOOK_NOT_XLSX`; +0.0 MB (peak 86.9); 1 ms       |
+  | `localname-control-14`, reader | 14 sheets, 140,013 cells; +58.7 MB (peak 143.5)      |
+  | `localname-decoy-14`, route    | `WORKBOOK_NOT_XLSX`; +0.0 MB; 5 ms                   |
+  | `comments-comments-1`, reader  | 1 sheet, 1 cell; +48.6 MB (one sheet names it: read) |
+  | `comments-comments-14`, reader | `WORKBOOK_NOT_XLSX`; +4.7 MB (peak 90.8); 35 ms      |
+  | `comments-distinct-14`, reader | 14 sheets, 14 cells; +53.3 MB (peak 134.1)           |
+  | `comments-comments-14`, route  | `WORKBOOK_NOT_XLSX`; +6.6 MB (peak 132.4); 74 ms     |
+
+  On the decoy, `inspect.mts` gives `sheetPartsOf threw WORKBOOK_NOT_XLSX`, and SheetJS's
+  own full read still makes 14 of 14 sheets the big part. The controls read as the
+  Reproduction has them: 140,013 cells and 14 cells.
+
+- **Done when 1, the real workbook.** `/workspaces/tools/workbook.xlsx` was read in place
+  and never copied. Only counts were taken; no cell was read into this record. My own
+  measurements: `docProps/app.xml` names `Microsoft Excel Online`, AppVersion `16.0300`.
+  It has 32 entries, and no local name differs from its directory name (0 of 32). It has
+  14 worksheet parts and 0 chartsheets. Parts: 0 comments, 0 threaded comments, 0 VML,
+  1 drawing, 1 chart. One sheet has a `.rels`, which names one part, the drawing. The
+  drawing's `.rels` names the chart.
+  - With both refusals in place, `readSheets` on the head reads 14 sheets and 3,513
+    cells. On the base tree at `a100f429` it also reads 14 sheets and 3,513 cells.
+  - The second refusal had one part to decide, the drawing, and it passed. The chart is
+    reached only through a worksheet's drawing, which the check follows only for a
+    chartsheet. So the chartsheet branch is unproven on a real file. Comments and VML are
+    unproven on a real file too, since this one has none.
+- **Done when 4.** PR #758 merged as `050ce1a4`, an ancestor of the base. On the head,
+  `git grep -n "cannot multiply" -- tools/ledger/api/src` exits 1. Build 4 is met by
+  #758, and the header is rewritten here to name what lg-104 refuses.
+- **Done when 6.** `npm run check` exit 0. `npm test -- --project ledger` exit 0: 2,323 of
+  2,323 tests, 99 files, 48 s.
+- **Fold-in.** The two copy defects above are folded in. Nothing else was folded. A
+  workbook-level multiplier was found and left out: see the next entry.
+- **Found, not fixed: one external-link part listed many times.** SheetJS's `parse_ct`
+  keeps every `Override` of an external-link type, without removing repeats. `parse_zip`
+  then parses each listed link's `.rels`, before even a `bookSheets` read returns. This
+  costs time, not memory, since nothing is kept between the parses. Probe `links.mts` on
+  the head ran while the ledger suite ran beside it, so the times are high: one link
+  `.rels` of 20,000 relationships listed once took 148 ms for `bookSheets` and 229 ms for
+  `readSheets`, +40.9 MB. Listed 50 times, it took 10,408 ms and 22,046 ms, +64.7 MB, and
+  `readSheets` read the file. It is not a sheet's part, so it falls outside this ticket's
+  population. Whether to fix it here or file it is an open decision, handed to the
+  orchestrator.
+
+### 2026-11-10, the owner's answer on the external-link listing
+
+- **Question.** SheetJS parses an external-link part's `.rels` once for each time
+  `[Content_Types].xml` lists the part. It costs time, not memory, and it is already on
+  `main`. Asked by the orchestrator, answered 2026-11-10 by the owner. The options:
+  (1) file a ledger ticket, which was the builder's recommendation; (2) fold it into
+  lg-104: refuse a repeated `Override` `PartName` before the `bookSheets` read, with a
+  test; (3) accept it and record it. **Chosen: (2), fold it in now.** That overrides the
+  builder's recommendation.
+- **The base measurement put with the question,** taken by the orchestrator. It ran the
+  builder's `links.mts` with the head's `xlsx-file.ts` helper over `a100f429`'s
+  `readSheets`. Listed once with 20,000 relationships: `bookSheets` 148 ms, `readSheets`
+  220 ms, +38.1 MB. Listed 50 times: `bookSheets` 4,829 ms, `readSheets` 13,565 ms,
+  +68.6 MB.
+
+### 2026-11-10, the external-link listing, built (Claude Opus 5.5)
+
+- **The refusal, commit `07a1471f`.** `eachPartListedOnce` in `workbook-parts.ts` reads
+  `[Content_Types].xml` with the ported tag reader. It refuses a workbook in which two
+  `Override` tags name one part. Names are compared as `safegetzipfile` finds a part:
+  case does not count, `/` and `\` count as one, and a leading `/` is stripped as
+  `strip_front_slash` does. It also refuses two names whose `.rels` would be one part.
+  - It applies to every content type, not only external links. The package format gives
+    a part one `Override`, and no workbook Excel saves lists one twice.
+  - A content-types part that exists and cannot be read is refused.
+  - `refuseUnlessEachSheetIsItsOwn` calls it right after `workbookEntries`, before the
+    `bookSheets` read. The error is `WORKBOOK_NOT_XLSX`, with the message "lists one of
+    its parts more than once". That code fits as it does for the other refusals: the
+    file is not a workbook a household saves.
+- **Tests,** built by the new helper `listedLinkWorkbook`. Six new tests, all passing at
+  `07a1471f`: 204 of 204 across the four spec files.
+  - `xlsx.test.ts`, the describe block "a part the content types list more than once is
+    refused before SheetJS reads the workbook": a link listed once is read; a link listed
+    50 times, in another case, with backslashes, or without the leading `/` is refused.
+  - `workbook-describe.test.ts`, "… through the route": refused by Describe and by
+    Confirm, nothing asked or written.
+  - My first backslash case was wrong, not the code. It turned every `/` into `\`, leading
+    one included, and SheetJS strips only a leading `/`, so it would not find that part
+    either. The case now drops the leading slash first.
+- **Mutation.** With the `eachPartListedOnce` refusal disabled in `xlsx.ts`, 5 of 204
+  tests fail: the four refusal cases and the route test. Restored from `07a1471f`, and
+  `git status` was clean.
+- **`links.mts` on the head (`07a1471f`).** One process at a time, under
+  `--max-old-space-size=900`, with nothing else running.
+  - Listed once, 20,000 relationships: `bookSheets` 131 ms; `readSheets` read 1 sheet in
+    196 ms; +42.6 MB; exit 0.
+  - Listed 50 times: `readSheets` refused `WORKBOOK_NOT_XLSX` in 2 ms; exit 0. The probe
+    calls `XLSX.read` with `bookSheets` itself before `readSheets`, and that direct call
+    still took 4,054 ms. The line's +63.3 MB is that call's too. `readSheets` reaches no
+    SheetJS read on this file.
+- **The real workbook at `07a1471f`.** Read in place, counts only: 14 sheets and 3,513
+  cells, as at the base.
+
+### 2026-11-10, the owner's answer on the corrupt-stream spin
+
+- **Question.** Gate 1 (Sonnet 5.5, FAIL at `2c48efa3`) dropped one item as outside its
+  range: `readSheets` spins at 100% CPU, killed at 30 s, on a workbook whose
+  `xl/_rels/workbook.xml.rels` is a corrupt deflate stream. It does the same at
+  `a100f429` (exit 124), so this branch does not introduce it. The import command reaches
+  it, since it does not call `countInflated`; the route does not. The reproduction is the
+  gate's `fold-F-wb-rels-corrupt.xlsx` through its `one.mts`. Asked by the orchestrator,
+  answered 2026-11-10 by the owner. The options: fold it into lg-104's review round (the
+  orchestrator's recommendation); file a ledger ticket; leave it. **Chosen: fold it into
+  lg-104's round.** The answer asks for a typed refusal, or a failure bounded to a few
+  seconds, through `readSheets` and the import command, with a test that fails or times
+  out at `2c48efa3`. It also asks where the spin is, and says to stop if the only fix is
+  inside `node_modules/xlsx`.
+
+### 2026-11-10, review round 1 (Claude Opus 5.5)
+
+The round's code is commit `76429ea5`. "Before" means a second tree at `2c48efa3` with
+the round's test files and helper copied in, farmed and built (both exit 0), and
+removed after.
+
+- **Gate 1's F1 reproduced on `2c48efa3` before any change.** The gate's
+  `slash-doubleslash-14` and `slash-leadingslash-14` read 14 sheets in 3,959 ms and
+  3,857 ms. `ct-listed-50-shadowed` read in 2,389 ms, against 105 ms listed once.
+- **The premise, from SheetJS's source and a reading.** `init_cfb` puts `Root Entry/`
+  first and `seed_cfb` a four-byte `\u0001Sh33tJ5` second. `cfb_add` keeps any name not
+  starting with `Root Entry/` as `("Root Entry/" + name).replace("//", "/")`.
+  `paths.mts` printed SheetJS's `FullPaths` for `/xl/a.xml`, `xl//b.xml`,
+  `Root Entry//xl/c.xml`, `//xl//d.xml`, `\u0001Sh33tJ5` and `xl/a.xml`:
+  `["Root Entry/","Root Entry/\u0001Sh33tJ5","Root Entry/xl/a.xml","Root Entry/xl/b.xml","Root Entry//xl/c.xml","Root Entry//xl//d.xml","Root Entry/\u0001Sh33tJ5","Root Entry/xl/a.xml"]`.
+- **The fix.** `zipOf` in `workbook-parts.ts` keys each entry by `cfbPathOf`, the path
+  `cfb_add` keeps. It also seeds the two keys `init_cfb` puts first, the empty name and
+  the seed, as "no part", since SheetJS finds those before any zip entry of that name.
+  This is gate 1's candidate remedy plus the seed, which the candidate left out.
+- **The two texts F1 names, corrected.** The header of `workbook-parts.ts` now says
+  the zip is searched under the path `cfb_add` keeps, after the seeded entries. It also
+  says the count of reads is as exact as the lookup and no more, since a part the copy
+  cannot find is counted as not read, and it records gate 1's +329.5 MB. In
+  `workbook-bounds.ts`, "they no longer get here" is replaced: the refusal rests on the
+  copy finding each part as SheetJS does, gate 1 read the comments shape past it, and
+  the copy, not the cap, keeps them from the cap.
+- **The sheet-part variant, built and measured.** It is the new helper
+  `storedSlashWorkbook`. One part is stored first as `xl//worksheets/b.xml`. Its
+  targets are `worksheets/b.xml`, `/xl/worksheets/b.xml` and `xl/worksheets/b.xml`,
+  each with a decoy under the name the old copy's next lookup tried. With `more`, it
+  adds one target for each place in `worksheets/b.xml` (not after a `/`) where `xl/`
+  can be put and still be taken out by SheetJS's first lookup, which makes 18 sheets.
+  The part is 1,400 by 100 numbers. These are `multiplier.mts` reader runs under
+  `--max-old-space-size=900`, one at a time:
+
+  | File              | At `2c48efa3`                                                                   | At `76429ea5`                       |
+  | ----------------- | ------------------------------------------------------------------------------- | ----------------------------------- |
+  | `slashsheet-3`    | read 3 sheets, 420,000 cells; +114.2 MB (peak 211.3); 1,296 ms                  | `WORKBOOK_NOT_XLSX`; +8.6 MB; 75 ms |
+  | `slashsheet-more` | `WORKBOOK_TOO_LARGE` `slots`, after the parse; +414.5 MB (peak 499.1); 7,755 ms | `WORKBOOK_NOT_XLSX`; +8.3 MB; 86 ms |
+
+  The gate estimated three to four times by reading. The spellings reach 18, and the
+  18-sheet file's parse peaked at 499.1 MB against the 512 MB container before the slots
+  cap refused it.
+
+- **The gate's own files, the same runs.**
+
+  | File                          | At `2c48efa3`                          | At `76429ea5`                        |
+  | ----------------------------- | -------------------------------------- | ------------------------------------ |
+  | `slash-plain-14-50000`        | `WORKBOOK_NOT_XLSX`; +4.9 MB           | `WORKBOOK_NOT_XLSX`; +11.0 MB; 75 ms |
+  | `slash-doubleslash-14-50000`  | read 14 sheets; +346.2 MB (peak 430.5) | `WORKBOOK_NOT_XLSX`; +7.8 MB; 75 ms  |
+  | `slash-leadingslash-14-50000` | read 14 sheets; +330.9 MB (peak 416.9) | `WORKBOOK_NOT_XLSX`; +9.8 MB; 73 ms  |
+  | `slash-triple-14-50000`       | read 14 sheets; +9.8 MB                | read 14 sheets; +12.3 MB             |
+  | `ct-listed-50-shadowed`       | read, 1,931 ms                         | `WORKBOOK_NOT_XLSX`, 18 ms           |
+  | `ct-listed-once`              | read, 111 ms                           | read, 102 ms                         |
+
+  `triple` is the gate's negative control: SheetJS keeps it under a name no relationship
+  asks for. It reads at both heads.
+
+- **The spin, located.** Gate 1's `fold-F-wb-rels-corrupt.xlsx` on `2c48efa3`:
+  `XLSX.CFB.read` alone exits 124 at 30 s, and so does `XLSX.read` with `bookSheets`.
+  Node's `inflateRawSync` refuses `xl/_rels/workbook.xml.rels` with `Z_DATA_ERROR` in
+  3 ms. So the spin is SheetJS's own JavaScript inflate inside its zip read, before any
+  code of ours runs.
+  - It is fixed in our code, not in `node_modules`. `readSheets` now runs
+    `countInflated` over every entry, with no bound, before any SheetJS read. That
+    inflates each stream through zlib once, keeps nothing, and refuses one that does not
+    inflate as `WORKBOOK_NOT_XLSX`. It reaches each entry through `compressedOf`, so it
+    also refuses, as `WORKBOOK_NOT_XLSX`, a local header that disagrees with the
+    directory on name, method or sizes, the encryption bit, a zip64 extra field in the
+    local header, and a range past the end of the file (withdrawn in place at the
+    landing, gate 2's N3: this bullet had named only the stream that does not inflate).
+  - It costs one more inflate of the file: about 35 ms at the bound by
+    `workbook-zip.ts`'s own figure. The route already ran this count against its bound;
+    the command now gets those checks and no bound (withdrawn in place at the landing: this line had said "the stream check" only). The comments-14 refusal went
+    from 35 ms (+4.7 MB) to 86 ms (+10.8 MB) through the reader.
+  - At `76429ea5`, `fold-F-wb-rels-corrupt.xlsx` through the gate's `one.mts` is refused
+    `WORKBOOK_NOT_XLSX` in 7 ms.
+- **Regression tests,** all passing on `76429ea5`:
+  - `xlsx.test.ts`, describe "a part stored under a name SheetJS's CFB normalises is
+    found as SheetJS finds it (lg-104, gate 1)", four tests: comments stored as
+    `xl//comments1.xml` and as `/xl/comments1.xml`, each asserting that SheetJS hangs a
+    comment on all 14 sheets; `/[Content_Types].xml` before a plain one; the sheet-part
+    variant, asserting that SheetJS reads `BIG` for 3 sheets.
+  - `xlsx.test.ts`, describe "a deflate stream that does not inflate is refused before
+    SheetJS reads it (lg-104)": refused, in under 5 s.
+  - `workbook-import.test.ts`, describe "a deflate stream that does not inflate, through
+    the command (lg-104)": exit 2, "Only an .xlsx workbook", no books directory.
+- **The same tests at `2c48efa3`:** `npx vitest run … -t "CFB normalises"` gave 4 of 4
+  failed. The two corrupt-stream tests each hit `timeout -k 5 90` (exit 124). No vitest
+  process survived (`ps … | grep -c "[v]itest"` → 0).
+- **Re-run at `76429ea5`:**
+  - Gate 1's `legit.mts`: the same six lines as gate 1's, the case-only `Override`
+    pair still refused.
+  - The real workbook, read in place, counts only: 14 sheets, 3,513 cells.
+  - `localname.sh 2 14` and `comments.sh … 50000 1 14`, all exit 0: both 14-sheet files
+    refused; the controls read 140,013 cells and 14 cells.
+  - The four spec files: 210 of 210.
+- **Done when 6, at `75d10327`.** `npm run check` exit 0. The four spec files: 210 of 210.
+  Fast preflight exit 0.
+  - `npm test -- --project ledger` exit 1, 2,334 of 2,335, in 24 s. The one failure is
+    `tools/ledger/web/test/history.test.tsx` › "the button reports whether its control is
+    open, and takes focus back when it closes (lg-95)".
+  - That test is outside this branch: `git diff --name-only a100f429...HEAD` lists no
+    path under `tools/ledger/web`. Alone, the file failed 1 of 3 runs (29 of 29, 29 of 29,
+    then 28 of 29).
+  - No ticket records the flake (`git grep` over `tools/ledger/docs` finds only lg-95's
+    and lg-99's passing readings). It is reported to the orchestrator, not fixed here.
+
+### 2026-11-10, landing
+
+- 2026-11-10 — Fixed at landing by owner choice: gate 2, N2 — "Three sub-rules of the new key are asserted by no test". Three tests added to `xlsx.test.ts`, describe "a part stored under a name SheetJS's CFB normalises is found as SheetJS finds it (lg-104, gate 1)", built as gate 2 built its A12, A5 and A14: "a part stored as xl//c//d.xml, named /xl/c//d.xml by 14 sheets, is refused: only the first // is joined", "a part stored as Root Entry/xl/comments1.xml, named by 14 sheets, is refused: it is already rooted" and "an entry named for SheetJS's seeded stream is read: SheetJS parses nothing for it". Each asserts SheetJS's own count (14, 14, 0) beside the copy's. All three pass on the head. With gate 2's `mutate2.mjs` applied to the committed tree, one test fails under each mutant and the other two pass: `overnorm` fails the first (1 failed, 2 passed), `noroot` the second, `noseed` the third. The tree was restored from the commit after each.
+- 2026-11-10 — Fixed at landing by owner choice: gate 2, N3 — "Shipped text understates what the command now refuses". The comment in `xlsx.ts` and the Build 1 bullet above, which said the command "gets no bound here, only the refusal of a stream that does not inflate", now say what `compressedOf` also refuses (a local header that disagrees with the directory on name, method or sizes, the encryption bit, a zip64 extra field in the local header, a range past the end of the file); the JSDoc of `refuseUnlessEachSheetIsItsOwn` now lists the pre-read step in its order. The earlier Log sentences were withdrawn in place, marked as such.

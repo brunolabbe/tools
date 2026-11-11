@@ -11,9 +11,18 @@ import { workbookEntries } from "../src/workbook-zip.ts";
 import { placesOf, readSheets, rowsOf } from "../src/xlsx.ts";
 import {
   SheetWriter,
+  commentsPart,
   entriesOf,
+  listedLinkWorkbook,
+  localNameWorkbook,
+  packaged,
+  relatedWorkbook,
+  relationshipType,
+  relationshipsPart,
   rewiredWorkbook,
   sharedPartWorkbook,
+  storedSlashWorkbook,
+  textPart,
   workbookOf,
   worksheetRelationship,
   zipOf,
@@ -760,5 +769,407 @@ describe("a workbook that does not give each sheet a part of its own is refused 
 
     expect(listed.SheetNames).toEqual(["2022", "2023"]);
     expect(listed.Sheets).toBeUndefined();
+  });
+});
+
+// lg-104: SheetJS reads, for each sheet, more than its part: the sheet's `.rels` and what
+// they name, and it finds every part by the name in the entry's local header. A part
+// reached twice that way is parsed twice, past every bound, so it is refused first.
+describe("a part SheetJS would read more than once for the sheets is refused before any sheet is parsed (lg-104)", () => {
+  const SHARED = "names one of its parts from more than one place in its sheets";
+
+  async function refusal(data: Buffer): Promise<AppError | undefined> {
+    try {
+      await readSheets(data);
+    } catch (error: unknown) {
+      if (error instanceof AppError) return error;
+      throw error;
+    }
+    return undefined;
+  }
+
+  /** SheetJS's own read: each sheet's `A1`, and how many comments it hangs on it. */
+  function sheetJs(bytes: Buffer): { text: unknown; comments: number }[] {
+    const book = XLSX.read(bytes, { type: "buffer", dense: true });
+    return book.SheetNames.map((name) => {
+      const cell = (book.Sheets[name] as XLSX.DenseSheet | undefined)?.["!data"]?.[0]?.[0];
+      return { text: cell?.v, comments: cell?.c?.length ?? 0 };
+    });
+  }
+
+  const comments = (target: string, id = "c1"): string =>
+    `<Relationship Id="${id}" Type="${relationshipType("comments")}" Target="${target}"/>`;
+
+  test("the local-name decoy: 14 sheets that SheetJS reads from one part are refused, by the zip check", async () => {
+    const bytes = localNameWorkbook(14, textPart("BIG"));
+
+    expect(sheetJs(bytes).filter((sheet) => sheet.text === "BIG")).toHaveLength(14);
+    expect(() => workbookEntries(bytes)).toThrow(AppError);
+    expect((await refusal(bytes))?.code).toBe("WORKBOOK_NOT_XLSX");
+  });
+
+  test("the decoy's honest control, every local name its directory name, is read: the big part once", async () => {
+    const bytes = localNameWorkbook(14, textPart("BIG"), true);
+
+    const sheets = await readSheets(bytes);
+
+    expect(sheets).toHaveLength(14);
+    expect(sheets.filter((sheet) => sheet.rows[0]?.[0]?.value?.kind === "text")).toHaveLength(14);
+    expect(
+      sheets.filter(
+        (sheet) => JSON.stringify(sheet.rows[0]?.[0]?.value) === '{"kind":"text","text":"BIG"}',
+      ),
+    ).toHaveLength(1);
+  });
+
+  test("one comments part named by 14 sheets' .rels, which SheetJS parses for each, is refused", async () => {
+    const bytes = relatedWorkbook(14, () => comments("../comments1.xml"), [
+      { name: "xl/comments1.xml", data: commentsPart(200) },
+    ]);
+
+    expect(sheetJs(bytes).filter((sheet) => sheet.comments === 1)).toHaveLength(14);
+    const error = await refusal(bytes);
+
+    expect(error?.code).toBe("WORKBOOK_NOT_XLSX");
+    expect(error?.message).toContain(SHARED);
+  });
+
+  test("the comments control, a part of its own for each of 14 sheets, is read", async () => {
+    const bytes = relatedWorkbook(
+      14,
+      (n) => comments(`../comments${n}.xml`),
+      Array.from({ length: 14 }, (_, i) => ({
+        name: `xl/comments${String(i + 1)}.xml`,
+        data: commentsPart(14),
+      })),
+    );
+
+    expect(await readSheets(bytes)).toHaveLength(14);
+  });
+
+  test("one comments part named twice in one sheet's .rels, spelled in two cases, which SheetJS parses twice, is refused", async () => {
+    const bytes = relatedWorkbook(
+      1,
+      () => comments("../comments1.xml") + comments("../COMMENTS1.xml", "c2"),
+      [{ name: "xl/comments1.xml", data: commentsPart(1) }],
+    );
+
+    expect(sheetJs(bytes)[0]?.comments).toBe(2);
+    expect((await refusal(bytes))?.message).toContain(SHARED);
+  });
+
+  const VML = "../drawings/vmlDrawing1.vml";
+  test.each([
+    [
+      "a comments target spelled with an entity, which SheetJS decodes",
+      (n: string) => comments(n === "1" ? "../comments1.xml" : "../comments&#49;.xml"),
+      [{ name: "xl/comments1.xml", data: commentsPart(1) }],
+      () => "",
+    ],
+    [
+      "a comments part whose name is not ASCII, found as SheetJS finds it",
+      () => comments("../commentés.xml"),
+      [{ name: "xl/commentés.xml", data: commentsPart(1) }],
+      () => "",
+    ],
+    [
+      "one VML drawing, read through each sheet's legacyDrawing",
+      () => `<Relationship Id="v1" Type="${relationshipType("vmlDrawing")}" Target="${VML}"/>`,
+      [{ name: "xl/drawings/vmlDrawing1.vml", data: Buffer.from("<xml/>") }],
+      () => '<legacyDrawing r:id="v1"/>',
+    ],
+    [
+      "one threaded comments part",
+      () =>
+        `<Relationship Id="t1" Type="http://schemas.microsoft.com/office/2017/10/relationships/threadedComment" Target="../threadedComments/threadedComment1.xml"/>`,
+      [
+        {
+          name: "xl/threadedComments/threadedComment1.xml",
+          data: Buffer.from("<ThreadedComments/>"),
+        },
+      ],
+      () => "",
+    ],
+    [
+      "one drawing, of a kind SheetJS does not parse for a worksheet: every type is counted",
+      () =>
+        `<Relationship Id="d1" Type="${relationshipType("drawing")}" Target="../drawings/drawing1.xml"/>`,
+      [{ name: "xl/drawings/drawing1.xml", data: Buffer.from("<xdr:wsDr/>") }],
+      () => "",
+    ],
+  ])("two sheets naming %s are refused", async (_what, relationships, extra, more) => {
+    const bytes = relatedWorkbook(2, relationships, extra, more);
+
+    expect((await refusal(bytes))?.message).toContain(SHARED);
+  });
+
+  test("two chartsheets whose drawings name one chart are refused; a chart each is read", async () => {
+    const chartsheets = (chart: (n: string) => string): Buffer => {
+      const ids = ["1", "2"];
+      return packaged(
+        ids.map((n) => ({ target: `chartsheets/sheet${n}.xml`, kind: "chartsheet" })),
+        ids.flatMap((n) => [
+          {
+            name: `xl/chartsheets/sheet${n}.xml`,
+            data: Buffer.from(
+              `<chartsheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><drawing r:id="d1"/></chartsheet>`,
+            ),
+          },
+          {
+            name: `xl/chartsheets/_rels/sheet${n}.xml.rels`,
+            data: relationshipsPart(
+              `<Relationship Id="d1" Type="${relationshipType("drawing")}" Target="../drawings/drawing${n}.xml"/>`,
+            ),
+          },
+          { name: `xl/drawings/drawing${n}.xml`, data: Buffer.from('<c:chart r:id="c1"/>') },
+          {
+            name: `xl/drawings/_rels/drawing${n}.xml.rels`,
+            data: relationshipsPart(
+              `<Relationship Id="c1" Type="${relationshipType("chart")}" Target="../charts/${chart(n)}"/>`,
+            ),
+          },
+          { name: `xl/charts/chart${n}.xml`, data: Buffer.from("<c:chartSpace/>") },
+        ]),
+      );
+    };
+
+    expect((await refusal(chartsheets(() => "chart1.xml")))?.message).toContain(SHARED);
+    expect(await refusal(chartsheets((n) => `chart${n}.xml`))).toBeUndefined();
+  });
+
+  // Found while building lg-104: two more spellings lg-96's check read as two parts,
+  // each of which SheetJS reads as one part for both sheets.
+  test("a workbook relationship target with a CDATA section, which SheetJS decodes, is refused", async () => {
+    const target = "worksheets/sheet<![CDATA[1]]>.xml";
+    const bytes = rewiredWorkbook({
+      sheets: `<sheet name="S1" sheetId="1" r:id="dup1"/><sheet name="S2" sheetId="2" r:id="dup2"/>`,
+      relationships:
+        worksheetRelationship("dup1", "worksheets/sheet1.xml") +
+        worksheetRelationship("dup2", target),
+      extra: [{ name: `xl/${target}`, data: textPart("OTHER") }],
+    });
+
+    expect(sheetJs(bytes).map((sheet) => sheet.text)).toEqual(["P1", "P1"]);
+    expect((await refusal(bytes))?.code).toBe("WORKBOOK_NOT_XLSX");
+  });
+
+  test("a workbook .rels saved as UTF-16, which SheetJS decodes and a byte-to-a-character reading does not, is refused", async () => {
+    const relationships =
+      worksheetRelationship("rId1", "worksheets/big.xml") +
+      worksheetRelationship("rId2", "worksheets/big.xml");
+    const text = relationshipsPart(relationships).toString("utf8");
+    const bytes = packaged(
+      [{ target: "worksheets/sheet1.xml" }, { target: "worksheets/sheet2.xml" }],
+      [
+        { name: "xl/worksheets/sheet1.xml", data: textPart("tiny1") },
+        { name: "xl/worksheets/sheet2.xml", data: textPart("tiny2") },
+        { name: "xl/worksheets/big.xml", data: textPart("BIG") },
+      ],
+    );
+    const utf16 = zipOf(
+      entriesOf(bytes).map((entry) =>
+        entry.name === "xl/_rels/workbook.xml.rels"
+          ? {
+              name: entry.name,
+              data: Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(text, "utf16le")]),
+            }
+          : entry,
+      ),
+    );
+
+    expect(sheetJs(utf16).map((sheet) => sheet.text)).toEqual(["BIG", "BIG"]);
+    expect((await refusal(utf16))?.code).toBe("WORKBOOK_NOT_XLSX");
+  });
+
+  test("a sheet whose part name is not ASCII is found as SheetJS finds it, and read", async () => {
+    const bytes = packaged(
+      [{ target: "worksheets/feuillé.xml" }],
+      [{ name: "xl/worksheets/feuillé.xml", data: textPart("P1") }],
+    );
+
+    const [sheet] = await readSheets(bytes);
+
+    expect(sheet?.rows[0]?.[0]?.value).toEqual({ kind: "text", text: "P1" });
+  });
+});
+
+// lg-104, the owner's answer of 2026-11-10: SheetJS parses an external link's `.rels`
+// once for every time the content types list the link, before a `bookSheets` read
+// returns, so a part listed twice is refused before that read.
+describe("a part the content types list more than once is refused before SheetJS reads the workbook (lg-104)", () => {
+  const LINK = "/xl/externalLinks/externalLink1.xml";
+  const LISTED_TWICE = "lists one of its parts more than once";
+
+  async function refusal(data: Buffer): Promise<AppError | undefined> {
+    try {
+      await readSheets(data);
+    } catch (error: unknown) {
+      if (error instanceof AppError) return error;
+      throw error;
+    }
+    return undefined;
+  }
+
+  test("an external link listed once is read", async () => {
+    const [sheet] = await readSheets(listedLinkWorkbook([LINK], 10));
+
+    expect(sheet?.rows[0]?.[0]?.value).toEqual({ kind: "text", text: "P1" });
+  });
+
+  test.each([
+    ["the same name 50 times", Array.from({ length: 50 }, () => LINK)],
+    ["the same part in another case", [LINK, LINK.toUpperCase()]],
+    // SheetJS strips a leading `/`, never a leading `\`, so the backslashed name has none.
+    ["the same part with backslashes", [LINK, LINK.slice(1).replaceAll("/", "\\")]],
+    ["the same part without the leading slash", [LINK, LINK.slice(1)]],
+  ])("an external link listed as %s is WORKBOOK_NOT_XLSX", async (_what, names) => {
+    const error = await refusal(listedLinkWorkbook(names, 10));
+
+    expect(error?.code).toBe("WORKBOOK_NOT_XLSX");
+    expect(error?.message).toContain(LISTED_TWICE);
+  });
+});
+
+// lg-104, gate 1's F1: SheetJS's CFB keeps an entry under `("Root Entry/" + name)` with its
+// first `//` made one `/`, so `/xl/a.xml` and `xl//a.xml` are `xl/a.xml` to it. A copy that
+// keyed the name as stored found no such part, and counted it as not read.
+describe("a part stored under a name SheetJS's CFB normalises is found as SheetJS finds it (lg-104, gate 1)", () => {
+  async function refusal(data: Buffer): Promise<AppError | undefined> {
+    try {
+      await readSheets(data);
+    } catch (error: unknown) {
+      if (error instanceof AppError) return error;
+      throw error;
+    }
+    return undefined;
+  }
+
+  /** How many of SheetJS's own sheets hang a comment on `A1`, and hold `text` there. */
+  function sheetJs(bytes: Buffer, text?: string): number {
+    const book = XLSX.read(bytes, { type: "buffer", dense: true });
+    return book.SheetNames.filter((name) => {
+      const cell = (book.Sheets[name] as XLSX.DenseSheet | undefined)?.["!data"]?.[0]?.[0];
+      return text === undefined ? (cell?.c?.length ?? 0) > 0 : cell?.v === text;
+    }).length;
+  }
+
+  test.each([["xl//comments1.xml"], ["/xl/comments1.xml"]])(
+    "one comments part stored as %s, named by 14 sheets' .rels, is refused",
+    async (stored) => {
+      const bytes = relatedWorkbook(
+        14,
+        () =>
+          `<Relationship Id="c1" Type="${relationshipType("comments")}" Target="../comments1.xml"/>`,
+        [{ name: stored, data: commentsPart(200) }],
+      );
+
+      expect(sheetJs(bytes)).toBe(14);
+      const error = await refusal(bytes);
+
+      expect(error?.code).toBe("WORKBOOK_NOT_XLSX");
+      expect(error?.message).toContain("names one of its parts from more than one place");
+    },
+  );
+
+  // Each of the next three pins one sub-rule of the key (gate 2, N2), so that a copy which
+  // over-normalised, forgot the root, or dropped the seeded names would flip a file SheetJS
+  // itself reads the same way.
+  test("a part stored as xl//c//d.xml, named /xl/c//d.xml by 14 sheets, is refused: only the first // is joined", async () => {
+    const bytes = relatedWorkbook(
+      14,
+      () => `<Relationship Id="c1" Type="${relationshipType("comments")}" Target="/xl/c//d.xml"/>`,
+      [{ name: "xl//c//d.xml", data: commentsPart(200) }],
+    );
+
+    expect(sheetJs(bytes)).toBe(14);
+    expect((await refusal(bytes))?.code).toBe("WORKBOOK_NOT_XLSX");
+  });
+
+  test("a part stored as Root Entry/xl/comments1.xml, named by 14 sheets, is refused: it is already rooted", async () => {
+    const bytes = relatedWorkbook(
+      14,
+      () =>
+        `<Relationship Id="c1" Type="${relationshipType("comments")}" Target="../comments1.xml"/>`,
+      [{ name: "Root Entry/xl/comments1.xml", data: commentsPart(200) }],
+    );
+
+    expect(sheetJs(bytes)).toBe(14);
+    expect((await refusal(bytes))?.code).toBe("WORKBOOK_NOT_XLSX");
+  });
+
+  test("an entry named for SheetJS's seeded stream is read: SheetJS parses nothing for it", async () => {
+    // Built in code: a control character typed into a source file is easy to lose.
+    const seeded = `${String.fromCharCode(1)}Sh33tJ5`;
+    const bytes = relatedWorkbook(
+      14,
+      () => `<Relationship Id="c1" Type="${relationshipType("comments")}" Target="/${seeded}"/>`,
+      [{ name: seeded, data: commentsPart(200) }],
+    );
+
+    expect(sheetJs(bytes)).toBe(0);
+    expect(await refusal(bytes)).toBeUndefined();
+  });
+
+  test("a content types part stored as /[Content_Types].xml, before a plain one, is the one read", async () => {
+    // SheetJS reads the first, which lists the link 50 times; the plain one lists it once.
+    const LINK = "/xl/externalLinks/externalLink1.xml";
+    const listed = entriesOf(
+      listedLinkWorkbook(
+        Array.from({ length: 50 }, () => LINK),
+        10,
+      ),
+    );
+    const once = entriesOf(listedLinkWorkbook([LINK], 10)).find(
+      (entry) => entry.name === "[Content_Types].xml",
+    );
+    if (once === undefined) throw new Error("no content types");
+    const bytes = zipOf([
+      ...listed.map((entry) =>
+        entry.name === "[Content_Types].xml" ? { ...entry, name: "/[Content_Types].xml" } : entry,
+      ),
+      once,
+    ]);
+
+    const error = await refusal(bytes);
+
+    expect(error?.code).toBe("WORKBOOK_NOT_XLSX");
+    expect(error?.message).toContain("lists one of its parts more than once");
+  });
+
+  test("one sheet part stored as xl//worksheets/b.xml, which SheetJS reads for three sheets, is refused", async () => {
+    const bytes = storedSlashWorkbook(textPart("BIG"));
+
+    expect(sheetJs(bytes, "BIG")).toBe(3);
+    expect((await refusal(bytes))?.code).toBe("WORKBOOK_NOT_XLSX");
+  });
+});
+
+// lg-104, the owner's answer of 2026-11-10 on gate 1's dropped item: SheetJS's own inflate
+// spun past 30 s on a corrupt deflate stream, on any read, before any check here could run.
+describe("a deflate stream that does not inflate is refused before SheetJS reads it (lg-104)", () => {
+  test("a workbook .rels whose stream is corrupt is WORKBOOK_NOT_XLSX, at once", async () => {
+    const bytes = zipOf(
+      entriesOf(
+        packaged(
+          [{ target: "worksheets/sheet1.xml" }],
+          [{ name: "xl/worksheets/sheet1.xml", data: textPart("P1") }],
+        ),
+      ).map((entry) =>
+        entry.name === "xl/_rels/workbook.xml.rels"
+          ? {
+              name: entry.name,
+              deflated: {
+                bytes: Buffer.from([0xff, 0xff, 0xff, 0xff]),
+                crc: 0,
+                size: entry.data?.length ?? 0,
+              },
+            }
+          : entry,
+      ),
+    );
+    const started = performance.now();
+
+    await expect(readSheets(bytes)).rejects.toMatchObject({ code: "WORKBOOK_NOT_XLSX" });
+    expect(performance.now() - started).toBeLessThan(5_000);
   });
 });

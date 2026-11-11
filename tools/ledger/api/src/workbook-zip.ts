@@ -52,11 +52,20 @@
  * counted here: a stream that runs past the directory's compressed size fails
  * this inflate (`Z_BUF_ERROR`), so it is refused before SheetJS sees it.
  *
+ * **And it names each entry by its local header** (lg-104), where this parse
+ * names it by the directory. So an entry whose local header carries a name other
+ * than the directory's is `WORKBOOK_NOT_XLSX`, checked for every entry when the
+ * directory is read and again when an entry's bytes are found. Without it,
+ * `workbook-parts.ts` judges a sheet's part by a name SheetJS never asks for: 14
+ * entries named apart in the directory and alike in their local headers read one
+ * 1 400 by 100 part 14 times, +379.0 MB through `readSheets` (peak 462.0 MB), past
+ * every bound here (gate 3 of lg-96).
+ *
  * The parse is by hand rather than through the reader, whose zip walk is not
  * an API.
  */
 
-import type { Buffer } from "node:buffer";
+import { Buffer } from "node:buffer";
 import { createInflateRaw } from "node:zlib";
 import { AppError } from "@ledger/contract";
 
@@ -121,7 +130,14 @@ const MAX_COMMENT = 0xffff;
 
 /** One entry, as the central directory declares it. */
 export interface ZipEntry {
+  /** Read as UTF-8, as a person would; what the code compares against a fixed name. */
   name: string;
+  /**
+   * The name a byte to a character, as SheetJS's CFB reads it (`String.fromCharCode` of
+   * each byte), which is how `workbook-parts.ts` must find a part: two names that are
+   * one in UTF-8 are not one to SheetJS, and the other way round (lg-104).
+   */
+  rawName: string;
   /** 0, stored, or 8, deflated: the two the reader reads. */
   method: 0 | 8;
   compressedSize: number;
@@ -147,6 +163,18 @@ function hasZip64(extra: Buffer): boolean {
     if (extra.readUInt16LE(at) === 1) return true;
   }
   return false;
+}
+
+/**
+ * Whether the local header at `at` carries `name`, byte for byte. SheetJS reads the
+ * name's length and bytes there whatever the signature says, so a header that does
+ * not fit in the file carries no name it could agree with.
+ */
+function localNameIs(bytes: Buffer, at: number, name: Buffer): boolean {
+  if (at + 30 > bytes.length) return false;
+  const length = bytes.readUInt16LE(at + 26);
+  if (length !== name.length || at + 30 + length > bytes.length) return false;
+  return bytes.subarray(at + 30, at + 30 + length).equals(name);
 }
 
 /** Where the end-of-central-directory record starts, or -1. */
@@ -222,8 +250,13 @@ export function workbookEntries(bytes: Buffer): ZipEntry[] {
     ) {
       throw notXlsx();
     }
+    // SheetJS names the entry from its local header (lg-104), so the two must be one name,
+    // byte for byte, whether or not anything here ever reads the entry's bytes.
+    const name = bytes.subarray(at + 46, at + 46 + nameLength);
+    if (!localNameIs(bytes, localHeaderOffset, name)) throw notXlsx();
     entries.push({
-      name: bytes.toString("utf8", at + 46, at + 46 + nameLength),
+      name: name.toString("utf8"),
+      rawName: name.toString("latin1"),
       method,
       compressedSize,
       declaredSize,
@@ -251,11 +284,13 @@ export function declaredInflatedSize(entries: readonly ZipEntry[]): number {
  * that is 0), so a local header that says deflated where the directory says
  * stored would be counted here as its raw bytes and inflated there without
  * bound (lg-87). The sizes may be 0 only where bit 3 says a data descriptor
- * carries them; the stream inflated is then the one counted here.
+ * carries them; the stream inflated is then the one counted here. The name must
+ * be the directory's too, since SheetJS names the entry by it (lg-104).
  */
 export function compressedOf(bytes: Buffer, entry: ZipEntry): Buffer {
   const at = entry.localHeaderOffset;
   if (at + 30 > bytes.length || bytes.readUInt32LE(at) !== LOCAL_HEADER) throw notXlsx();
+  if (!localNameIs(bytes, at, Buffer.from(entry.rawName, "latin1"))) throw notXlsx();
   const flags = bytes.readUInt16LE(at + 6);
   const compressed = bytes.readUInt32LE(at + 18);
   const inflated = bytes.readUInt32LE(at + 22);

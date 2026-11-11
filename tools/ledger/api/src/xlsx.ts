@@ -14,8 +14,8 @@ import * as XLSX from "xlsx";
 import type { Cell, CellValue, Sheet } from "@ledger/books";
 import { AppError } from "@ledger/contract";
 import { MAX_WORKBOOK_ROWS, MAX_WORKBOOK_SLOTS } from "./workbook-bounds.ts";
-import { sheetPartsOf } from "./workbook-parts.ts";
-import { workbookEntries } from "./workbook-zip.ts";
+import { eachPartListedOnce, eachPartReadOnce, sheetPartsOf } from "./workbook-parts.ts";
+import { countInflated, workbookEntries } from "./workbook-zip.ts";
 
 /** The one `SSF` call this file makes; SheetJS types the whole namespace `any`. */
 const SSF = XLSX.SSF as { is_date: (format: string) => boolean };
@@ -227,22 +227,46 @@ export function rowsOf(
  *
  * The shape of the zip comes first, whatever the caller: whatever `workbookEntries`
  * refuses is refused here, so the import command meets the refusal the route does
- * (gate 2). Then the sheets are counted by SheetJS itself, with `bookSheets`, which
+ * (gate 2). Then every entry is inflated once through node's zlib, with no bound and
+ * keeping nothing, which refuses a stream that does not inflate and whatever
+ * `compressedOf` refuses in a local header (lg-104). Then a part listed twice in the
+ * content types is refused, since even a
+ * `bookSheets` read parses each listed external link's `.rels` (lg-104). Then the
+ * sheets are counted by SheetJS itself, with `bookSheets`, which
  * reads the workbook part and parses no sheet, and the workbook is refused unless
  * `workbook-parts.ts` finds the same number, each in a part that exists, no two in
- * one.
+ * one. Then every other part SheetJS reads for a sheet, its `.rels` and what they name
+ * (comments, VML, a chartsheet's drawing and chart), must be read for that sheet alone
+ * and once (lg-104): a comments part of 50 000 comments that 14 sheets' `.rels` all
+ * named read +327.1 MB through `readSheets`, past every bound.
  *
  * **The count is fail-closed; the distinctness of the parts is not.** A difference
  * between the copy and SheetJS in the sheet count or in whether a part exists is a
- * refusal. Whether two sheets share a part is judged by a copy of SheetJS's rules, and
- * gate 3 (lg-96) found two ways past it, both read through `readSheets` (lg-104 owns
- * them): a zip entry whose local-header name differs from its central-directory name
- * (`workbookEntries` and `compressedOf` read the central one, SheetJS's CFB the local
- * one), which read one 1 400 by 100 part 14 times, +367.5 MB (peak 448.9 MB); and a part,
- * such as comments, that several sheets' `.rels` name, parsed once per sheet, +352.5 MB.
+ * refusal. Whether two reads are of one part is judged by a copy of SheetJS's rules,
+ * and each of lg-96's three gates and lg-104's build found a difference in it; each
+ * known one is refused (`workbook-parts.ts` lists them). `workbookEntries` refuses a
+ * zip entry whose local-header name differs from its directory's, which read one
+ * 1 400 by 100 part 14 times, +379.0 MB (peak 462.0 MB), since SheetJS names an
+ * entry by the first and the copy found parts by the second.
  */
-function refuseUnlessEachSheetIsItsOwn(data: Buffer): void {
+async function refuseUnlessEachSheetIsItsOwn(data: Buffer): Promise<void> {
   const entries = workbookEntries(data);
+  // Every deflate stream through node's zlib first, keeping nothing (lg-104, the owner's
+  // answer of 2026-11-10): SheetJS's own inflate, which runs on any read, `bookSheets`
+  // included, spun at full CPU past 30 s on a corrupt `.rels` stream that zlib refuses in
+  // 3 ms. The route has counted these already, against its bound; the import command has
+  // not, and gets no bound here. It gets what `compressedOf` refuses on the way to each
+  // stream: a stream that does not inflate, a local header that disagrees with the
+  // directory on name, method or sizes, the encryption bit, a zip64 extra field in the
+  // local header, and a range past the end of the file.
+  await countInflated(data, entries, Number.MAX_SAFE_INTEGER);
+  // Before the `bookSheets` read, which parses each listed external link's `.rels`.
+  if (!eachPartListedOnce(data, entries)) {
+    throw new AppError(
+      "WORKBOOK_NOT_XLSX",
+      "That workbook lists one of its parts more than once; this import reads a workbook that lists each once.",
+    );
+  }
   let listed: unknown;
   try {
     listed = XLSX.read(data, { type: "buffer", bookSheets: true }).SheetNames;
@@ -261,11 +285,17 @@ function refuseUnlessEachSheetIsItsOwn(data: Buffer): void {
       "That workbook does not give each of its sheets a part of its own; this import reads a workbook that does.",
     );
   }
+  if (!eachPartReadOnce(data, entries)) {
+    throw new AppError(
+      "WORKBOOK_NOT_XLSX",
+      "That workbook names one of its parts from more than one place in its sheets; this import reads a workbook whose sheets each keep their own.",
+    );
+  }
 }
 
 /** Every sheet of the workbook in `data`, in the workbook's order. */
 export async function readSheets(data: Buffer): Promise<Sheet[]> {
-  refuseUnlessEachSheetIsItsOwn(data);
+  await refuseUnlessEachSheetIsItsOwn(data);
   let workbook: XLSX.WorkBook;
   try {
     // `sheetStubs`, or a formula saved with no value is dropped, formula and all:
