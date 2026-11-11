@@ -3,7 +3,7 @@ id: repo-129
 tool: repo
 title: Every test file re-imports its whole module graph, 145 s of CI's 815 s
 kind: chore
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -41,7 +41,9 @@ where it holds; (b) not now. **Chosen: (a).**
    and use a glob such as `<tool>*` in the docs if needed.
 2. A project's non-isolated half is kept only if it passes **five consecutive
    full runs** of that project locally, with different `--sequence.seed` values
-   (`--sequence.shuffle`), and one CI run. State leaking between files shows up
+   (`--sequence.shuffle`; ledger's passes shuffle file order, `--sequence.shuffle.files`,
+   because of the in-file order dependencies filed as lg-106, PR #789, and repo-144,
+   PR #788), and one CI run. State leaking between files shows up
    as order-dependent failures. Candidates found by reading: the ledger rate
    limiter, ledger's per-file env clearing in
    `tools/ledger/api/test/helpers/no-model-environment.ts`, and module-level
@@ -61,12 +63,39 @@ where it holds; (b) not now. **Chosen: (a).**
 ## Done when
 
 1. Each project ends either split into an isolated and a non-isolated half, with
-   five shuffled local passes and one CI pass recorded in the Log, or left
+   five shuffled local passes (ledger's shuffle file order, `--sequence.shuffle.files`,
+   because of the in-file order dependencies filed as lg-106, PR #789, and repo-144,
+   PR #788; the other projects' use `--sequence.shuffle`) and one CI pass recorded
+   in the Log, or left
    unchanged with the failing files and the reason recorded.
-2. The CI log of this pull request shows a lower summed `import` time than run
-   `40210503276`'s 145 s, and the Log states the difference.
+2. The ubuntu import share and wall clock fall against the nearest `main` matrix
+   run, and the Log states the difference.
 3. `npm test -- --project <tool>` still runs all of that tool's files. Prove it
    by comparing the file count before and after.
+
+## Review
+
+**Gate: PASS** — 2026-11-10 · `a100f429..5bee293c` · Sonnet 5.5, depth medium (repo-139's measurement)
+
+| Done when                                                                                                                                                      | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Each project split into an isolated and a non-isolated half with five shuffled local passes and one CI pass in the Log, or left unchanged with the reason   | **verified** — the Log records five seeds each for planner, ledger and downloader, core and `repo` unchanged with a reason, and one green CI pass (`test (ubuntu-latest)` and `test (windows-latest, informational)`, run 42732276312 at `2b13cbd9`; run 42733239059 at `5bee293c`, which differs from it by the ticket file only). Re-run by me on fresh seeds through the gate: planner `--sequence.shuffle --sequence.seed=11` `Test Files 86 passed (86)`, `Tests 1944 passed (1944)`; ledger `--sequence.shuffle.files --sequence.seed=13` `99 passed (99)`, `2300 passed (2300)`; downloader `--sequence.shuffle --sequence.seed=12` `126 passed \| 1 skipped (127)`, `2608 passed \| 2 skipped (2610)`. The other four seeds each are the Log's, not re-run. **Ledger's readings shuffle files, not tests (`--sequence.shuffle.files`)**; the line is met in property by that mechanism (see F1). |
+| 2. (as reworded by the owner, 2026-11-10) the ubuntu import share and wall clock fall against the nearest `main` matrix run, and the Log states the difference | **verified** from the CI logs. `main` run 42525621981 at `d7137816`, ubuntu: `Duration 229.18s (tests 83%, import 11%, …)`. This PR, run 42732276312 at `2b13cbd9`: `198.63s (tests 90%, import 4%, …)`; run 42733239059 at `5bee293c`: `210.28s (tests 89%, import 5%, …)`. Both PR readings are below `main` on share and on wall clock; the Log states 11 % to 4 % and 229 s to 199 s. Windows (informational, not in the line): 322.30 s import 11 % to 343.53 s import 6 % and 327.95 s import 6 %.                                                                                                                                                                                                                                                                                                                                                                                                 |
+| 3. `npm test -- --project <tool>` still runs all of that tool's files, shown by a file count before and after                                                  | **proven** — `scripts/test/vitest-projects.test.ts` › "--project <tool> lists every one of the tool's test files, once each (repo-129)" asserts `vitest list --filesOnly --project <tool>` equals the files on disk for downloader, planner and ledger; it goes red when the shared half is emptied (`downloader: expected [ …(27) ] to deeply equal [ …(127) ]`). My counts, `vitest list --filesOnly --project <p>` at `a100f429` then `5bee293c`: downloader 127/127, planner 86/86, ledger 99/99, core 15/15, repo 16/17 (the new test file), all 343/344, the sets identical bar that file, none listed twice.                                                                                                                                                                                                                                                                                      |
+
+- **low** · no `Done when` line depends on it · **F1** Build 2 and Done when 1 name `--sequence.shuffle`; for ledger the Log used `--sequence.shuffle.files` because two files order-depend on their own tests. Reproduced: `csv-import.test.ts` seed 3 and `workbook-describe.test.ts` seed 4 fail under `--sequence.shuffle` with and without `--isolate`, and pass under `--sequence.shuffle.files`, so they are not leaks between files. The shuffled thing that matters to `isolate: false` is file order, which is what was shuffled. The Log says "a defect to file" and no id exists yet: the lander files them (with `preflight.test.ts`'s ghshim case, seed 2 under `--sequence.shuffle.tests`) and rewords the line.
+- **low** · no `Done when` line depends on it · **F2** `splitProject` lists the files by name when the config loads, so `npm run test:watch` does not pick up a new test file until it restarts; before, an include glob did. `.claude/rules/testing.md` says a new test file "needs nothing", true of a run. Reasoned from the config, not run.
+- **low** · no `Done when` line depends on it · **F3** text the move made false, in the safe direction: the header of `tools/ledger/api/test/helpers/no-model-environment.ts` says `setupFiles` is "in the root `vitest.config.ts`" (now `tools/ledger/vitest.config.ts`), and the opening of `.claude/rules/testing.md` and the root `CLAUDE.md` still say the projects are configured once in the root file. The new paragraph in `testing.md` states the split; the old sentences were not touched.
+- **low** · no `Done when` line depends on it · **F4** the new test's `MOCKS` regex omits `unmock` and `doUnmock`, and no file of the three tools uses `vi.doMock` alone, so breaking any one of those three alternatives in `NEEDS_ISOLATION` leaves `vitest-projects.test.ts` green (3 of 7 alternatives reproduced; the other four turn it red). The pattern at the head is right. No live call site.
+- **low** · no `Done when` line depends on it · **F5** the Log's baseline sentence calls `d7137816` "the nearest `main` push run with its matrix executed". A nearer one ran: run 42536853653 at `7a1ad282`, ubuntu `269.18s (… import 14% …)`, red on one `history.test.tsx` focus case, windows `379.57s`, import 14 %. Against it the fall is larger, so no conclusion changes; the Log does not say why the red run was passed over.
+- **low** · no `Done when` line depends on it · **F6** the Log gives `expected 0 to be greater than 20` for both ledger files. `workbook-describe.test.ts` seed 4 reproduces as `AssertionError: expected false to be true`, with and without `--isolate`; `csv-import.test.ts` seed 3 as `expected 0 to be greater than 20`. The tickets to be filed should carry the messages as they reproduce.
+- **dropped** · the sweep of the 248 shared-half files for `vi.spyOn`, fake timers, `process.env` and `TZ` writes, prototype patches and `process` patches: 16 files carry a real hazard pattern. The 11 that patch something shared (`Directory.prototype`, `Database.prototype`, `process.kill`, `Element.prototype`, `TMPDIR`, `TZ`, the fake clock) each restore it in the same file, in a `finally`, `afterEach` or `afterAll`, or by an inline `mockRestore`; the other 5 spy on an object their own harness built for the test. Not leaks. Module-level mutable state in `src` was not enumerated: no `export let` or `export var` exists, and the module-level `Set`s read are constant tables.
+- **dropped** · the Log's one unexplained downloader failure (`resolvers.test.ts` › "a rejection recorded before the caller's own window does not reach it"): the state is a `TlsRejectionLog` made inside the test, not module state, and it did not recur in my run. Unattributable to the split, not a defect of this diff.
+- **dropped** · the new config files (`vitest.isolation.ts`, three `tools/<tool>/vitest.config.ts`) sit under no tsconfig project, as the root config did before; an ad hoc `tsc --strict` over the four exits 0, `oxlint` and `oxfmt --check` are clean. Not a defect of this diff.
+- **dropped** · `--project shared` and `--project nosuch` fail loudly (`No projects were found`); `--project "planner*"`, `--project "planner (shared)"` and `--project '!planner'` behave as expected. Not a defect.
+- **note** · the Log's "Not proven by anything run here: that a file project's `maxWorkers: 4` took effect on CI" can be proven and now is: with `CI=true`, vitest's own config resolution (`createVitest`, `project.config.maxWorkers`) gives 4 for all eight projects at the head and for all five at the base; with `CI` unset or `false` it gives 11 (`nproc` less one) for all of them, so the probe tells 4 from the default. Separately, vitest throws when two projects in one group order have different `maxWorkers`, and run 42733239059 ran all eight over 343 files green.
+- **findings** · the hunt returned 10; 6 carried (F1–F6), 4 dropped.
+- NFR: security n/a (test configuration only; `shell: false` in the new test's spawn) · performance ✓ (import share 11 % to 4–5 % on ubuntu) · reliability ✓ (every shared-half hazard class swept, three fresh shuffled seeds green, ledger setup file shown to re-run per file in one worker) · maintainability — F2, F3, F4.
 
 ## Log
 
@@ -86,3 +115,193 @@ where it holds; (b) not now. **Chosen: (a).**
   `AssertionError: expected 0 to be greater than or equal to 3`
   (`scripts/test/preflight.test.ts:2521`). Done when 1's shuffled runs will hit it: fix it
   or exclude it, with a reason, before taking those readings.
+- 2026-11-10, built by a Sonnet 5.5 builder on `repo-129-split-isolation` from
+  `a100f429`. **What the brief had wrong, and what was done about it.**
+  - **`--project <name>` matches a project's name exactly** (vitest 5.0.5,
+    `wildcardPatternToRegExp`: `^name$`, case-insensitive), so two inline projects
+    `planner` and `planner (isolated)` would have made `npm test -- --project
+    planner`, `ci.yml`'s matrix, `preflight.mjs`'s plan and `npm run test:planner`
+    run half the files and say nothing. A glob in the docs is not enough: those four
+    pass the literal name. What vitest 5 does give is the container: a config
+    _file_ that declares `projects`; its children are named `<name> (<child>)` and
+    `--project <name>` matches the container by ancestry (`matchesEntryFilter`).
+    So each split tool has `tools/<tool>/vitest.config.ts`, and the root config
+    lists the three paths. **A file project inherits nothing from the root config**
+    (`resolveSingleProjectEntry`: "file-based projects own all of their values"),
+    so `splitProject` sets repo-99's `maxWorkers: 4` itself under the same `isCi`;
+    unproven here, because the gate sets `VITEST_MAX_WORKERS` locally and CI is
+    the only place `isCi` is true (gate 1 has since read it from vitest's config
+    resolution: the `maxWorkers: 4` entry below).
+  - **Selection is by reading the file, not by a list.** `splitProject`
+    (`vitest.isolation.ts`) puts a file in the isolated half when it matches
+    `\bvi\.(?:mock|doMock|unmock|doUnmock|stubGlobal|stubEnv|resetModules)\b`, or
+    when a container names it in `stayIsolated` with a reason. The count the brief
+    gave (35) omitted `resetModules` and `doMock`; the pattern above finds **50**
+    files at `a100f429`: core 1, downloader 9, planner 13, ledger 24, `scripts/test`
+    3 (`grep -rlE '<pattern>' tools packages scripts --include=*.test.ts
+    --include=*.test.tsx`). A new file that mocks goes isolated the day it is written.
+  - **The preflight shuffle failure is not what the Log took it for.**
+    `npx vitest run scripts/test/preflight.test.ts --sequence.seed=2` fails with
+    `--sequence.shuffle.tests` (`1 failed | 120 passed`, the ghshim case, now near
+    line 3038) and passes with `--sequence.shuffle.files` (`121 passed | 1
+    skipped`). It is an order the file depends on, inside one file, and it fails
+    under `isolate: true` all the same; seed 1 passing was not "half stale", it
+    only did not draw the order. `repo` is not split (below), so no reading here
+    shuffles it and it was left alone.
+  - **`--sequence.shuffle` is the wrong flag for ledger.** It reorders tests inside
+    a file as well as files, and ledger has two files whose tests depend on the
+    ones above them: seeds 3 and 4 failed `csv-import.test.ts › no line of any
+    request above holds a CSV's content…` and `workbook-describe.test.ts › no line of
+    any request above holds the upload's content…` (`csv-import.test.ts` seed 3: `expected 0 to be greater than 20`;
+    `workbook-describe.test.ts` seed 4: `expected false to be true`). Both fail with `--isolate` too (`npx vitest run
+    tools/ledger/api/test/csv-import.test.ts --sequence.shuffle --sequence.seed=3
+    --isolate` → `1 failed | 62 passed`; `workbook-describe.test.ts` seed 4 → `1
+    failed | 44 passed`), so they are not leaks between files. Ledger's five
+    readings use `--sequence.shuffle.files`; planner's and downloader's use plain
+    `--sequence.shuffle`, which they pass. The two ledger files are filed as lg-106
+    (pull request #789, branch `ledger-file-shuffle-order`, open) and the preflight
+    ghshim case as repo-144 (pull request #788, open), not folded in: each needs its
+    tests made independent of their order, which is test design and not this
+    ticket's.
+  - **Core and `repo` are left unchanged.** Core: `--project core --isolate` 2.15,
+    2.22, 1.79 s against 3.85, 1.97, 1.99 s split (three alternating pairs): no
+    gain, so no container file in `packages/`. `repo`: 14.1 s with import at 3 %
+    of it (`npm test -- --project repo`); the cost is spawning `git` and `node`.
+- 2026-11-10, **the readings.** Each is one gated `npm test -- --project <tool>
+  <flags>` on the branch, serially; correctness only, the machine was shared with
+  two peer sessions. All passed, 2608/2610 and 2 skipped in the downloader (the
+  same one file and two tests skip under `--isolate`).
+  - planner, `--sequence.shuffle --sequence.seed=<n>`, seeds 1 2 3 4 5: `Test
+    Files 86 passed (86)`, `Tests 1944 passed (1944)` each.
+  - ledger, `--sequence.shuffle.files --sequence.seed=<n>`, seeds 1 2 3 4 5:
+    `Test Files 99 passed (99)`, `Tests 2300 passed (2300)` each. (Plain
+    `--sequence.shuffle`: seeds 1, 2 and 5 pass, 3 and 4 fail as above.)
+  - downloader, `--sequence.shuffle --sequence.seed=<n>`, seeds 1 2 3 4 5: `Test
+    Files 126 passed | 1 skipped (127)` each.
+  - **Files, before and after (Done when 3):** `vitest list --filesOnly --project
+    <p> | grep -c test` at `a100f429`: core 15, repo 16, downloader 127, planner
+    86, ledger 99. On the branch: core 15, repo 17 (its own new test),
+    downloader 27 isolated + 100 shared = 127, planner 13 + 73 = 86, ledger 24 +
+    75 = 99; 343 in all either way. `scripts/test/vitest-projects.test.ts` holds
+    it: each split tool's `--project` lists exactly the test files on disk, none
+    twice, and every file matching the pattern is in an isolated half.
+  - **The files that stay isolated:** every file matching the pattern (downloader
+    9, planner 13, ledger 24), and the whole of
+    `tools/downloader/resolvers/test/browser/` (20 files, 2 of them already
+    matching) for Build 3: Chromium through `BrowserPool`, and prototype patches
+    (`provoke.test.ts` patches `Frame.click`). No file needed to move out of the
+    shared half after a failure, and no list was grown by hand: the ledger rate
+    limiter, `no-model-environment.ts` and the downloader's recorders held through
+    five shuffled passes. The one non-shuffled downloader run that failed
+    (`resolvers.test.ts › a rejection recorded before the caller's own window does
+    not reach it`, `TLS_VERIFICATION_FAILED` for `UNREACHABLE`, run during a 125 s
+    load) did not recur in the six runs after it (one more unshuffled, five shuffled), and its cause is
+    unproven: it needs `Date.now()` not to have advanced past a 20 ms timer.
+  - **Local wall times (not a reading: a shared machine, noisy to 2x):** alternating
+    `--isolate` and the split, planner 10.2 s and 8.4 s against 6.8 s and 6.6 s,
+    with `import` at 38-44 % of the summed time against 27 %; ledger 22.8 s and
+    36.7 s against 19.8 s (the second split run hit a `history.test.tsx` focus
+    failure in the _isolated_ half under that load: `the button reports whether
+    its control is open, and takes focus back when it closes (lg-95)`); downloader
+    147 s and 71 s against 66 s (and one run, 125 s, with the failure above).
+    `import` fell from 9-10 % of the summed time to 3-5 %; the downloader's wall time is
+    its browser files, which stay isolated, so it moves least.
+  - **Build 5, planner's alternatives, kept `isolate: false`.** A scratch config
+    (not committed) with the planner project isolated and `@planner/*` aliased to
+    `src/index.ts`, or `server.deps.external` over `tools/planner/*/dist`, three
+    alternating rounds against the plain project: duration 22.7, 21.0 and 15.0 s
+    plain; 32.8, 18.5 and 21.3 s aliased; 27.3, 11.7 and 16.6 s externalised;
+    `import` 37-48 % in all three. Neither beats the 6.6-6.8 s of the split, and
+    neither separates from the plain project beyond the machine's noise.
+  - **The new test fails when the pattern stops matching:** with `vi\.(?:mock|` in
+    `vitest.isolation.ts` changed to `vi\.(?:nomock|`, `npx vitest run
+    scripts/test/vitest-projects.test.ts` → `1 failed | 1 passed (2)`, `a test file
+    that mocks, stubs or resets modules is in the isolated half`; restored from
+    the commit. The test states the mock calls itself (a first version imported
+    `NEEDS_ISOLATION` and passed under that same mutation).
+  - **CI, this pull request's run `42732276312` at `2b13cbd9` (Done when 1's CI pass
+    and Done when 2).** `test (ubuntu-latest)` passed: `Test Files 342 passed | 1
+    skipped (343)`, `Duration 198.63s (tests 90%, import 4%, environment 3%,
+    transform 2%)`. `test (windows-latest, informational)` passed: `340 passed | 3
+    skipped (343)`, `Duration 343.53s (tests 87%, environment 6%, import 6%,
+    transform 1%)`. Both read with `gh run view 42732276312 --job <id> --log`.
+  - **Done when 2 cannot be read in seconds.** The comparison run `40210503276`
+    was vitest 4 and printed `import 144.65s, tests 814.81s`; vitest 5.0.5, which
+    `main` runs now, prints each as a share of the summed time and no seconds. The
+    nearest green `main` push run with its matrix executed is `42525621981` (`d7137816`,
+    two docs commits and one ledger change before this base): ubuntu `341 passed | 1
+    skipped (342)`, `Duration 229.18s (tests 83%, import 11%, environment 4%,
+    transform 2%)`; windows `322.30s`, `import 11%`. So **ubuntu import went from
+    11 % to 4 % of the summed time and the wall clock from 229 s to 199 s; windows
+    import from 11 % to 6 %, wall 322 s to 344 s** (the informational leg, whose
+    wall time moves with its runner). In seconds that is a derived estimate and not
+    a reading: with the old run's 815 s of tests held fixed, 11 % is about 108 s
+    and 4 % about 36 s. The 145 s figure is not comparable to either, which the
+    brief could not have known; the Done when wants rewording to the share. A nearer
+    `main` push run ran its matrix, `42536853653` at `7a1ad282` (ubuntu `269.18s`,
+    import 14 %; windows `379.57s`, import 14 %), and was red on one
+    `history.test.tsx` focus case; it is not the baseline used here, and against it
+    the fall is larger, so no conclusion changes (gate 1's F5).
+  - **`maxWorkers: 4`, read from vitest's own config resolution (gate 1's):** a
+    `createVitest` probe printing `project.config.maxWorkers` gives 4 for all eight
+    head projects and all five base projects under `CI=true`; with `CI` unset or
+    `false` it gives 11 (`nproc` is 12).
+- 2026-11-10, **the owner's answers at the gate checkpoint** (tools-86, checkpoint
+  4, relayed by the orchestrator; each was the recommended option and none was
+  overridden), recorded by the lander.
+  - **Done when 2, which asked for a seconds figure no run prints.** Options: reword
+    to the share and the wall clock (chosen; the builder's recommendation); keep
+    seconds; reword and also hold windows. The Done when line itself is reworded to
+    "The ubuntu import share and wall clock fall against the nearest `main` matrix
+    run, and the Log states the difference."
+  - **The three in-file order-dependent tests** (the preflight ghshim case and the
+    two ledger log tests). Options: file two tickets (chosen; the builder's
+    recommendation); record in the Log only; fix ghshim here and file the ledger
+    one only. Filed as
+    [repo-144](./repo-144-the-preflight-leak-spec-depends-on-test-order.md) (pull
+    request #788, open) and lg-106, `tools/ledger/docs/work/lg-106-the-log-tests-read-what-earlier-tests-logged.md`
+    (pull request #789, open, branch `ledger-file-shuffle-order`); neither is on
+    this branch, so the links are by name until they merge.
+  - **pl-64's handover.** Options: a note in pl-64's Build in this pull request
+    (chosen); leave it to pl-64's builder. The note is appended to the bullet that
+    reads "Exclude `api/test/live-records.test.ts` from the `planner` project's unit
+    run." in
+    `tools/planner/docs/work/pl-64-planner-tests-load-the-contract-twice-and-scan-archived-runs.md`:
+    the planner project is now `tools/planner/vitest.config.ts`, and `splitProject`
+    has no `exclude` option.
+- 2026-11-10 — Fixed at landing by owner choice: gate 1, F1 — "Build 2 and Done
+  when 1 name `--sequence.shuffle`; for ledger the Log used
+  `--sequence.shuffle.files`". The Log's "a defect to file" sentence now cites
+  lg-106 and repo-144. The first landing (`ac7b78dc`) left Build 2 and Done when 1
+  as they were, which was less than the owner's answer; the next commit rewords
+  both, so the answer is applied in full. `git diff 5bee293c HEAD -- docs/work/repo-129-every-test-file-reimports-its-module-graph.md | grep -c '^-.*are a defect to$'` → `1`. Build 2 and Done when 1, run after the second commit: `git diff ac7b78dc HEAD -- docs/work/repo-129-every-test-file-reimports-its-module-graph.md | grep -c '^-.*and one CI run. State leaking'` → `1`, and the same with `'^-.*five shuffled local passes and one CI pass'` → `1`.
+- 2026-11-10 — Fixed at landing by owner choice: gate 1, F3 — "the header of
+  `no-model-environment.ts` says `setupFiles` is in the root `vitest.config.ts`,
+  and the opening of `testing.md` and the root `CLAUDE.md` still say the projects
+  are configured once in the root file". The owner authorised the wording of all
+  three, and nothing else in the two pages; landing edit, not gated. `git diff 5bee293c HEAD -- .claude/rules/testing.md | grep -c '^-.*configured once in the root'` → `1`;
+  `git diff 5bee293c HEAD -- CLAUDE.md | grep -c '^-.*configured in the root$'` → `1`;
+  `git diff 5bee293c HEAD -- tools/ledger/api/test/helpers/no-model-environment.ts | grep -c '^-.*in the root$'` → `1`.
+- 2026-11-10 — Fixed at landing by owner choice: gate 1, F4 — "the new test's
+  `MOCKS` regex omits `unmock` and `doUnmock`". Both are in `MOCKS` now. Proof, on
+  the fix's commit with a throwaway `tools/planner/api/test/zz-unmock-probe.test.ts`
+  holding one `vi.unmock("node:fs")` call and `unmock|doUnmock` taken out of
+  `NEEDS_ISOLATION`: the gated test (`git checkout 5bee293c -- scripts/test/vitest-projects.test.ts`)
+  → `Tests  2 passed (2)`, green under the mutation; the fixed test
+  `npx vitest run scripts/test/vitest-projects.test.ts` → `1 failed | 1 passed (2)`,
+  `planner: expected [ …(13) ] to deeply equal ArrayContaining{…}` naming the
+  probe. Restored with `git checkout 11d693a6 -- vitest.isolation.ts`, probe
+  removed. `doUnmock` was removed in the same mutation as `unmock` and the probe
+  calls only `unmock`, so `doUnmock` is covered by being in the same pattern and not
+  by a call of its own.
+- 2026-11-10 — Fixed at landing by owner choice: gate 1, F5 — "the Log's baseline
+  sentence calls `d7137816` 'the nearest `main` push run with its matrix
+  executed'". It now reads "nearest green" and names run `42536853653`, the nearer
+  red one, with its figures. `git diff 5bee293c HEAD -- docs/work/repo-129-every-test-file-reimports-its-module-graph.md | grep -c '^-.*nearest `main` push run with its matrix executed'` → `1`.
+- 2026-11-10 — Fixed at landing by owner choice: gate 1, F6 — "the Log gives
+  `expected 0 to be greater than 20` for both ledger files". Each file now carries
+  its own message. `git diff 5bee293c HEAD -- docs/work/repo-129-every-test-file-reimports-its-module-graph.md | grep -c '^-.*(`expected 0 to be greater than$'`→`1`.
+- 2026-11-10 — Fixed at landing by owner choice: gate 1's note — "the Log's 'Not
+  proven by anything run here: that a file project's `maxWorkers: 4` took effect
+  on CI' can be proven and now is". The Log's last reading is replaced by the gate's
+  probe and the earlier "unproven here" clause points to it. `git diff 5bee293c HEAD -- docs/work/repo-129-every-test-file-reimports-its-module-graph.md | grep -c '^-.*Not proven by anything run here'` → `1`.

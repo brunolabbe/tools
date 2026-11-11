@@ -51,7 +51,12 @@ found:
    of this ticket.
 2. Live records:
    - Exclude `api/test/live-records.test.ts` from the `planner` project's unit
-     run.
+     run. **Handover from repo-129:** the `planner` project no longer lives in
+     the root `vitest.config.ts`; it is `tools/planner/vitest.config.ts`, a
+     container that calls `splitProject` from `vitest.isolation.ts`, so the
+     exclusion goes there. `splitProject` has no `exclude` option today, so add
+     one (it must keep the file out of both halves and out of the file count
+     `scripts/test/vitest-projects.test.ts` compares) or edit the container.
    - Run it in `.github/workflows/planner.yml` in a job path-filtered on
      `tools/planner/api/test/fixtures/live/**` and on the test file itself.
    - Keep it runnable locally with `npx vitest run <file>`, and say how in

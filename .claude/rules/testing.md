@@ -16,10 +16,39 @@ fixture or a tsconfig, and costs nothing the rest of the time. The rules are
 unchanged.
 
 
-**vitest**, configured once in the root `vitest.config.ts` as one project per
-tool plus one for `packages/`. Tests live in `<package>/test/**/*.test.{ts,tsx}`.
+**vitest**, one project per tool plus one for `packages/`, listed in the root
+`vitest.config.ts` and declared for a split tool in `tools/<tool>/vitest.config.ts`. Tests live in `<package>/test/**/*.test.{ts,tsx}`.
 Import `test`/`expect`/`vi` explicitly — globals are off on purpose, so oxlint's
 `no-undef` keeps working.
+
+**A tool's tests are two vitest projects, one of which does not isolate its
+files (repo-129).** `isolate: false` makes a worker evaluate Fastify, zod and
+each workspace's `dist/` once for all the files it runs, instead of once per
+file — which is where most of vitest's `import` time went. It is only safe for
+a file that leaves nothing behind, so each tool (downloader, planner, ledger)
+has a container, `tools/<tool>/vitest.config.ts`, that `splitProject` in
+`vitest.isolation.ts` turns into `<tool> (shared)` and `<tool> (isolated)`.
+**`--project <tool>` selects both**, because vitest matches a container's own
+name against the filter: this is why the split is a file per tool rather than
+two inline projects in the root config, whose names `--project planner` would
+have matched exactly, running half the files and saying nothing. A tool's new
+test file needs nothing: it goes in the isolated half when it contains
+`vi.mock`, `vi.doMock`, `vi.unmock`, `vi.doUnmock`, `vi.stubGlobal`,
+`vi.stubEnv` or `vi.resetModules` (`NEEDS_ISOLATION`), found by reading the
+file, and in the shared half otherwise. A file that needs isolation for a reason
+no pattern sees — the downloader's browser tests launch Chromium through
+`BrowserPool` and patch prototypes — is named in `stayIsolated` with its reason.
+**A shared-half failure that only shows in a full run is a leak between files**:
+reproduce it with `npm test -- --project <tool> --sequence.shuffle.files
+--sequence.seed=<n>` and move the leaking file to the isolated half, or make
+it clean up after itself. Shuffle the files, not the tests: plain
+`--sequence.shuffle` also reorders the tests inside a file, and several fail
+that way in an isolated half too (ledger's `csv-import.test.ts` and
+`workbook-describe.test.ts`, `preflight.test.ts`'s ghshim case), which is an
+order the file depends on and not a leak. `core` and `repo` are not split: they run in two
+seconds and fourteen, and their import time is not what those seconds are.
+`scripts/test/vitest-projects.test.ts` holds that a split tool's `--project`
+still lists every test file exactly once.
 
 **Tests are typechecked, and by the same gate the source is.** So `npm run
 check` holds a fake to the signature of the thing it fakes, and there is no
