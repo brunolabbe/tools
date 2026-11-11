@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.9.0](https://github.com/brunolabbe/tools/compare/ledger-v0.8.0...ledger-v0.9.0) (2026-11-11)
+
+
+### Features
+
+* **ledger:** read a flagged receipt again with a stronger model (lg-105) ([#780](https://github.com/brunolabbe/tools/issues/780)) ([738d51d](https://github.com/brunolabbe/tools/commit/738d51d8a1ec30d115d1d6e8dd726e8f7af81a98))
+* **ledger:** read the ledger's data through one TanStack Query cache (lg-98) ([#785](https://github.com/brunolabbe/tools/issues/785)) ([332fd3a](https://github.com/brunolabbe/tools/commit/332fd3ae5520fc2764f5c445c9ada1d738357b7b))
+
+
+### Fixes
+
+* **ledger:** a receipt filed from the list says the amounts it filed ([#774](https://github.com/brunolabbe/tools/issues/774)) ([7a1ad28](https://github.com/brunolabbe/tools/commit/7a1ad282c55659d97663a32bff1b05cd8f8b2db6))
+* **ledger:** refuse a part SheetJS would read for more than one sheet (lg-104) ([#782](https://github.com/brunolabbe/tools/issues/782)) ([c4e5298](https://github.com/brunolabbe/tools/commit/c4e5298788543b118a76978aa8deb8e5e8ed6d15))
+* **ledger:** take the bulk who-paid and whose selects off the receipt bar (lg-102) ([#773](https://github.com/brunolabbe/tools/issues/773)) ([79dd97a](https://github.com/brunolabbe/tools/commit/79dd97a2eaf3b53a3f3f3fc32b1d733eddc92bba))
+
 ## [0.8.0](https://github.com/brunolabbe/tools/compare/ledger-v0.7.0...ledger-v0.8.0) (2026-11-08)
 
 
