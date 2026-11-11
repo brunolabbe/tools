@@ -3,10 +3,11 @@ id: dl-130
 tool: downloader
 title: The dl-37 Done-when 2 browser test behind the terminating proxy fails intermittently
 kind: fix
-status: ready
+status: in-flight
 milestone: null
 depends_on: []
 difficulty: hard
+awaiting: Done when 1, 2, 3 and 5 — a failing run of the dl-37 Done-when 2 test, in CI, a gate or a whole-project run, whose `dl-130 diagnosis` message names the branch
 ---
 
 # dl-130 — The dl-37 Done-when 2 browser test behind the terminating proxy fails intermittently
@@ -192,6 +193,31 @@ deterministic test is the proof. The sweeps are only the measurement of the rate
    in the Log with their loads, whatever they show.
 5. `npm run check` and `npm test -- --project downloader` pass at the fixed head.
 
+## Review
+
+**Gate: CONCERNS** — 2026-11-10 · `a100f429..d9683ee8` · Sonnet 5.5, depth full
+
+Header: base `a100f42967ec3fc3760a5a6032449be3e986806`, head `d9683ee88bf65ccab1348257857972997e55858a`, branch `downloader/dl-130-proxy-flake`, draft PR #777. The diff is one test file and the ticket; the build was run (`npm run build`, exit 0) because the test file is code. Lines 1, 2, 3 and 5 are graded against the owner's 2026-11-10 choice of option (A), recorded in the ticket's Log: ship a test-side diagnostic and park the ticket behind its `awaiting:` line until a real failure is captured.
+
+| Done when                                                                             | Proof                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. The cause is named from a failing run                                              | **awaiting** — a failing run of `api/test/tiers-on-the-terminating-proxy.test.ts` › "still refuses a certificate the proxy could not verify — dl-37 Done-when 2", in CI, a gate or a whole-project run, whose `dl-130 diagnosis` message names the branch; the reading is that message copied into the Log. Parked by the owner's choice (A). The instrument that will carry the reading is exercised by three plants below. |
+| 2. A deterministic test drives the named branch                                       | **awaiting** — the same failing run, after which Build 3 to 5 apply as written; this line also needs a build round after the reading, not only the reading.                                                                                                                                                                                                                                                                  |
+| 3. The flaky test passes 20 of 20 isolated and 3 of 3 whole-project on the fixed head | **awaiting** — there is no fixed head until line 2's round; same event.                                                                                                                                                                                                                                                                                                                                                      |
+| 4. The base is measured on this ticket                                                | **verified** — the Log's ten runs at `da4673e1` against the builder's raw sweep: ten loads match item by item (7.56, 7.56, 7.12, 7.12, 6.63, 6.63, 6.09, 6.09, 6.09, 5.69), ten of ten `Tests  1 passed \| 4 skipped (5)`, exit 0 each. The Log gives the loads verbatim and the output as a quoted summary line, not ten pasted outputs.                                                                                    |
+| 5. `npm run check` and `npm test -- --project downloader` pass at the fixed head      | **awaiting** — same event as line 3. The build head is green on the pull request (`check`, `test (ubuntu-latest)` at `d9683ee8`), which does not discharge a line about the fixed head.                                                                                                                                                                                                                                      |
+
+- **med** · no `Done when` line depends on it, but it blocks the landing push · **open decision.** The ticket is `status: ready` with an `awaiting` line. Landing this gate's `## Review` on a `ready` ticket trips the board's `reviewed-but-ready` check: on a scratch copy of the ticket with a `## Review` appended, `node scripts/status.mjs --root <copy> --json` exits 1 with `status is "ready" but the ticket carries a ## Review gate record`, and `ci.yml`'s `check` job runs that command and `scripts/test/status.test.ts` (which asserts the live tree has none). Today `--ready` lists dl-130 and `--show` prints `unblocked` after its `awaiting` line; that question is the owner's. It is the same decision. Options: (A) `status: in-flight` in the landing commit — `docs/01-TICKETS.md` says `in-flight` is deliberately not flagged ("a ticket that lands as a partial has to have somewhere to sit"), and it takes dl-130 out of `--ready`, which is what parking means; (B) keep `ready` and accept two red steps in `check`. Recommend (A). The gate does not edit `status`.
+- **low** · `nfr:maintainability` · the `since` line prints `at` as absolute epoch milliseconds while every other line is relative to the header's `startedAt`, and the stale-record reading is exactly the comparison of the two. Planted stale shape: refusal at `355 ms`, `since(…, at 1794271161269)` against header `1794271158268`; the reader subtracts to get 3001. Direction: print `at` relative. Nothing relies on it.
+- **low** · `nfr:maintainability` · the message names the hook, not the path under it. `onOtherConnectFailure` is called from six places in `egress-proxy.ts` (the guard refusal, the literal refusal, the origin socket error, `terminateTls`'s `onFailed` and `onUnavailable`, and the chained upstream refusal), and the `assertAllowed` line is written before the guard decides. Build 4's stop condition names `onFailed`, `onUnavailable` and the socket error as the cases to report; the message cannot separate them, so that report needs a second instrumented round. No `Done when` line depends on it.
+- **low** · `nfr:maintainability` · a navigation the proxy never saw shows only as the absence of an `assertAllowed` line; the message says nothing about it and the key to it lives in the source comment above `events`. Planted: the whole message was `reason: …ERR_PROXY_CONNECTION_FAILED` and one `since … returned undefined` line.
+- **dropped** · "the diagnostic changes what the test asserts or when it passes": refuted. Fifteen `expect(` in the file at base and at head; the only changed lines are the two `code` and `reason` assertions gaining a message argument. The only `TlsRejectionLog` calls in the test are `record` (same arguments, after a `noteEvent`) and the wrapped `since` (returns the real value). `recordOtherFailure` and `recordSuccess` appear nowhere in the file.
+- **dropped** · the `since` wrapper "restores" with an own-property bound copy rather than removing the shadow; behaviour is identical afterwards, no caller can tell.
+- **dropped** · `assertAllowed ${rawUrl}` puts a URL in a failure message without `redactUrl`; the URL is a loopback fixture with no credentials and no query. No live call site.
+- **findings** · the hunt returned 7; 4 carried (1 med, 3 low), 3 dropped.
+- NFR: security n/a (test only) · performance n/a · reliability: nothing added between `record` and `since`; the synchronous `noteEvent` sits before `record` and can move `entry.at` later by microseconds, the direction that hides a stale record, below the clock's resolution; 5 of 5 isolated runs pass (loads 16.29 to 15.63) and a 0-in-5 reading says nothing about a 1-in-10 rate · maintainability — above.
+- CI: PR #777 at `d9683ee8` has every check complete and green (`check` CI, `test (ubuntu-latest)`, `test (windows-latest, informational)`, `e2e (direct)`, `e2e (sniffer)`, `docker`, `CodeQL`, `codeql`, `dependency-review`, `changes`); one `pr-title` `check` is `CANCELLED` and superseded by a later `SUCCESS`. Nothing pending.
+
 ## Log
 
 **2026-10-20 — filed** from a maintenance dispatch, with the reproduction in
@@ -202,3 +228,168 @@ and the fix will depend on what step 2 names, which is the judgement the rating
 means. The gate's figures under **Measurements** were read from its own logs in
 its scratch directory. The dl-129 builder's figures were relayed by the
 orchestrator and have not been checked by anyone.
+
+**2026-11-10 — Build 2 swept: 20 of 20 passed, so no cause is named; stopped at
+Done when 1** (builder, Opus 5.5, branch `downloader/dl-130-proxy-flake` off
+`a100f429`). Nothing under `src/` changed, and no fix was attempted: Build 5
+fixes "the cause the Log names", and this Log names none.
+
+_The instrumentation_ (test-side only, uncommitted, removed after the sweep):
+in `tiers-on-the-terminating-proxy.test.ts`, the proxy's
+`onCertificateRejected` logged its arguments and then called
+`rejections.record` as before; `onOtherConnectFailure` and
+`onConnectEstablished` were passed as spies that only log, calling no
+`TlsRejectionLog` method; the guard's `assertAllowed` was wrapped to log each
+`CONNECT` the proxy received, so a navigation the proxy never saw would show as
+no line; and `rejections.since` was wrapped for the rogue test's call only,
+logging its arguments and return value, and restored after it. Each event went
+as one JSON line to a file named by an environment variable, never to a
+`TlsRejectionLog`.
+
+_The command_, one at a time from the worktree root, `/proc/loadavg` read before
+each run:
+`npx vitest run tools/downloader/api/test/tiers-on-the-terminating-proxy.test.ts -t "still refuses a certificate the proxy could not verify"`.
+Every run printed `Tests  1 passed | 4 skipped (5)` and exited 0.
+
+| runs  | 1-min load before each run                                 | foreign `vitest` processes |
+| ----- | ---------------------------------------------------------- | -------------------------- |
+| 1–10  | 1.84, 2.98, 2.98, 2.90, 2.90, 2.91, 2.91, 3.16, 3.86, 3.86 | 0                          |
+| 11–20 | 4.20, 7.06, 7.06, 8.02, 8.02, 7.62, 7.62, 7.33, 7.33, 7.14 | 3, then 14–19              |
+
+Runs 11 to 20 overlapped another session's `vitest` run, so half the sweep was
+taken at the load gate 1 reported for its failure ("about 4") and above it.
+
+_What the spies captured_ — identical in shape in all 20 traces, five lines
+each: one `assertAllowed` (one `CONNECT`), one `onCertificateRejected` with
+`DEPTH_ZERO_SELF_SIGNED_CERT`, no `onOtherConnectFailure`, no
+`onConnectEstablished`, and a `since` that returned the code. Run 20, at load
+7.14 (`hint` cut):
+
+```
+{"t":1794269753737,"event":"rogue-start","originPort":46203}
+{"t":1794269753888,"event":"assertAllowed","rawUrl":"https://127.0.0.1:46203"}
+{"t":1794269753905,"event":"onCertificateRejected","host":"127.0.0.1","code":"DEPTH_ZERO_SELF_SIGNED_CERT"}
+{"t":1794269753924,"event":"since","host":"127.0.0.1","port":46203,"at":1794269753738,"returned":"DEPTH_ZERO_SELF_SIGNED_CERT"}
+{"t":1794269753925,"event":"rogue-error","code":"TLS_VERIFICATION_FAILED","message":"The site's security certificate could not be verified.","details":{"url":"https://127.0.0.1:46203/watch","reason":"DEPTH_ZERO_SELF_SIGNED_CERT", …}}
+```
+
+So Done when 1 stays open for the owner, as the line says. What a passing run
+does show: the wiring is as this ticket's Code path reads it (the two conflict
+hooks never fire in this test), and across the 20 traces the refusal was
+recorded 12–24 ms after the `CONNECT` reached the proxy, 117–218 ms after the
+`startedAt` that `since` was given, and 13–47 ms before `since` read it. None of
+those margins was close to a stale-record miss.
+
+**Done when 4 — the base, 10 of 10 passed** at `da4673e1`, in a detached second
+tree, uninstrumented, the same command one run at a time. Every run printed
+`Tests  1 passed | 4 skipped (5)`, exit 0, 2.0–2.5 s each. Loads before each run
+(1-min): 7.56, 7.56, 7.12, 7.12, 6.63, 6.63, 6.09, 6.09, 6.09, 5.69; no foreign
+`vitest` process was running at any of them. Ten is the bound, and a clean ten
+does not show the defect absent at the base.
+
+One thing the base run met that the brief does not say: `npm run build` at
+`da4673e1` exits 2 in `@ledger/api` (`TS2307: Cannot find module 'exceljs'`),
+after the downloader workspaces had built — `packages/*` and
+`tools/downloader/*` come before `tools/ledger/*` in the workspace order, and
+their `dist` was written in that run. That the tree measured ran the base's own
+code is shown by a `dist` grep: `PROVOKE_PASS_PAUSE_MS`, which dl-129 added to
+`resolvers/src/resolvers/browser.ts`, occurs 0 times in the base tree's
+`resolvers/dist/resolvers/browser.js` and 2 times in this branch's.
+
+Not folded in: dl-134's `AT_ONCE_WAITS` in the same test file, which waits for
+this ticket. Nothing else became free.
+
+**2026-11-10 — the owner answered Done when 1's open question** (relayed by the
+orchestrator, which put the question). The question as put: 0 failures in 50
+isolated runs (this ticket's 20 at head and 10 at base, and dl-129's builder's
+20 at base, relayed), so Done when 1 cannot be met from a sweep; what next? The
+options:
+
+- **(A)** commit a small test-side diagnostic, so that the next failure anywhere
+  (CI, a gate, a whole-project run) prints `error.details.reason` and the
+  `since` read in its assertion message, and park the ticket with an
+  `awaiting:` line until a failure is captured — no retry, no wider timeout;
+- **(B)** a bigger sweep now, about 100 isolated runs and a few whole-project
+  runs;
+- **(C)** close as not reproduced.
+
+**The owner chose (A)**, which was the builder's and the orchestrator's
+recommendation. No `Done when` line is reworded: lines 1, 2, 3 and 5 are parked
+behind the `awaiting` line until a failing run's message names the branch, and
+Build 3 to 5 then apply to that run as written.
+
+**2026-11-10 — option (A) built: the test names its own branch when it fails**
+(builder, Opus 5.5). Test-side only, in
+`tools/downloader/api/test/tiers-on-the-terminating-proxy.test.ts`; nothing
+under `src/` changed. What the test asserts, and when it passes, are unchanged:
+the diagnosis is the second argument to `expect` on the `code` and `reason`
+assertions, which vitest prints only on a failure.
+
+_Which form, and why not the smallest one._ The smallest form the option names
+(`error.details.reason` and the `since` read) cannot tell this ticket's two
+readings apart: Chromium reports `net::ERR_TUNNEL_CONNECTION_FAILED` for every
+non-200 `CONNECT`, and `since` returns `undefined` both when no refusal was
+recorded and when one was recorded before the window. Build 3 also asks which
+other hook fired, and Build 4 stops on a navigation the proxy never saw. So the
+message carries, on one clock, in milliseconds from just before the resolve:
+
+- `reason:` — the returned error's `details.reason`, Chromium's own line;
+- every `assertAllowed` the proxy's guard was asked (the first thing the proxy
+  does with a `CONNECT`, so a navigation it never saw shows as no line);
+- every `onCertificateRejected`, `onOtherConnectFailure` and
+  `onConnectEstablished` the proxy called — the last two are recorded and
+  forwarded to nothing, since passing them to `rejections` would change what
+  `since` reads;
+- the `since` call with its arguments and return value, or `since: never read`.
+
+Events below zero ms came from an earlier test in the file. The record is an
+in-memory array: unlike the sweep's instrumentation above, it writes no file
+and reads no environment variable.
+
+_The planted failure_, never committed: the `rejections.record(host, code)` line
+in the test's `onCertificateRejected` hook replaced by a comment, at `6d988632`,
+then
+`npx vitest run tools/downloader/api/test/tiers-on-the-terminating-proxy.test.ts -t "still refuses a certificate the proxy could not verify"`,
+exit 1, `Tests  1 failed | 4 skipped (5)`:
+
+```
+AssertionError: dl-130 diagnosis, times relative to 1794270333617:
+reason: page.goto: net::ERR_TUNNEL_CONNECTION_FAILED at https://127.0.0.1:46025/watch
+130 ms: assertAllowed https://127.0.0.1:46025
+147 ms: onCertificateRejected 127.0.0.1 DEPTH_ZERO_SELF_SIGNED_CERT
+165 ms: since(127.0.0.1, 46025, at 1794270333618) returned undefined
+verdict: expected 'UNREACHABLE' to be 'TLS_VERIFICATION_FAILED' // Object.is equality
+```
+
+Restored with `git checkout 6d988632 -- <the test file>` (`grep -c PLANT` → 0),
+then the whole file alone, `npx vitest run
+tools/downloader/api/test/tiers-on-the-terminating-proxy.test.ts`:
+`Tests  5 passed (5)`.
+
+_Parked_: the frontmatter's `awaiting` line holds Done when 1, 2, 3 and 5
+until a failing run's message names the branch. Whoever reads that message
+records it here as Done when 1's proof, and Build 3 to 5 then apply to it as
+written; Done when 4 is met above.
+
+**2026-11-10 — the owner's answers after the build** (relayed by the
+orchestrator, which put the questions; recorded by the lander, Sonnet 5.5).
+
+- _How to park the ticket._ Asked after the build: an `awaiting:` line alone
+  leaves dl-130 on `--ready`. Options: add a `held:` note / leave as is /
+  `needs-decision`. The owner chose the `held:` note, the builder's
+  recommendation.
+- _Re-asked on a measurement._ Gate 1's med: a `ready` ticket carrying
+  `## Review` fails the board check `reviewed-but-ready`. On a scratch copy,
+  `status: ready` gives `status --json` exit 1 with or without the held note,
+  and `status: in-flight` gives exit 0 and is off `--ready`. Options:
+  in-flight with the awaiting line only / in-flight plus the held note / ready
+  plus the held note anyway. The owner chose **in-flight, awaiting line only**,
+  which supersedes the held-note answer. The ticket lands `in-flight` with no
+  `held:` note.
+- _Gate 1's lows._ Options: fix L1 and L3 at the landing / record all / a round
+  for all three. The owner chose **fix L1 and L3 at the landing, no re-gate**;
+  L2 stays recorded as the gate wrote it.
+
+- 2026-11-10 — Fixed at landing by owner choice: gate 1, the first low (L1) — "the `since` line prints `at` as absolute epoch milliseconds while every other line is relative". Gate 1's stale plant (`gate-1/plant.mjs a1`, never committed) on `1fa81592`, the Done-when 2 test alone, exit 1: the message reads `353 ms: onCertificateRejected 127.0.0.1 DEPTH_ZERO_SELF_SIGNED_CERT` then `427 ms: since(127.0.0.1, 41155, at 3001 ms) returned undefined`, where gate 1 read an epoch `at` beside the header's epoch. Restored with `git checkout 1fa81592 --`, `git status --porcelain` empty.
+- 2026-11-10 — Fixed at landing by owner choice: gate 1, the third low (L3) — "a navigation the proxy never saw shows only as the absence of an `assertAllowed` line; the message says nothing about it". Gate 1's no-CONNECT plant (`plant.mjs c`, never committed) on `1fa81592`, same command, exit 1: the message now carries `no CONNECT reached the proxy: no assertAllowed line after 0 ms` between the `reason:` line and the `since` line. Restored the same way; `npx vitest run tools/downloader/api/test/tiers-on-the-terminating-proxy.test.ts` after both restores: `Tests  5 passed (5)`, exit 0. No assertion changed: the fix commit touches no `expect(` line (`git diff d9683ee8 1fa81592 -- tools/downloader/api/test | grep -c '^[-+].*expect('` → `0`).
+- 2026-11-10 — Gate 1's second low (L2, the message names the hook, not the path under it) is recorded as the gate wrote it and not fixed: Build 4's report on `onFailed`, `onUnavailable` and the socket error needs a second instrumented round if a failure lands there.
