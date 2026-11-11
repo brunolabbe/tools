@@ -145,12 +145,18 @@ the batch cannot proceed, put it to the user at once.
 
    **A builder is resumed for one round and one owner stop, no more.** Each
    resume re-reads the whole transcript, so a ticket with several stops goes to
-   fresh agents for its later steps — handed the branch, its head and the Log —
-   and sooner when `node scripts/agent-cost.mjs --agent <id>` shows the
-   builder past about $15: pl-60's builder-hard was resumed four times to
-   $38.03 while the fresh agents that finished the ticket cost $0.60 to $3.92
-   each; pl-62, retiring its builder at $12.01, cost $34.24 against pl-60's
-   $47.50 for the same shape.
+   fresh agents for its later steps — handed the branch, its head and the Log.
+   The bar is about $10, read at the builder's first report with
+   `node scripts/agent-cost.mjs --agent <id>`: a builder past it is not resumed
+   for a round; the round goes to a fresh `builder-hard` handed the branch, its
+   head and the Log. The batch entry's Tickets line says whether that builder
+   was read against the bar. The figure is repo-140's measurement from
+   `reference/history.md`: on the 2026-10-25 and 2026-10-31 batches, the
+   `builder-hard` row that opened each of nine tickets cost $6.39 to $20.14,
+   three of them above fifteen dollars (two of those rows also carry a round or
+   a resume). On those three tickets the later agents were gates and fixers at
+   $0.48 to $4.41 each, and one fresh builder for two rounds at a little over
+   fifteen dollars. repo-140's Log names the rows.
 
    After sending to a running or resumed agent, confirm delivery with
    `ListAgents` and with the artefact the message should produce.
