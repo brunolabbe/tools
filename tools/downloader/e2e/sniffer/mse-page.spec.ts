@@ -200,9 +200,9 @@ test("finds a blob-only stream through the sniffer and downloads it", async ({ p
     page.getByRole("button", { name: "Download", exact: true }).click(),
   ]);
 
-  // The card shows the page's title and host, not the address (dl-109), and
-  // this is the only job on the page.
-  const job = page.getByRole("list", { name: "Downloads" }).locator(":scope > li").first();
+  // The job is the box the analysis was (dl-133), titled by the page, and this
+  // is the only box on the page.
+  const job = page.getByRole("list", { name: "Analyses" }).locator(":scope > li").first();
   await expect(job).toBeVisible();
 
   // --- The file -----------------------------------------------------------

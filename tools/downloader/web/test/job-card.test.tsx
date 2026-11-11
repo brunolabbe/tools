@@ -28,7 +28,8 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import type { AppErrorPayload, Job, ProbeStageEvent } from "@downloader/contract";
 import { JobCard } from "../src/components/JobCard.tsx";
-import { JobList } from "../src/components/JobList.tsx";
+import { BoxList } from "../src/components/BoxList.tsx";
+import { displayBoxes } from "../src/lib/boxes.ts";
 import { reconcileJob } from "../src/lib/job-reducer.ts";
 import { ProgressMessages } from "../src/components/ProgressMessages.tsx";
 import { PROBE_STAGE_PENDING } from "../src/lib/probe-stages.ts";
@@ -75,7 +76,7 @@ interface MountOptions {
 function mount(value: Job, options: MountOptions = {}): Handlers {
   const spies = handlers();
   render(
-    <ul>
+    <>
       <JobCard
         job={value}
         title={options.title}
@@ -87,24 +88,34 @@ function mount(value: Job, options: MountOptions = {}): Handlers {
         onRemove={spies.onRemove}
         onRetry={spies.onRetry}
       />
-    </ul>,
+    </>,
   );
   return spies;
 }
 
-function renderList(jobs: readonly Job[], extra: Partial<Parameters<typeof JobList>[0]> = {}) {
+/**
+ * The jobs as the page shows them on a reload: each one a box in the job state,
+ * with no analysis above it (dl-133). The list was `JobList` until then.
+ */
+function renderList(jobs: readonly Job[], extra: Partial<Parameters<typeof BoxList>[0]> = {}) {
   return render(
-    <JobList
+    <BoxList
+      boxes={displayBoxes([], jobs)}
       jobs={jobs}
       titles={{}}
       streamStates={{}}
       refusals={{}}
       stages={{}}
       revealId={null}
+      onClose={vi.fn()}
+      onReanalyse={vi.fn()}
+      onDownload={vi.fn()}
+      onClearStartError={vi.fn()}
+      onStopWaitingDownload={vi.fn()}
       onFollowLink={vi.fn()}
       onCancel={vi.fn()}
-      onRemove={vi.fn()}
-      onRetry={vi.fn()}
+      onDismissJob={vi.fn()}
+      onRetryJob={vi.fn()}
       {...extra}
     />,
   );
@@ -316,9 +327,10 @@ test("a completed job is one line saying what arrived, and offers no second copy
   mount(job("completed"));
 
   // dl-53: the file went to this browser as it streamed and nothing is kept,
-  // so there is no link to fetch it again — and nothing else to press.
+  // so there is no link to fetch it again — and nothing to press but the
+  // Dismiss that puts the row away (dl-133 decision 5).
   expect(screen.queryByRole("link")).toBeNull();
-  expect(screen.queryByRole("button")).toBeNull();
+  expect(screen.getAllByRole("button").map((button) => button.textContent)).toEqual(["Dismiss"]);
   expect(screen.queryByRole("progressbar")).toBeNull();
   const row = screen.getByRole("status");
   expect(within(row).getByText("Saved by your browser — a-sample-recording.mp4")).toBeDefined();
@@ -334,7 +346,7 @@ test("a finished file of unknown duration is described without a trailing separa
 /** `mount` returns the spies; the preview tests need the container instead. */
 function renderCard(value: Job): { container: HTMLElement; unmount: () => void } {
   const { container, unmount } = render(
-    <ul>
+    <>
       <JobCard
         job={value}
         title={undefined}
@@ -346,7 +358,7 @@ function renderCard(value: Job): { container: HTMLElement; unmount: () => void }
         onRemove={vi.fn()}
         onRetry={vi.fn()}
       />
-    </ul>,
+    </>,
   );
   return { container, unmount };
 }
@@ -354,7 +366,7 @@ function renderCard(value: Job): { container: HTMLElement; unmount: () => void }
 test("an active job shows its preview in the head, beside the title, from our path", () => {
   const { container } = renderCard(job("downloading", { thumbnailPath: "/api/thumbnail/xyz789" }));
 
-  const image = container.querySelector(".job__head .preview img");
+  const image = container.querySelector(".card__head .preview img");
   expect(image?.getAttribute("src")).toBe("/api/thumbnail/xyz789");
   expect(image?.getAttribute("alt")).toBe("");
   expect(screen.getByRole("heading", { name: "1080p · H.264 + AAC" })).toBeDefined();
@@ -535,7 +547,7 @@ test("each card is handed its own stream state, looked up by job id", () => {
     { streamStates: { "job-2": "reconnecting" } },
   );
 
-  const cards = screen.getAllByRole("listitem").filter((item) => item.querySelector("h3"));
+  const cards = screen.getAllByRole("listitem").filter((item) => item.querySelector("h2"));
   const [first, second] = cards;
   expect(cards).toHaveLength(2);
   expect(within(first as HTMLElement).getByRole("heading", { name: "First" })).toBeDefined();
@@ -850,8 +862,8 @@ test("the job just started scrolls its card into view, nearest, and no other car
     });
     expect(scrollIntoView).toHaveBeenCalledTimes(1);
     expect(scrollIntoView).toHaveBeenCalledWith({ block: "nearest" });
-    const cards = screen.getByRole("list", { name: "Downloads" }).querySelectorAll(":scope > li");
-    expect(scrolled).toEqual([cards[1]]);
+    const cards = screen.getByRole("list", { name: "Analyses" }).querySelectorAll(":scope > li");
+    expect(scrolled).toEqual([cards[1]?.firstElementChild]);
   } finally {
     // @ts-expect-error -- jsdom has none, and a later test must not inherit the stub.
     delete Element.prototype.scrollIntoView;
@@ -868,4 +880,36 @@ test("a list with no job just started scrolls nothing", () => {
     // @ts-expect-error -- jsdom has none, and a later test must not inherit the stub.
     delete Element.prototype.scrollIntoView;
   }
+});
+
+// ---------------------------------------------------------------------------
+// The job inside its analysis's box (dl-133)
+// ---------------------------------------------------------------------------
+
+test("a saved row stays until its own Dismiss, which reports its job", () => {
+  const spies = mount(job("completed", { id: "job-9" }));
+  fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+  expect(spies.onRemove).toHaveBeenCalledWith("job-9");
+});
+
+test("the analysis's preview stays in the head, where the job record has none yet", () => {
+  // A queued job has no preview of its own until its re-probe has run, so the
+  // image the analysis showed is handed down rather than dropped on Download.
+  const { container } = render(
+    <JobCard
+      job={job("queued")}
+      title="A sample recording"
+      streamState={undefined}
+      refusal={undefined}
+      stage={undefined}
+      previewPath="/api/thumbnail/from-analysis"
+      onFollowLink={vi.fn()}
+      onCancel={vi.fn()}
+      onRemove={vi.fn()}
+      onRetry={vi.fn()}
+    />,
+  );
+  const image = container.querySelector(".card__head .preview--panel img");
+  expect(image?.getAttribute("src")).toBe("/api/thumbnail/from-analysis");
+  expect(screen.getByRole("heading", { level: 2, name: "A sample recording" })).toBeDefined();
 });

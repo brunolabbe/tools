@@ -11,8 +11,8 @@
  * **The screens are the page's view states** (`web/src/App.tsx`, no router),
  * the ones `docs/work/repo-109-…` lists: the address form, the analysing panel,
  * the renditions table, a finished download's card, and the terms page that sits
- * beside the bundle. A new one is a new test here, in the pull request that
- * adds it.
+ * beside the bundle — and, since dl-133, two boxes on the page at once. A new
+ * one is a new test here, in the pull request that adds it.
  *
  * Two of them carry a long address on purpose. A URL is the one piece of
  * content here that has no break points, which is how a narrow column ends up
@@ -30,7 +30,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "@playwright/test";
 import type { Page, TestInfo } from "@playwright/test";
-import { startHlsOrigin } from "./fixtures/hls-origin.ts";
+import { startDelayingProxy, startHlsOrigin } from "./fixtures/hls-origin.ts";
 import type { HlsOrigin } from "./fixtures/hls-origin.ts";
 
 /** A phone at its narrowest worth supporting, and a desktop window. */
@@ -151,9 +151,10 @@ test("a finished download's card fits a phone and a desktop", async ({ page }, t
     page.getByRole("button", { name: "Download", exact: true }).click(),
   ]);
   await download.path();
-  const card = page.getByRole("list", { name: "Downloads" }).locator(":scope > li").first();
+  const card = page.getByRole("list", { name: "Analyses" }).locator(":scope > li").first();
   await expect(card.getByText(/^Saved by your browser — /u)).toBeVisible({ timeout: 120_000 });
-  // The renditions are still above it: this is the page as a person leaves it.
+  // The saved box, with its Dismiss: this is the page as a person leaves it.
+  // The renditions left the box when Download was pressed (dl-133).
   await fitsBothWidths(page, testInfo, "Finished download");
 });
 
@@ -233,4 +234,130 @@ test("the theme switch's segments are 44 px tall at 360 px, beside the name", as
   });
   expect(natural, "the widened name's width on one line").toBeGreaterThanOrEqual(158.7);
   await nameBesideSwitch(page);
+});
+
+test("two boxes analysing side by side fit a phone and a desktop (dl-133)", async ({
+  page,
+}, testInfo) => {
+  // Both probes are held, as the analysing panel's case holds its one, so the
+  // two boxes are running for as long as it takes to measure them.
+  let release: (() => void) | undefined;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/api/probe", async (route) => {
+    await held;
+    await route.abort();
+  });
+
+  await page.goto("/");
+  const field = page.getByLabel("Page address");
+  const analyse = page.getByRole("button", { name: "Analyse" });
+  // Two long addresses, one after the other without waiting: the field keeps
+  // its value after Analyse, so the second is typed over the first.
+  await field.fill(longUrl());
+  await analyse.click();
+  await field.fill(`${longUrl()}&second=${"fedcba9876543210".repeat(4)}`);
+  await analyse.click();
+
+  const boxes = page.getByRole("list", { name: "Analyses" }).locator(":scope > li");
+  await expect(boxes).toHaveCount(2);
+  for (const box of await boxes.all()) {
+    await expect(box.getByRole("heading", { name: "Analysing" })).toBeVisible();
+    await expect(box.locator(".stage")).toHaveText(/\S/u);
+  }
+  await fitsBothWidths(page, testInfo, "Two boxes");
+  release?.();
+});
+
+test("a box waiting for a probe slot beside two analysing fits a phone and a desktop (dl-133)", async ({
+  page,
+}, testInfo) => {
+  let release: (() => void) | undefined;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/api/probe", async (route) => {
+    await held;
+    await route.abort();
+  });
+
+  await page.goto("/");
+  const field = page.getByLabel("Page address");
+  const analyse = page.getByRole("button", { name: "Analyse" });
+  for (const index of [1, 2, 3]) {
+    await field.fill(`${longUrl()}&box=${String(index)}`);
+    await analyse.click();
+  }
+
+  const boxes = page.getByRole("list", { name: "Analyses" }).locator(":scope > li");
+  await expect(boxes).toHaveCount(3);
+  // Newest first: the third waits, with no request sent, above the two running.
+  await expect(boxes.nth(0).getByRole("heading", { name: "Waiting" })).toBeVisible();
+  await expect(boxes.nth(1).getByRole("heading", { name: "Analysing" })).toBeVisible();
+  await expect(boxes.nth(2).getByRole("heading", { name: "Analysing" })).toBeVisible();
+  await fitsBothWidths(page, testInfo, "Waiting analysis");
+  release?.();
+});
+
+/**
+ * A page title of the length some sites give, with spaces: the job's title is
+ * the analysis's, and it heads the box through the download. An unbroken one
+ * is a separate defect, filed apart from dl-133.
+ */
+const LONG_TITLE = Array.from(
+  { length: 12 },
+  (_, index) => `A rather long page title, part ${String(index + 1)} of twelve`,
+).join(" · ");
+
+test("a waiting Download beside a running job and a refused one, under a long title, fits a phone and a desktop (dl-133)", async ({
+  page,
+}, testInfo) => {
+  // Segments held back, so the first job is still streaming while the page is
+  // measured; the server's one job per client (`playwright.config.ts`) refuses
+  // the second, which stays queued and counted; the page holds the third.
+  const slow = await startDelayingProxy(hls, 2500);
+  try {
+    await page.route("**/api/probe", async (route) => {
+      const response = await route.fetch();
+      const body = (await response.json()) as { probe: { title: string } };
+      body.probe.title = LONG_TITLE;
+      await route.fulfill({ response, json: body });
+    });
+
+    await page.goto("/");
+    await page.getByLabel("Page address").fill(slow.masterUrl);
+    const analyse = page.getByRole("button", { name: "Analyse" });
+    for (let index = 0; index < 3; index++) await analyse.click();
+
+    const boxes = page.getByRole("list", { name: "Analyses" }).locator(":scope > li");
+    await expect(boxes).toHaveCount(3);
+    await expect(boxes.getByRole("table")).toHaveCount(3);
+    const download = (index: number) =>
+      boxes.nth(index).getByRole("button", { name: "Download", exact: true });
+
+    // The oldest first: it takes the server's slot once its link is spent.
+    await download(2).click();
+    await expect(boxes.nth(2).getByRole("progressbar")).toBeVisible();
+    await expect(boxes.nth(2).getByRole("link", { name: "Download", exact: true })).toHaveCount(0);
+    await download(1).click();
+    await expect(boxes.nth(1).getByRole("alert")).toBeVisible();
+    await download(0).click();
+    await expect(boxes.nth(0).locator(".stage")).toHaveText(
+      "Waiting for one of your other downloads to finish",
+    );
+    await expect(boxes.getByRole("heading", { name: LONG_TITLE })).toHaveCount(3);
+
+    await fitsBothWidths(page, testInfo, "Waiting download");
+
+    // Left as found for the specs after this one, which need the server's one
+    // job slot: the wait is put back, then both jobs are stopped.
+    await boxes.nth(0).getByRole("button", { name: "Stop waiting" }).click();
+    for (const index of [1, 2]) {
+      await boxes.nth(index).getByRole("button", { name: "Stop", exact: true }).click();
+      await expect(boxes.nth(index).getByRole("button", { name: "Dismiss" })).toBeVisible();
+    }
+  } finally {
+    await slow.close();
+  }
 });

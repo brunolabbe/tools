@@ -1,6 +1,7 @@
+import { useId } from "react";
 import type { ProbeStageEvent } from "@downloader/contract";
 import { useElapsed } from "../hooks/useElapsed.ts";
-import { PROBE_STAGE_PENDING, probeStageText } from "../lib/probe-stages.ts";
+import { PROBE_STAGE_PENDING, PROBE_WAITING, probeStageText } from "../lib/probe-stages.ts";
 import { ProgressBar } from "./ProgressBar.tsx";
 
 /**
@@ -36,6 +37,12 @@ interface AnalysingPanelProps {
   startedAt: number;
   /** The last stage the server reported. `null` until the first frame lands. */
   stage: ProbeStageEvent | null;
+  /**
+   * Waiting in this browser for a probe slot, with no request sent (dl-133).
+   * The clock then counts the wait, and the line says what it is waiting for.
+   */
+  waiting?: boolean;
+  /** Closes the box: the probe is abandoned, or the wait is, with nothing ever sent. */
   onCancel: () => void;
 }
 
@@ -43,29 +50,37 @@ export function AnalysingPanel({
   url,
   startedAt,
   stage,
+  waiting = false,
   onCancel,
 }: AnalysingPanelProps): React.JSX.Element {
   const elapsed = useElapsed(startedAt);
   const seconds = Math.floor(elapsed / 1000);
-  const line = stage === null ? PROBE_STAGE_PENDING : probeStageText(stage);
+  // Per box: several analyses can be on the page at once (dl-133).
+  const headingId = useId();
+  let line = stage === null ? PROBE_STAGE_PENDING : probeStageText(stage);
+  if (waiting) line = PROBE_WAITING;
 
   return (
-    <section className="card" aria-labelledby="analysing-heading">
+    <section aria-labelledby={headingId}>
       <div className="card__head">
-        <h2 id="analysing-heading" className="card__title">
-          Analysing
+        <h2 id={headingId} className="card__title">
+          {waiting ? "Waiting" : "Analysing"}
         </h2>
         <span className="pill">{seconds}s</span>
       </div>
       <p className="muted url-echo">{url}</p>
-      <ProgressBar percent={null} label="Analysing page" />
+      <ProgressBar
+        percent={null}
+        label={waiting ? "Waiting to analyse" : "Analysing page"}
+        waiting={waiting}
+      />
       {/* `aria-live` on the element whose text changes, not on a wrapper whose
           children merely change class. `aria-atomic` because the whole line is
           replaced and half of it is never the news. */}
       <p className="stage" aria-live="polite" aria-atomic="true">
         {line}
       </p>
-      <p className="muted">Browser probes usually take 10–20 seconds.</p>
+      {!waiting && <p className="muted">Browser probes usually take 10–20 seconds.</p>}
       <button type="button" className="button" onClick={onCancel}>
         Stop waiting
       </button>

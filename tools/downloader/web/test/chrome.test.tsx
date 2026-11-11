@@ -23,7 +23,7 @@ import type { ProbeStageEvent } from "@downloader/contract";
 import { AnalysingPanel } from "../src/components/AnalysingPanel.tsx";
 import { ScenarioHints } from "../src/components/ScenarioHints.tsx";
 import { SCENARIOS, scenarioUrl } from "../src/api/scenarios.ts";
-import { PROBE_STAGE_PENDING, probeStageText } from "../src/lib/probe-stages.ts";
+import { PROBE_STAGE_PENDING, PROBE_WAITING, probeStageText } from "../src/lib/probe-stages.ts";
 import { NOW, SOURCE_URL } from "./fixtures.ts";
 
 afterEach(cleanup);
@@ -254,4 +254,39 @@ test("picking a scenario reports the URL that selects it", () => {
 
   fireEvent.click(screen.getAllByRole("button")[0] as HTMLButtonElement);
   expect(onPick).toHaveBeenLastCalledWith(scenarioUrl(""));
+});
+
+// ---------------------------------------------------------------------------
+// AnalysingPanel, waiting for a slot (dl-133)
+// ---------------------------------------------------------------------------
+
+test("a box waiting for a probe slot says so, claims no stage, and can be closed", () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(NOW);
+  try {
+    const onCancel = vi.fn<() => void>();
+    render(
+      <AnalysingPanel url={SOURCE_URL} startedAt={NOW} stage={null} waiting onCancel={onCancel} />,
+    );
+    expect(screen.getByRole("heading", { name: "Waiting" })).toBeDefined();
+    // Nothing was sent, so the pending line, which says the POST is out, is not
+    // true yet; the waiting line is.
+    expect(stageLine()).toBe(PROBE_WAITING);
+    expect(stageLine()).not.toBe(PROBE_STAGE_PENDING);
+    expect(screen.getByRole("progressbar").hasAttribute("value")).toBe(false);
+    expect(screen.getByText(SOURCE_URL)).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: "Stop waiting" }));
+    expect(onCancel).toHaveBeenCalledOnce();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test("a waiting box's bar says nothing has started, not that work is in progress (gate 1 F5)", () => {
+  render(
+    <AnalysingPanel url={SOURCE_URL} startedAt={NOW} stage={null} waiting onCancel={vi.fn()} />,
+  );
+  expect(screen.getByRole("progressbar").getAttribute("aria-label")).toBe(
+    "Waiting to analyse: not started yet",
+  );
 });

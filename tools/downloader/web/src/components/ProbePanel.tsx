@@ -3,7 +3,9 @@ import { canMakeWebm } from "@downloader/contract";
 import type { JobOptions, ProbeResult } from "@downloader/contract";
 import { formatDuration } from "../lib/format.ts";
 import { pickDefaultVariantId, toDisplayRows } from "../lib/variants.ts";
-import { Preview } from "./Preview.tsx";
+import { JOB_WAITING } from "../lib/probe-stages.ts";
+import { BoxHead } from "./BoxHead.tsx";
+import { ProgressBar } from "./ProgressBar.tsx";
 import { VariantTable } from "./VariantTable.tsx";
 
 const CONTAINERS = ["mp4", "mkv", "webm", "source"] as const;
@@ -14,6 +16,16 @@ interface ProbePanelProps {
   busy: boolean;
   onDownload: (options: JobOptions) => void;
   onReanalyse: () => void;
+  onDismiss: () => void;
+  /**
+   * Download was pressed with both job slots taken (dl-133): the table and the
+   * options step aside, as they will when the job starts, and the line under
+   * the bar says what the box waits for. They stay mounted in this panel's
+   * state, so Stop waiting brings them back as they were chosen (owner,
+   * 2026-11-10).
+   */
+  waiting?: boolean;
+  onStopWaiting?: () => void;
 }
 
 export function ProbePanel({
@@ -22,6 +34,9 @@ export function ProbePanel({
   busy,
   onDownload,
   onReanalyse,
+  onDismiss,
+  waiting = false,
+  onStopWaiting,
 }: ProbePanelProps): React.JSX.Element {
   const [variantId, setVariantId] = useState<string | null>(() =>
     pickDefaultVariantId(probe.variants),
@@ -33,6 +48,9 @@ export function ProbePanel({
   const [embedSubtitles, setEmbedSubtitles] = useState(probe.subtitles.length > 0);
   const [liveDurationMin, setLiveDurationMin] = useState(5);
 
+  // Per panel: several boxes hold one each (dl-133), and a fixed id would name
+  // every one of them by the first one's title.
+  const headingId = useId();
   const containerId = useId();
   const liveId = useId();
 
@@ -46,10 +64,6 @@ export function ProbePanel({
   }
 
   const subtitleLanguages = [...new Set(probe.subtitles.map((track) => track.language))];
-  // The same pure call the table makes, because this line counts what the table
-  // shows: saying "20 renditions" above five rows is the dl-40 defect wearing a
-  // different hat.
-  const { rows: shownRows, collapsed } = toDisplayRows(probe.variants);
 
   // dl-99: WebM is offered only for a variant it can be made from. With no
   // variant chosen yet the server picks one, and refuses WebM itself if it must.
@@ -80,40 +94,31 @@ export function ProbePanel({
     onDownload(options);
   }
 
+  if (waiting) {
+    return (
+      <section aria-labelledby={headingId}>
+        <ProbeHead probe={probe} cached={cached} headingId={headingId} />
+        <ProgressBar percent={null} label="Waiting to download" waiting />
+        <p className="stage" aria-live="polite" aria-atomic="true">
+          {JOB_WAITING}
+        </p>
+        {/* Keys that differ from the options row's: both branches return the same
+            section with an actions row in the same place, so without them React
+            kept the pressed Stop waiting button and turned it into Download, and
+            a held Enter or a second quick press started the wait over (dl-133
+            gate 2, N4). */}
+        <div key="waiting-actions" className="card__actions">
+          <button type="button" className="button" onClick={onStopWaiting}>
+            Stop waiting
+          </button>
+        </div>
+      </section>
+    );
+  }
+
   return (
-    <section className="card" aria-labelledby="probe-heading">
-      <div className="card__head">
-        {/* Grouped with the title rather than added as a third child of
-            `card__head`, which is `space-between` — a bare third child would
-            push the title into the middle of the row. `card__headline` collapses
-            to just the title when there is no preview, so the layout does not
-            depend on the image existing. */}
-        <div className="card__headline">
-          <Preview path={probe.thumbnailPath} size="panel" />
-          {/* What was found sits under the title, where the job card keeps its
-              subtitle, so the line is in the same place on both steps. */}
-          <div className="job__titles">
-            <h2 id="probe-heading" className="card__title">
-              {probe.title}
-            </h2>
-            <p className="muted job__subtitle">
-              {probe.durationSec ? `${formatDuration(probe.durationSec)} · ` : ""}
-              {shownRows.length} rendition{shownRows.length === 1 ? "" : "s"}
-              {collapsed > 0
-                ? ` · ${collapsed} duplicate path${collapsed === 1 ? "" : "s"} merged`
-                : ""}
-              {probe.subtitles.length > 0
-                ? ` · ${probe.subtitles.length} subtitle track${probe.subtitles.length === 1 ? "" : "s"}`
-                : ""}
-            </p>
-          </div>
-        </div>
-        <div className="pills">
-          {probe.isLive && <span className="pill pill--warn">Live</span>}
-          {cached && <span className="pill">cached</span>}
-          <span className="pill">{probe.resolver}</span>
-        </div>
-      </div>
+    <section aria-labelledby={headingId}>
+      <ProbeHead probe={probe} cached={cached} headingId={headingId} />
 
       <VariantTable variants={probe.variants} selectedId={variantId} onSelect={setVariantId} />
 
@@ -179,14 +184,65 @@ export function ProbePanel({
         )}
       </fieldset>
 
-      <div className="card__actions">
+      <div key="options-actions" className="card__actions">
         <button type="button" className="button button--primary" onClick={submit} disabled={busy}>
           {busy ? "Starting…" : "Download"}
         </button>
-        <button type="button" className="button" onClick={onReanalyse}>
+        {/* Neither this nor Dismiss while the job is being created: the box is
+            about to become that job, and re-analysing it in that window left
+            the job to land as a second box (dl-133 gate 1, F2). */}
+        <button type="button" className="button" onClick={onReanalyse} disabled={busy}>
           Analyse again
+        </button>
+        {/* An analysis no longer leaves when the next one starts (dl-133), so one
+            that is not wanted is put away from here. */}
+        <button type="button" className="button" onClick={onDismiss} disabled={busy}>
+          Dismiss
         </button>
       </div>
     </section>
+  );
+}
+
+/**
+ * The analysis's head: its preview, its title, and what was found under it. Its
+ * own component because a box whose Download waits for a slot keeps this head
+ * and loses the table and the options, as the job it turns into does (dl-133).
+ */
+export function ProbeHead({
+  probe,
+  cached,
+  headingId,
+}: {
+  probe: ProbeResult;
+  cached: boolean;
+  headingId?: string;
+}): React.JSX.Element {
+  // The same pure call the table makes, because this line counts what the table
+  // shows: saying "20 renditions" above five rows is the dl-40 defect wearing a
+  // different hat.
+  const { rows: shownRows, collapsed } = toDisplayRows(probe.variants);
+  return (
+    <BoxHead
+      {...(headingId ? { headingId } : {})}
+      title={probe.title}
+      subtitle={
+        <>
+          {probe.durationSec ? `${formatDuration(probe.durationSec)} · ` : ""}
+          {shownRows.length} rendition{shownRows.length === 1 ? "" : "s"}
+          {collapsed > 0
+            ? ` · ${collapsed} duplicate path${collapsed === 1 ? "" : "s"} merged`
+            : ""}
+          {probe.subtitles.length > 0
+            ? ` · ${probe.subtitles.length} subtitle track${probe.subtitles.length === 1 ? "" : "s"}`
+            : ""}
+        </>
+      }
+      previewPath={probe.thumbnailPath}
+    >
+      {probe.isLive && <span className="pill pill--warn">Live</span>}
+      {cached && <span className="pill">cached</span>}
+      <span className="pill">{probe.resolver}</span>
+    </BoxHead>
   );
 }

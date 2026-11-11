@@ -73,11 +73,12 @@ test("paste a URL, pick a quality, and download the file", async ({ page, reques
     page.getByRole("button", { name: "Download", exact: true }).click(),
   ]);
 
-  // The card shows the page's title and host, not the address (dl-109), and
-  // this is the only job on the page.
-  const job = page.getByRole("list", { name: "Downloads" }).locator(":scope > li").first();
+  // The job is the box the analysis was (dl-133), titled by the page, and this
+  // is the only box on the page.
+  const job = page.getByRole("list", { name: "Analyses" }).locator(":scope > li");
+  await expect(job).toHaveCount(1);
   await expect(job).toBeVisible();
-  // On screen, not merely in the page: the panel is scrolled to its bottom to
+  // On screen, not merely in the page: the box is scrolled to its bottom to
   // press Download, and a card placed above it landed out of view (dl-109).
   await expect(job).toBeInViewport();
   const href = new URL(download.url()).pathname;

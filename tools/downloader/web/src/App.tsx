@@ -1,150 +1,39 @@
-import { useCallback, useRef, useState } from "react";
-import { AppError, sourceUrlSchema } from "@downloader/contract";
+import { useCallback, useState } from "react";
+import { sourceUrlSchema } from "@downloader/contract";
 import { AppFooter, AppHeader, TOOL_VERSION } from "@webtools/ui";
-import type {
-  AppErrorPayload,
-  Job,
-  JobOptions,
-  ProbeResult,
-  ProbeStageEvent,
-} from "@downloader/contract";
+import type { AppErrorPayload } from "@downloader/contract";
 import { USING_MOCK_API, api } from "./api/client.ts";
-import { AnalysingPanel } from "./components/AnalysingPanel.tsx";
+import { BoxList } from "./components/BoxList.tsx";
 import { ErrorPanel } from "./components/ErrorPanel.tsx";
 import { Glyph } from "./components/Glyph.tsx";
-import { JobList } from "./components/JobList.tsx";
-import { ProbePanel } from "./components/ProbePanel.tsx";
 import { ScenarioHints } from "./components/ScenarioHints.tsx";
 import { UrlForm } from "./components/UrlForm.tsx";
+import { useBoxes } from "./hooks/useBoxes.ts";
 import { useJobs } from "./hooks/useJobs.ts";
 import { localErrorPayload } from "./lib/error-presentation.ts";
-import type { EventStream } from "./lib/event-stream.ts";
-import { mintProbeId } from "./lib/probe-id.ts";
-
-type Phase =
-  | { kind: "idle" }
-  | {
-      kind: "analysing";
-      url: string;
-      startedAt: number;
-      /** The last stage the server reported over the probe's channel (dl-43). */
-      stage: ProbeStageEvent | null;
-    }
-  | { kind: "probed"; url: string; probe: ProbeResult; cached: boolean };
 
 export function App(): React.JSX.Element {
+  // Kept after Analyse (dl-133 decision 3): the clear button empties it.
   const [url, setUrl] = useState("");
-  const [phase, setPhase] = useState<Phase>({ kind: "idle" });
-  // With the address it came from: the field may have been cleared since, and
-  // "Analyse again" retries the page that failed, not whatever is typed now.
-  const [probeError, setProbeError] = useState<{ error: AppErrorPayload; url: string } | null>(
-    null,
-  );
-  const [startError, setStartError] = useState<AppErrorPayload | null>(null);
-  const [starting, setStarting] = useState(false);
-  const [revealId, setRevealId] = useState<string | null>(null);
-  // Bumped on every new analysis so a late response from an abandoned probe
-  // cannot overwrite the current one.
-  const probeToken = useRef(0);
-  /** The stage channel for the probe in flight, so a new analysis can close it. */
-  const stageStream = useRef<EventStream | null>(null);
+  // An address the contract refuses makes no box: nothing was analysed, so the
+  // answer belongs to the form that was submitted.
+  const [formError, setFormError] = useState<AppErrorPayload | null>(null);
 
   const jobs = useJobs(api);
-  const { clearSaved } = jobs;
+  const boxes = useBoxes(api, jobs);
+  const { analyse: open } = boxes;
 
   const analyse = useCallback(
-    async (candidate: string) => {
+    (candidate: string) => {
       const parsed = sourceUrlSchema.safeParse(candidate);
       if (!parsed.success) {
-        setPhase({ kind: "idle" });
-        setProbeError({ error: localErrorPayload("INVALID_URL"), url: candidate });
+        setFormError(localErrorPayload("INVALID_URL"));
         return;
       }
-      const token = probeToken.current + 1;
-      probeToken.current = token;
-      // A saved card is the confirmation for the page the visitor was on; moving
-      // on to another page is when it has been read (dl-109).
-      clearSaved();
-      setProbeError(null);
-      setStartError(null);
-      setPhase({ kind: "analysing", url: parsed.data, startedAt: Date.now(), stage: null });
-
-      // dl-43. Opened before the POST and named by this client, because the
-      // request that starts the probe is also the first thing that can produce a
-      // stage — there is no moment later at which subscribing would still catch
-      // the beginning. A stale stream from an abandoned probe is closed here
-      // rather than left to the server's channel timeout.
-      stageStream.current?.close();
-      const probeId = mintProbeId();
-      const stream = api.openProbeEvents(probeId, {
-        onOpen: () => {},
-        onEvent: (event) => {
-          if (probeToken.current !== token || event.type !== "stage") return;
-          // Only while analysing: a frame that arrives after the answer has no
-          // panel to reach, and must not resurrect one.
-          setPhase((current) =>
-            current.kind === "analysing"
-              ? { ...current, stage: { stage: event.stage, resolver: event.resolver } }
-              : current,
-          );
-        },
-        // Narration is decoration over a request that is still in flight. Losing
-        // it leaves the panel on its last honest line and changes nothing else.
-        onError: () => {},
-      });
-      stageStream.current = stream;
-
-      try {
-        const response = await api.probe({ url: parsed.data, probeId });
-        if (probeToken.current !== token) return;
-        setPhase({
-          kind: "probed",
-          url: parsed.data,
-          probe: response.probe,
-          cached: response.cached,
-        });
-      } catch (error) {
-        if (probeToken.current !== token) return;
-        setPhase({ kind: "idle" });
-        setProbeError({ error: AppError.from(error).toPayload(), url: parsed.data });
-      } finally {
-        stream.close();
-        if (stageStream.current === stream) stageStream.current = null;
-      }
+      setFormError(null);
+      open(parsed.data);
     },
-    [clearSaved],
-  );
-
-  const abandonProbe = useCallback(() => {
-    probeToken.current += 1;
-    stageStream.current?.close();
-    stageStream.current = null;
-    setPhase({ kind: "idle" });
-  }, []);
-
-  const download = useCallback(
-    async (options: JobOptions) => {
-      if (phase.kind !== "probed") return;
-      setStarting(true);
-      setStartError(null);
-      try {
-        const job = await jobs.start(phase.url, options, phase.probe.title);
-        setRevealId(job.id);
-      } catch (error) {
-        setStartError(AppError.from(error).toPayload());
-      } finally {
-        setStarting(false);
-      }
-    },
-    [jobs, phase],
-  );
-
-  const retryJob = useCallback(
-    (job: Job) => {
-      setUrl(job.sourceUrl);
-      void analyse(job.sourceUrl);
-    },
-    [analyse],
+    [open],
   );
 
   const invalid =
@@ -165,68 +54,39 @@ export function App(): React.JSX.Element {
           <h2 id="analyse-heading" className="card__title">
             Analyse a page
           </h2>
-          <UrlForm
-            url={url}
-            onUrlChange={setUrl}
-            onSubmit={() => void analyse(url)}
-            busy={phase.kind === "analysing"}
-            invalid={invalid}
-          />
+          {/* Never busy: each Analyse makes its own box, and a third waits in
+              its box for a slot rather than here (dl-133). */}
+          <UrlForm url={url} onUrlChange={setUrl} onSubmit={() => analyse(url)} invalid={invalid} />
         </section>
 
-        {probeError && (
-          <ErrorPanel
-            error={probeError.error}
-            onRetry={() => void analyse(probeError.url)}
-            onDismiss={() => setProbeError(null)}
-            retryLabel="Analyse again"
-          />
-        )}
+        {formError && <ErrorPanel error={formError} onDismiss={() => setFormError(null)} />}
 
-        {phase.kind === "analysing" && (
-          <AnalysingPanel
-            url={phase.url}
-            startedAt={phase.startedAt}
-            stage={phase.stage}
-            onCancel={abandonProbe}
-          />
-        )}
-
-        {phase.kind === "probed" && (
-          <>
-            <ProbePanel
-              probe={phase.probe}
-              cached={phase.cached}
-              busy={starting}
-              onDownload={(options) => void download(options)}
-              onReanalyse={() => void analyse(phase.url)}
-            />
-            {startError && <ErrorPanel error={startError} onDismiss={() => setStartError(null)} />}
-          </>
-        )}
-
-        {/* Below the analysis panel, directly under the Download button just
-            pressed — where the eye already is. Above it, the new card landed
-            off screen, because the panel is scrolled to its bottom to press
-            the button (measured by dl-109's gate). */}
-        <JobList
+        {/* Directly under the field, newest first (dl-133 decision 4): a new box
+            lands where the eye already is, however many are below it. */}
+        <BoxList
+          boxes={boxes.boxes}
           jobs={jobs.jobs}
           titles={jobs.titles}
           streamStates={jobs.streamStates}
           refusals={jobs.refusals}
           stages={jobs.stages}
-          revealId={revealId}
+          revealId={boxes.revealId}
+          onClose={boxes.close}
+          onReanalyse={boxes.reanalyse}
+          onDownload={boxes.download}
+          onClearStartError={boxes.clearStartError}
+          onStopWaitingDownload={boxes.stopWaitingDownload}
           onFollowLink={jobs.clearRefusal}
           onCancel={(id) => void jobs.cancel(id)}
-          onRemove={jobs.remove}
-          onRetry={retryJob}
+          onDismissJob={boxes.dismissJob}
+          onRetryJob={boxes.retryJob}
         />
 
         {USING_MOCK_API && (
           <ScenarioHints
             onPick={(picked) => {
               setUrl(picked);
-              void analyse(picked);
+              analyse(picked);
             }}
           />
         )}

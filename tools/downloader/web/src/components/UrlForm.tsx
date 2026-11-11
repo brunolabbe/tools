@@ -4,18 +4,15 @@ interface UrlFormProps {
   url: string;
   onUrlChange: (url: string) => void;
   onSubmit: () => void;
-  busy: boolean;
   /** Inline validation message, or null when the field is acceptable. */
   invalid: string | null;
 }
 
-export function UrlForm({
-  url,
-  onUrlChange,
-  onSubmit,
-  busy,
-  invalid,
-}: UrlFormProps): React.JSX.Element {
+/**
+ * The address field. Never busy (dl-133): every Analyse makes a box of its own,
+ * so the next address can be pasted and analysed while the last one runs.
+ */
+export function UrlForm({ url, onUrlChange, onSubmit, invalid }: UrlFormProps): React.JSX.Element {
   const inputId = useId();
   const errorId = useId();
   const input = useRef<HTMLInputElement>(null);
@@ -65,12 +62,8 @@ export function UrlForm({
             </button>
           )}
         </div>
-        <button
-          type="submit"
-          className="button button--primary"
-          disabled={busy || url.trim() === ""}
-        >
-          {busy ? "Analysing…" : "Analyse"}
+        <button type="submit" className="button button--primary" disabled={url.trim() === ""}>
+          Analyse
         </button>
       </div>
       <p className="urlform__hint">

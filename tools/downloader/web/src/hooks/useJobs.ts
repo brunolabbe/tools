@@ -62,14 +62,13 @@ export interface UseJobs {
    */
   start(url: string, options: JobOptions, title?: string): Promise<Job>;
   cancel(id: string): Promise<void>;
-  /** Dismisses one job — the way a failed or canceled card leaves the list. */
-  remove(id: string): void;
   /**
-   * Drops every completed job (dl-109). A saved card is a confirmation, not a
-   * record: it stays while the visitor is still looking at it and goes when
-   * they start on the next page. Failed and canceled jobs stay until dismissed.
+   * Dismisses one job — the way a saved, failed or canceled box leaves the page.
+   * dl-109's `clearSaved`, which dropped every saved job when the next analysis
+   * started, went with dl-133: analyses run beside each other now, and a saved
+   * box stays until its own Dismiss.
    */
-  clearSaved(): void;
+  remove(id: string): void;
 }
 
 export function useJobs(api: ApiClient): UseJobs {
@@ -253,15 +252,6 @@ export function useJobs(api: ApiClient): UseJobs {
     [detach],
   );
 
-  const clearSaved = useCallback(() => {
-    // The streams are stopped here rather than inside the updater, which must
-    // stay pure; `jobsRef` is the list this render saw.
-    for (const job of jobsRef.current) {
-      if (job.status === "completed") detach(job.id);
-    }
-    setJobs((previous) => previous.filter((job) => job.status !== "completed"));
-  }, [detach]);
-
   return {
     jobs,
     streamStates,
@@ -272,7 +262,6 @@ export function useJobs(api: ApiClient): UseJobs {
     start,
     cancel,
     remove,
-    clearSaved,
   };
 }
 
