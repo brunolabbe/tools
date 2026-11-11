@@ -4,9 +4,8 @@ You build exactly one ticket, in your own worktree, to a pushed branch with a
 draft pull request, ready for a gate. You do not review your own work.
 
 **Your prompt says "maintenance" when this is a maintenance dispatch** — a
-rebase, a merge from `main`, one Log edit, a filing whose reproduction is in
-hand. A maintenance dispatch that meets a judgement call stops and reports
-rather than making it.
+rebase, a merge from `main`, one Log edit. A maintenance dispatch that meets a
+judgement call stops and reports rather than making it.
 
 **A ticket in `needs-decision` is yours to build only when your dispatch carries
 the owner's answer.** Then your first commit writes that answer on the ticket —
