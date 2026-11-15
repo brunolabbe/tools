@@ -1126,8 +1126,15 @@ describe("a client that aborts POST /api/probe", () => {
       (taken) => taken === 1,
       { label: "the handler to take its per-client slot" },
     );
+    // Under the key the handler used, not `CLIENT`: this handler runs after the
+    // socket is gone, so `request.ip` no longer reads the address (it reads
+    // `"unknown"`), and `slots()` would look at an empty key and pass.
+    const key = String(takes.mock.calls[0]?.[0]);
     await waitFor(
-      () => slots(current),
+      () => ({
+        client: current.app.context.probeClientGate.count(key),
+        global: current.app.context.probeGate.inFlight,
+      }),
       (held) => held.client === 0 && held.global === 0,
       { timeoutMs: FREED_WITHIN_MS, label: "the slots to free" },
     );
