@@ -36,7 +36,7 @@ Log; this is the repo half. The ledger half is a separate ticket and is not
 covered here. The repo-129 builder's report at that checkpoint recommended
 filing a ledger ticket for the two ledger files and a repo ticket for ghshim,
 and the owner chose that. repo-129's branch (`repo-129-split-isolation`, pull
-request #783, not merged) diagnoses the same failure on 2026-11-10 and leaves it
+request #783, since merged as `768661a7`) diagnosed the same failure on 2026-11-10 and left it
 alone. It was never an isolation problem, which is why `--isolate` is not the
 fix and why this ticket does not touch the project split.
 
@@ -242,7 +242,7 @@ ledger ticket; the owner chose filing two, the repo-129 builder's recommendation
 
 Two readings on record that this measurement qualifies. repo-110's Log on `main`
 says seed 1 fails with the same message, and repo-128's gate record on the
-unmerged branch `repo-129-split-isolation` says seeds 1 and 2 fail on the base's
+branch `repo-129-split-isolation` (unmerged then, merged since as `768661a7`) says seeds 1 and 2 fail on the base's
 copy of the file. At `a100f429`, seed 1 passes and seed 2 fails (run twice). The
 failing seeds move with the test set, so the Build asks for a sweep rather than
 one seed.
@@ -352,3 +352,48 @@ ledger ticket is outside this pull request's range, so it is not a defect here.
   `git diff 264f2e1d HEAD -- docs/work/repo-144-the-preflight-leak-spec-depends-on-test-order.md | grep -c '^-.*list. The mutation control in Build 4'` → `1`.
 - 2026-11-10 — Fixed at landing by owner choice: gate 2, F6 (fixed in part) —
   "Delete all four lines miscounts a six-line block." `git diff 264f2e1d HEAD -- docs/work/repo-144-the-preflight-leak-spec-depends-on-test-order.md | grep -c '^-.*Delete all four lines: deleting only'` → `1`.
+
+### 2026-11-15 — built
+
+Base `origin/main` at `4e040577`; baseline commit `355d186b` carries the change to
+`scripts/test/preflight.test.ts` (the only source file touched).
+
+- **What changed.** The leak check is a file-level `afterAll` beside `makeShimDir`,
+  asserting `shimDirsMade.filter(existsSync)` is empty with the message
+  `leaked: <paths>`; it has no floor. The old test and its two-line comment are
+  deleted (seven lines, the blank line before them included). A cover test,
+  `makeShimDir records each directory (repo-144)`, makes its own directory,
+  asserts it is in `shimDirsMade` and exists, and removes it. `vitest.config.ts`
+  is untouched. The file still reports 122 tests, one skipped: one removed, one added.
+- **Sweep, at the branch head, one `npx vitest run scripts/test/preflight.test.ts`
+  per row.** File order: exit 0, `Test Files  1 passed (1)`, `Tests  121 passed | 1
+  skipped (122)`. `--sequence.shuffle.files --sequence.seed=2`: the same. Done when
+  2: `--sequence.shuffle --sequence.seed=n` for n = 1 to 20, exit 0 and
+  `Test Files  1 passed (1)` on all twenty. The base's failing seeds, from the
+  ticket's Reproduction and re-measured by the intake at `4e040577`, were 2, 7, 8
+  and 16.
+- **Filters (Done when 5), each exit 0, `Test Files  1 passed (1)`:**
+  `-t "repo-110"` 3 passed | 119 skipped; `-t "repo-104"` 14 passed | 108 skipped;
+  `-t "the CLI never leaks next-id.mjs's id-sweep wording"` 2 passed | 120 skipped;
+  `-t "allProjects is exactly"` 1 passed | 121 skipped;
+  `-t "makeShimDir records each directory"` 1 passed | 121 skipped.
+- **Mutation control (Build 4).** With `removeShimDir(shimDir);` commented out in
+  the `finally` of the `--only mergeTree` test (line 2296), file order: exit 1,
+  `AssertionError: leaked: /tmp/preflight-ghshim-YwX4z4: expected [
+  '/tmp/preflight-ghshim-YwX4z4' ] to deeply equal []`, `Test Files  1 failed (1)`,
+  `Tests  121 passed | 1 skipped (122)`. Under `--sequence.shuffle --sequence.seed=2`:
+  exit 1, `leaked: /tmp/preflight-ghshim-H4ssqM`, `Test Files  1 failed (1)`. Both
+  name the leaked directory. Restored with `git checkout 355d186b -- scripts/test/preflight.test.ts`;
+  `git diff 355d186b -- scripts/test/preflight.test.ts | wc -l` → `0`. The two
+  leaked directories were removed by hand.
+- **Build 6.** `npx oxlint scripts/test/preflight.test.ts` and
+  `npx oxfmt --check scripts/test/preflight.test.ts` clean; `npm run check` exit 0.
+- **What the brief had wrong.** repo-129's pull request #783 is merged
+  (`768661a7`), not open; the Why and the 2026-11-10 filing entry now say so.
+  The spec had moved to about `:3049-3054` after #783 added lines near 2593; the
+  line numbers in the Why and Reproduction are the base `a100f429`'s and are left
+  as that record. The removal at the `--only mergeTree` test is still at `:2296`.
+- **Not folded in.** `.claude/rules/testing.md` still lists "`preflight.test.ts`'s
+  ghshim case" among files that fail under `--sequence.shuffle`; after this change
+  it no longer does, so that sentence is now stale. It is a rule page, which a
+  builder never edits: reported for the owner.
