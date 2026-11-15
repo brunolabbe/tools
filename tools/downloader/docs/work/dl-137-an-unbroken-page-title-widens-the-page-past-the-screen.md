@@ -204,6 +204,24 @@ Done when now also cover `.notice__message` with the same declaration, checked
 by the same shape of layout case. The widened Build and Done when are written
 in round 1; the Why records F4's reproduction.
 
+**Question 4, gate 1's F1 on the built head (an unbroken subtitle language in the
+"Embed subtitles" label) — answered 2026-11-15 by the owner: fold it in, over
+the gate's recommendation to file.** The options were (1) file a ticket, the
+gate's recommendation; (2) fold it into dl-137 as one CSS rule and one layout
+case, then a narrow gate 2; (3) record only. The owner chose (2) and so
+overrode the gate's recommendation. The gate's finding: a 200-character
+unbroken `language` in `probe.subtitles` reaches the label
+`Embed subtitles (…)` in `ProbePanel.tsx` (`.options__row label`,
+`display: inline-flex`, no `overflow-wrap`) and reads `scrollWidth` 1875 at 360
+px and 2028 at 1280 px, the same on the base and on the head 8f64987c; a remote
+manifest controls the value (`resolvers/src/manifest/hls.ts` copies the
+`LANGUAGE` attribute as it is). **Scope: this ticket now also covers that one
+label, with one rule and one case appended to `e2e/layout.spec.ts`.** The
+`Done when` lines above are unchanged and still describe the four elements.
+Also answered the same day: F2 and F3 of the same gate (a code comment and two
+Log descriptions that misstate what the screenshots show) are fixed in this
+round.
+
 The question as it stood when filed, and the options with their costs as the
 filing put them (the costs are corrected in round 1, F1 and
 F2):
