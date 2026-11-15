@@ -142,7 +142,8 @@ export function useBoxes(api: ApiClient, jobs: UseJobs): UseBoxes {
         stream.close();
         if (streams.current.get(id) === stream) streams.current.delete(id);
         if (posts.current.get(id) === token) posts.current.delete(id);
-        // The server has let go of the slot an abandoned box was still holding.
+        // The POST has settled or timed out, so the page's count of the abandoned
+        // box is given back. After a timeout the server may still hold its slot.
         if (orphans.current.delete(token)) setUnsettled((count) => count - 1);
       }
     },

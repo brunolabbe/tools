@@ -34,6 +34,19 @@ export interface HttpClientOptions {
   humanCheck?: HumanCheckFactory;
 }
 
+/**
+ * How long a probe or job request may stay out, from its fetch (dl-138). The
+ * probe's is above the longest the server's bounded waits add up to (about 61 s
+ * with the human check on and the resolver timeout at its ceiling, by the
+ * ticket's arithmetic), but it does not bound the unbounded lookups, and the
+ * abort at the bound does not free the server's slot: the server keeps it until
+ * its own handler ends. The bound frees the page's count, not the server's slot.
+ * A job creation takes no server slot and is a few writes: 30 s clears the
+ * siteverify's 5 s by a wide margin.
+ */
+export const PROBE_TIMEOUT_MS = 90_000;
+export const CREATE_JOB_TIMEOUT_MS = 30_000;
+
 export function createHttpClient(options: HttpClientOptions = {}): ApiClient {
   const baseUrl = (options.baseUrl ?? "").replace(/\/$/, "");
   const url = (path: string): string => `${baseUrl}${path}`;
@@ -107,18 +120,56 @@ export function createHttpClient(options: HttpClientOptions = {}): ApiClient {
     return humanCheckToken === null ? body : { ...body, humanCheckToken };
   }
 
-  return {
-    probe: async (probeRequest: ProbeRequest) =>
-      await request(ROUTES.probe, probeResponseSchema, {
-        method: "POST",
-        body: JSON.stringify(await withHumanCheck(probeRequest)),
-      }),
+  /**
+   * Gives up on a request that has not settled by `ms`, and says so with
+   * core's `TIMEOUT` (dl-138). Both halves are needed: the abort closes the
+   * socket of a real `fetch`, whose rejection `request()` would otherwise
+   * report as `UNREACHABLE`; the race settles the call even when the abort
+   * reaches nothing, and the rejection of its own is what says `TIMEOUT`. The
+   * timer begins when this is called, so a caller that takes its human check
+   * first keeps that wait off the bound.
+   */
+  async function withTimeout<T>(ms: number, run: (signal: AbortSignal) => Promise<T>): Promise<T> {
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const expired = new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(() => {
+        // The order of these two lines is not required: the abort reaches the
+        // race only through `request()`'s `catch`, one microtask later, so the
+        // rejection wins either way and no test pins the order. Kept first as the
+        // order that does not depend on that hop.
+        reject(new AppError("TIMEOUT"));
+        controller.abort();
+      }, ms);
+    });
+    try {
+      return await Promise.race([run(controller.signal), expired]);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
 
-    createJob: async (createRequest: CreateJobRequest) =>
-      await request(ROUTES.jobs, jobResponseSchema, {
-        method: "POST",
-        body: JSON.stringify(await withHumanCheck(createRequest)),
-      }),
+  return {
+    // Bounded on these two calls and no others (dl-138): the page counts a probe
+    // and a job creation until the request settles, so one that never does would
+    // hold its count for the life of the page. A timeout frees the page's count
+    // and not the server's slot, which the server keeps until its own handler
+    // ends: after a lost answer that is already free, but while the handler is in
+    // an unbounded wait, or a lookup before the slot outlasts the bound, a box
+    // that starts next can meet `RATE_LIMITED`.
+    probe: async (probeRequest: ProbeRequest) => {
+      const body = JSON.stringify(await withHumanCheck(probeRequest));
+      return await withTimeout(PROBE_TIMEOUT_MS, (signal) =>
+        request(ROUTES.probe, probeResponseSchema, { method: "POST", body, signal }),
+      );
+    },
+
+    createJob: async (createRequest: CreateJobRequest) => {
+      const body = JSON.stringify(await withHumanCheck(createRequest));
+      return await withTimeout(CREATE_JOB_TIMEOUT_MS, (signal) =>
+        request(ROUTES.jobs, jobResponseSchema, { method: "POST", body, signal }),
+      );
+    },
 
     getJob: (id: string) => request(ROUTES.job(id), jobResponseSchema),
 
