@@ -16,8 +16,9 @@ difficulty: standard
 `scripts/test/preflight.test.ts` ends with a spec that reads a module-level list,
 `shimDirsMade`, and asserts two things about it: that at least three shim
 directories were made, and that none of them still exists
-(`scripts/test/preflight.test.ts:3038-3041`). The two-line comment above it says
-why it sits last: "it reads what every test above left behind" (`:3036-3037`).
+(`scripts/test/preflight.test.ts:3038-3041` at `a100f429`). The two-line comment
+above it says why it sits last: "it reads what every test above left behind"
+(`:3036-3037` at `a100f429`).
 Under vitest's file order that holds. Under `--sequence.shuffle` it does not. The
 spec runs before some of the tests that call `makeShimDir()`, so the floor sees
 fewer than three and fails, even though nothing leaks.
@@ -150,7 +151,7 @@ what it says.
    it proves `makeShimDir` pushes onto `shimDirsMade`, and says nothing about the
    six tests that call it.
 3. Remove the old `test(...)` at `:3038-3041` and its two-line comment at
-   `:3036-3037`. Delete all six lines (comment 2, test 4): deleting only `:3037` leaves a
+   `:3036-3037` (both at `a100f429`). Delete all six lines (comment 2, test 4): deleting only `:3037` leaves a
    dangling comment. Keep an explanatory comment in the hook that says why it is in an
    `afterAll`: shuffled order is the reason.
 4. Mutation control, committed first: commit the file as a baseline
@@ -365,6 +366,8 @@ Base `origin/main` at `4e040577`; baseline commit `355d186b` carries the change 
   `makeShimDir records each directory (repo-144)`, makes its own directory,
   asserts it is in `shimDirsMade` and exists, and removes it. `vitest.config.ts`
   is untouched. The file still reports 122 tests, one skipped: one removed, one added.
+  _Withdrawn at the landing: "beside `makeShimDir`" no longer holds. The lander
+  moved the hook above the file's first `afterAll`; see the landing entry below._
 - **Sweep, at the branch head, one `npx vitest run scripts/test/preflight.test.ts`
   per row.** File order: exit 0, `Test Files  1 passed (1)`, `Tests  121 passed | 1
   skipped (122)`. `--sequence.shuffle.files --sequence.seed=2`: the same. Done when
@@ -397,3 +400,35 @@ Base `origin/main` at `4e040577`; baseline commit `355d186b` carries the change 
   ghshim case" among files that fail under `--sequence.shuffle`; after this change
   it no longer does, so that sentence is now stale. It is a rule page, which a
   builder never edits: reported for the owner.
+
+### 2026-11-15 — landing
+
+- 2026-11-15 — Owner's answers at the landing, relayed in the lander's dispatch.
+  The stale rule-page clause (`.claude/rules/testing.md` still listing the ghshim
+  case among the files that fail under plain `--sequence.shuffle`); options:
+  (1) the lander edits it on #803, (2) leave it for the next log review, (3) file a
+  ticket; the owner chose (1). The gate's first and third lows; options: fix both
+  at landing with no re-gate, the first only, neither; the owner chose both.
+- 2026-11-15 — The rule-page edit is made on the owner's explicit instruction, by
+  the lander and not the builder: the ghshim item is removed from the parenthesis
+  in `.claude/rules/testing.md`, the ledger's two files remain.
+  `git diff 2f072e86 HEAD -- .claude/rules/testing.md | grep -c '^-.*ghshim case'` → `1`.
+- 2026-11-15 — Fixed at landing by owner choice: gate 1, the first low — "declare
+  the hook before the file's first `afterAll`, and the planted run leaves only the
+  shim directory". The hook and its comment now sit above the `repoTemplate`
+  cleanup. Planted leak (no `removeShimDir` in the `--only mergeTree` test's
+  `finally`), one `npx vitest run scripts/test/preflight.test.ts` each under a
+  private `TMPDIR`: file order exit 1, `Test Files  1 failed (1)`, and a
+  `leaked:` line naming the path; `--sequence.shuffle --sequence.seed=2` the
+  same; each left one `preflight-ghshim-*` directory and no `preflight-template`
+  or `preflight-title` (the only other entry was node's own `node-compile-cache`).
+  Restored with `git checkout 3e4224ca -- scripts/test/preflight.test.ts`, then
+  `git diff 3e4224ca -- scripts/test/preflight.test.ts | wc -l` → `0`. Seeds 1
+  to 20 shuffled: 20 of 20 exit 0, `Test Files  1 passed (1)`.
+  `npm run check` exit 0 at the fix commit `3e4224ca`, after `npm run build` exit 0.
+- 2026-11-15 — Fixed at landing by owner choice: gate 1, the third low — "the Why
+  paragraph and Build 3 cite the old spec as `:3038-3041` and `:3036-3037` with no
+  sha in those sentences". Pinned to `a100f429`, the sha whose numbers they are:
+  `git show a100f429:scripts/test/preflight.test.ts | sed -n 3036,3041p` is the
+  two-line comment and the four-line test.
+  `git diff 2f072e86 HEAD -- docs/work/repo-144-the-preflight-leak-spec-depends-on-test-order.md | grep -c '^-.*above left behind'` → `1`.
