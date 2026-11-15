@@ -248,3 +248,56 @@ resolved in about 5 s, which is what isolates the delay as the cause.
     with the hover and a 3 s budget.
   - `npm run check` exit 0; `npm test -- --project downloader` 2669 passed, 2
     skipped (129 files passed, 1 skipped). e2e and container gates not run.
+- 2026-11-15 — Round 3 (the reload race). The coordinator's live runs of
+  ae2902a6 came to 4 of 6 (my 10 of 10 did not reproduce); the failing trace had
+  the second main-frame load at 4.9 s with provoke-playback starting at 4.9 s, and
+  provocation over in 1.2 s with no wait.
+  - **Why provocation ended after 1.2 s with no wait: `waitForBlankPlayerFill`
+    swallowed the error.** Its single outer `catch` set `state.done = true` on any
+    failure that was not an abort, and the first thing the wait does, the
+    `frame.evaluate` that marks the iframe, throws when the document is being
+    replaced under it. A failure to read was treated as "the page went away", and
+    the wait, and with it its 6 s, was skipped without a trace. Same family: when
+    the reload landed after a successful mark, the poll's own `catch` swallowed
+    the stale-handle error every 100 ms until the budget ran out, hovering and
+    sampling nothing. And a third: after the reload, the new document has not yet
+    parsed its iframe, the mark script returns `false`, which also set `done`.
+  - **The fix is in `provoke.ts` only; `browser.ts` is untouched** (so nothing
+    near `watchForDeparture`). The wait now runs in rounds, one per document: a
+    failure to read ends the round, not the wait; the next round re-marks the
+    iframe in the new document (`state.marked = false`) and the hover goes on
+    there; "no blank player iframe" ends the wait only before any document has
+    been replaced, and after one it is retried until the budget; only an abort, a
+    detached frame, a closed page or the 6 s end it. Bounded by the same budget
+    and deadline, so a page that reloads forever costs at most that wait.
+  - **Why not a reload wait in `browser.ts`** (the coordinator's option B). The
+    reload is not predictable from outside (a `guest.vary` fetch, then a reload,
+    1.4-2.8 s after the first commit, and it landed 0.0 s to 1.1 s after
+    provocation began in the traces I have); a wait for it in `waitForPageLoad`
+    would still lose the race it is about whenever the reload lands just after
+    the settle, which is the case that failed. Making the wait itself survive a
+    document swap covers the reload wherever it lands in the wait. Not covered:
+    a reload that lands before the wait starts and then leaves no blank iframe,
+    and one that lands after the wait is done and the embed has been clicked.
+  - Fixture: `player-delayed-single.html?reload`. First visit: the first
+    interaction sets a cookie and reloads (tied to the interaction, not a timer, so
+    it lands in the wait every run). Second visit (cookie): the hover-only page,
+    whose iframe is put back into the document 600 ms after load, so a look right
+    after the reload finds none. Test at the end of the press-targets spec: "a
+    first-visit reload that lands in the wait does not end it...", which also
+    asserts the page was requested twice.
+  - **Red on ae2902a6's `provoke.ts`:** `AppError: No downloadable video stream
+    was found on that page.` (4.4 s). **Mutations** (each red, 3.4-5.6 s, same
+    error): the round's `catch` ending the wait as before (`state.done = true;
+    break`), and the not-yet-parsed retry disabled (`if (true)` for
+    `if (!replaced)`).
+  - Live, the traced script, against this build: 6 of 6 (OK at 23.1, 18.8, 18.0,
+    23.0, 21.5, 17.3 s). Second main load / provoke-playback start, seconds:
+    3.2/4.0, 1.0*/1.8, 3.7/4.0, 3.1/3.9, 3.6/4.1, 3.5/4.0 (*the log's own
+    out-of-order stamp). **None of the six had the reload land after provocation
+    began**, so they show no regression, not the fix; the fix is shown by the
+    fixture, and by an earlier run with the same code minus the not-yet-parsed
+    retry (5 of 6; its miss had the second load at 5.1 s, provoke at 4.0 s,
+    provocation over at 6.4 s: the retry case above).
+  - `npm run check` exit 0; `npm test -- --project downloader` 2670 passed, 2
+    skipped. e2e and container gates not run.

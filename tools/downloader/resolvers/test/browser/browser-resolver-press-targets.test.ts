@@ -503,3 +503,30 @@ describe("a delay-JS plugin that only a pointer releases (dl-143 round 2)", () =
     },
   );
 });
+
+describe("a delay-JS page that reloads itself while the probe waits on its player iframe (dl-143 round 3)", () => {
+  test(
+    "a first-visit reload that lands in the wait does not end it: the hover and the wait go on in the new document",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      server.requests.length = 0;
+      // The first interaction sets a cookie and reloads the page; the second
+      // document is the hover-only page. The marked iframe is detached by the
+      // reload, which used to end the wait on the spot.
+      const result = await probe(
+        "/player-delayed-single.html?reload",
+        new BrowserResolver({
+          pool,
+          hlsParser: recordingHlsParser().parser,
+          ...STREAM_WAITS,
+          emptyMinWaitMs: NO_EMPTY_FLOOR_MS,
+        }),
+      );
+
+      expect(result.variants[0]?.url).toBe(server.secondaryUrl("/media/related/master.m3u8"));
+      expect(
+        server.requests.filter((pathname) => pathname === "/player-delayed-single.html"),
+      ).toHaveLength(2);
+    },
+  );
+});

@@ -10,7 +10,7 @@
          `data-enc`, and nothing on the page runs until the window sees a first
          interaction; 1.2 s after that the player script sets the iframe's `src`.
          There is no tab. With `?plain` the iframe is a div instead, which is the
-         same page with no blank player iframe, and with `?hover` only a pointer over the window releases it, and with `?never` the script
+         same page with no blank player iframe, and with `?hover` only a pointer over the window releases it, with `?reload` its first interaction reloads the page once (a cookie marks the second visit, which is `?hover`'s), and with `?never` the script
          releases but never fills the iframe. -->
     <div class="player-wrap" id="wrap" style="padding-top: 200px">
       <iframe
@@ -35,6 +35,16 @@
         var frame = document.getElementById("player-0");
         var embed = "{{SECONDARY}}/player-delayed-embed-hop.html";
         if (frame) frame.setAttribute("data-enc", btoa(embed + "?player=0"));
+        // The reloaded document (`?reload`, second visit) puts its player iframe in
+        // only 600 ms later, as a page that builds its player in script does, so a
+        // probe that looks for it straight after the reload finds none yet.
+        if (frame && query.indexOf("reload") !== -1 && document.cookie.indexOf("dl143reload=1") !== -1) {
+          var holder = frame.parentNode;
+          holder.removeChild(frame);
+          setTimeout(function () {
+            holder.appendChild(frame);
+          }, 600);
+        }
 
         // The delay-JS loader: nothing below the listeners runs until the window
         // sees one of these, registered on window and passive the way the plugin
@@ -53,13 +63,27 @@
         // With `?hover` only a pointer hearing the window releases it: no wheel,
         // click, key or touch, and the page is too short to scroll, so the
         // probe's scroll moves nothing and sends nothing the page listens to.
-        if (query.indexOf("hover") !== -1) EVENTS = ["mouseover", "pointerup", "pointerdown"];
+        var hoverOnly = query.indexOf("hover") !== -1 || query.indexOf("reload") !== -1;
+        if (hoverOnly) EVENTS = ["mouseover", "pointerup", "pointerdown"];
+        // With `?reload` the first visit is a cache plugin's first-visit page: its
+        // first interaction sets a cookie and reloads the document, which is how a
+        // reload comes to land while the probe waits on the iframe. The second
+        // visit, with the cookie, is the page as `?hover` has it. The reload is
+        // tied to the interaction rather than a timer so that it lands in the wait
+        // every run.
+        var firstVisit =
+          query.indexOf("reload") !== -1 && document.cookie.indexOf("dl143reload=1") === -1;
         var released = false;
         function release() {
           if (released) return;
           released = true;
+          if (firstVisit) {
+            document.cookie = "dl143reload=1; path=/";
+            location.reload();
+            return;
+          }
           for (var k = 0; k < EVENTS.length; k++) window.removeEventListener(EVENTS[k], release);
-          setTimeout(playerScript, query.indexOf("hover") !== -1 ? 500 : 1200);
+          setTimeout(playerScript, hoverOnly ? 500 : 1200);
         }
         function listen() {
           for (var j = 0; j < EVENTS.length; j++) {
@@ -69,7 +93,7 @@
         // With `?hover` the listeners go on 300 ms after `load`, as the plugin's do
         // (live, the mouseover the browser sends at load had already gone by), so
         // the pointer that Playwright's context starts with does not release it.
-        if (query.indexOf("hover") !== -1) {
+        if (hoverOnly) {
           window.addEventListener("load", function () {
             setTimeout(listen, 300);
           });

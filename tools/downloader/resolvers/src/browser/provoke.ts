@@ -1974,69 +1974,94 @@ async function waitForBlankPlayerFill(
   options: { capMs: number; deadline: number; signal: AbortSignal; last: boolean },
 ): Promise<void> {
   if (state.done) return;
+  const startedAt = Date.now();
+  const allowedMs = Math.max(
+    0,
+    Math.min(
+      options.capMs,
+      BLANK_PLAYER_FILL_WAIT_MS - state.spentMs,
+      remaining(options.deadline) - 1500,
+    ),
+  );
+  let seen = "";
+  let stableSince = 0;
+  let hoveredAt = 0;
+  let replaced = false;
   try {
-    if (!state.marked) {
-      if (!(await frame.evaluate<boolean>(MARK_BLANK_PLAYER_SCRIPT))) {
-        state.done = true;
-        return;
-      }
-      state.marked = true;
-    }
-    const handle = await frame.locator(`[${FILL_MARK}]`).first().elementHandle({ timeout: 500 });
-    const startedAt = Date.now();
-    const allowedMs = Math.max(
-      0,
-      Math.min(
-        options.capMs,
-        BLANK_PLAYER_FILL_WAIT_MS - state.spentMs,
-        remaining(options.deadline) - 1500,
-      ),
-    );
-    let seen = "";
-    let stableSince = 0;
-    let hoveredAt = 0;
-    try {
-      while (Date.now() - startedAt < allowedMs) {
-        throwIfAborted(options.signal);
-        let sample = "";
-        try {
+    // One round per document: a page that reloads itself (a cache plugin's
+    // first-visit reload) detaches the marked iframe under the poll, and the round
+    // after it marks the new document's. A failure to read is never the end of the
+    // wait, only the end of the budget or the page is (dl-143).
+    while (!state.done && Date.now() - startedAt < allowedMs) {
+      throwIfAborted(options.signal);
+      let handle: ElementHandle | undefined;
+      try {
+        if (!state.marked) {
+          if (!(await frame.evaluate<boolean>(MARK_BLANK_PLAYER_SCRIPT))) {
+            // No blank player iframe at all, which ends it; but in a document
+            // that replaced one it may only not have parsed it yet.
+            if (!replaced) {
+              state.done = true;
+              break;
+            }
+            await sleep(BLANK_PLAYER_POLL_MS, options.signal);
+            continue;
+          }
+          state.marked = true;
+        }
+        handle = await frame.locator(`[${FILL_MARK}]`).first().elementHandle({ timeout: 500 });
+        while (Date.now() - startedAt < allowedMs) {
+          throwIfAborted(options.signal);
+          // Throws when the document is gone: the round is over, the wait is not.
           const src = await handle.evaluate((el) => (el.getAttribute("src") ?? "").trim());
-          if (
-            (src === "" || src.toLowerCase() === "about:blank") &&
-            Date.now() - hoveredAt >= BLANK_PLAYER_HOVER_EVERY_MS
-          ) {
-            hoveredAt = Date.now();
-            await hoverPlayer(frame, handle, state.hovers++ % 2 === 0);
+          let sample = "";
+          try {
+            if (
+              (src === "" || src.toLowerCase() === "about:blank") &&
+              Date.now() - hoveredAt >= BLANK_PLAYER_HOVER_EVERY_MS
+            ) {
+              hoveredAt = Date.now();
+              await hoverPlayer(frame, handle, state.hovers++ % 2 === 0);
+            }
+            const child =
+              src !== "" && src.toLowerCase() !== "about:blank"
+                ? await handle.contentFrame()
+                : null;
+            if (child !== null && child.url() !== "about:blank") {
+              const ready = await child.evaluate<string>("document.readyState");
+              if (ready === "complete") sample = child.url();
+            }
+          } catch {
+            // The embed is mid-navigation: not yet a document to read.
           }
-          const child =
-            src !== "" && src.toLowerCase() !== "about:blank" ? await handle.contentFrame() : null;
-          if (child !== null && child.url() !== "about:blank") {
-            const ready = await child.evaluate<string>("document.readyState");
-            if (ready === "complete") sample = child.url();
+          if (sample !== "" && sample === seen) {
+            if (Date.now() - stableSince >= BLANK_PLAYER_STABLE_MS) {
+              state.done = true;
+              break;
+            }
+          } else {
+            seen = sample;
+            stableSince = Date.now();
           }
-        } catch {
-          // Mid-navigation: not yet a document to read.
+          await sleep(BLANK_PLAYER_POLL_MS, options.signal);
         }
-        if (sample !== "" && sample === seen) {
-          if (Date.now() - stableSince >= BLANK_PLAYER_STABLE_MS) {
-            state.done = true;
-            return;
-          }
-        } else {
-          seen = sample;
-          stableSince = Date.now();
+      } catch (error) {
+        if (options.signal.aborted) throw error;
+        if (frame.isDetached() || frame.page().isClosed()) {
+          state.done = true;
+          break;
         }
+        // The document was replaced under us: look for the iframe in the new one.
+        state.marked = false;
+        replaced = true;
+        seen = "";
         await sleep(BLANK_PLAYER_POLL_MS, options.signal);
+      } finally {
+        await handle?.dispose().catch(() => undefined);
       }
-    } finally {
-      state.spentMs += Date.now() - startedAt;
-      await handle.dispose().catch(() => undefined);
     }
-  } catch (error) {
-    if (options.signal.aborted) throw error;
-    // Detached, never found, or the page went away: the wait is over.
-    state.done = true;
   } finally {
+    state.spentMs += Date.now() - startedAt;
     if (state.done || options.last) {
       if (state.marked) {
         try {
