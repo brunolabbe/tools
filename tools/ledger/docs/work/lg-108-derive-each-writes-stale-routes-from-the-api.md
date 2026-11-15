@@ -403,3 +403,154 @@ screen case still proves were open here until the owner answered them on
 - 2026-11-10 — Fixed at landing by owner choice: gate 2, N4 — the probe entry's order of events is withdrawn in place above, with the corrected order and the second `react`. Proof, run after the commit: `git diff dfebaca7 HEAD -- <ticket> | grep -v 'Fixed at landing' | grep -c '^+.*exit 0 comes only after the scratch install'` → 1 (an added line, so the `grep -v` keeps this entry's own quotation out).
 - 2026-11-10 — Gate 1's and gate 2's full reports are on the pull request thread,
   #793; status unchanged.
+- 2026-11-15 — **Built** (builder, Opus 5.5), on `lg-108-stale-routes-from-api` from
+  `4e040577`. Harness `api/test/writes-derived.test.ts` and helper
+  `api/test/helpers/inject-fetch.ts` at `7428f090`; `EXPECTED` retired at `f27b7b37`.
+  Commands are run from the worktree root.
+
+  **The run.** `npx vitest run tools/ledger/api/test/writes-derived.test.ts
+  --reporter=verbose` → `Tests 34 passed (34)`, one case per key of `WRITES`, each
+  named `<write> marks every route its write changes (lg-108)`, and the summary it
+  prints: `lg-108: 34 of 34 writes compared; 0 changed routes not marked.` Every
+  write, the seeds' included, is sent through `WRITES[name].write()`, the web's own
+  function; the file writes no request. Done when 2's greps:
+  `grep -nE '"(POST|PUT|PATCH|DELETE)"|method:|"/api/' <harness> | wc -l` → 0,
+  `grep -c 'WRITES' <harness>` → 8, and on `helpers/inject-fetch.ts`
+  `grep -nE '"(POST|PUT|PATCH|DELETE)"|"/api/' | wc -l` → 0.
+
+  **Which half it lands in.** The isolated one. The harness puts its `fetch` in place
+  with `vi.stubGlobal` and takes it away with `vi.unstubAllGlobals` in `afterEach`,
+  so `NEEDS_ISOLATION` reads it into `ledger (isolated)`; the verbose run prints
+  `|ledger (isolated)|` on 34 lines and `|ledger (shared)|` on 0. (Correction to
+  the Build's placement paragraph: there is no longer one ledger project with
+  `environment: "node"`; `tools/ledger/vitest.config.ts` is a `splitProject`
+  since repo-129, both halves node.)
+
+  **The reads.** Asked of Fastify, not listed: `getRoutes` keeps each `ROUTES` key
+  for which `app.server.hasRoute({ method: "GET", url })` holds, 29 routes (the 21
+  non-stats `app.get(` sites and the 8 stats routes). `household` takes the
+  caller's household from `GET /api/me`; `receiptMatches` takes the receipt the
+  seed uploaded, with the amount and date the fake reader states for it
+  (`amountCents=12345&date=2026-09-20`); each stats route is read with no range;
+  `rows` is read unfiltered and with `spendingCategory=none`; `periodLines` is read
+  from the open period's start, which is `null` (from the beginning) in every seed,
+  so it is read whole. No variant beyond these. The one case that does not read
+  `receiptMatches` is `confirmWorkbook`, whose seed uploads nothing (an import goes
+  into books that hold nothing). The 24 keys not read have no `GET` and are only
+  written to: `householdMembers`, `householdRename`, `adminMembers`,
+  `adminMemberRemove`, `adminHouseholdRename`, `adminMemberAddress`,
+  `adminPersonRename`, `adminPersonRetire`, `statements`, `rule`, `ruleRetire`,
+  `classifications`, `periodClose`, `periodLine`, `periodLineRetire`,
+  `recurringItem`, `spendingCategory`, `spendingCategoryRetire`,
+  `spendingCategoryOverrides`, `receipts`, `receiptRead`, `receiptFile`,
+  `workbookDescribe`, `workbookConfirm` (the run prints this list). No `ROUTES`
+  key returns a file.
+
+  **The clock** is pinned (`2026-10-03T09:30:00Z`) rather than any field left out:
+  `health`'s `uptimeSec` is then 0 before and after, and it is read in every case
+  and changes in none.
+
+  **The seeds.** One app per write, `rateLimitReadsPerMinute: 0`. The caller is
+  alex, `DEV_IDENTITY` and an admin, so every directory read and write is theirs.
+  A fake `receiptReader` and a fake `layoutAsk` (answering lg-7's correct layout);
+  no model. The base seed, sent through the web's functions: 2026 salaries and a
+  ratio, a spending category the bank's `Épicerie` maps to, `TRANSFER_RULE` with
+  that category, `helpers/classification.ts`'s paste, a line, a recurring item, a
+  live mortgage and one uploaded receipt. Per write on top of it: `adminRetirePerson`
+  removes sam's address first; `closePeriod` removes sam's address and retires
+  sam, so the close has a retirement to apply; `confirmRatio` enters 2026 salaries
+  again; `setRowSpendingCategory` adds a second category. `confirmWorkbook` has no
+  seed. Nothing was lifted from `receipts.test.ts` or `people.test.ts`: the seeds
+  go through the web's functions, so `jpeg`, `upload` and `salary` were not needed,
+  and a photo is a `Blob` written in the harness.
+
+  **Shared or rebuilt seed (the Unknown): rebuilt for each write.** Measured with a
+  temporary timing edit, restored from `7428f090` and not committed: the seed costs
+  9.4–22.4 ms a write (82.0 ms for the first, which warms the modules), a boot
+  8.4–21.0 ms; serialising the seeded books costs 0.03–0.30 ms and a boot from them
+  8.3–19.8 ms. So a copy saves at most the seed, about 0.45 s over 33 seeds, and it
+  costs correctness: `booksTemplate` is the template of every household the app
+  opens, so `createHousehold`'s new household would start with the seeded books, and
+  the directory (members, sam's removal, the retirement) is not in the books at all.
+
+  **Derived set and marked-and-unchanged routes, per write** (the run prints both;
+  none fails a case):
+
+  | Write                                                               | Changed                                                                                                                         | Marked and unchanged                                                                                                                                                 |
+  | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | addHouseholdMember, adminAddMember                                  | household, adminHouseholds, people, buckets, mortgage, stats salaries, contributions, mortgage-own                              | me, inbox, autoFiled, rows, periods, periodOpen, periodLines, spendingCategoryMap, stats mortgage-payments, buffer, spending, fixed-items, settlements               |
+  | renameHousehold, adminRenameHousehold, adminChangeAddress           | household, adminHouseholds                                                                                                      | me, people                                                                                                                                                           |
+  | createHousehold                                                     | adminHouseholds                                                                                                                 | —                                                                                                                                                                    |
+  | adminRemoveMember                                                   | household, adminHouseholds                                                                                                      | me, people and all of `BOOKS`                                                                                                                                        |
+  | adminRetirePerson                                                   | adminHouseholds                                                                                                                 | me, household, people and all of `BOOKS`                                                                                                                             |
+  | adminRenamePerson                                                   | household, adminHouseholds, people                                                                                              | me                                                                                                                                                                   |
+  | classifyRow                                                         | inbox, buckets, rows, stats buffer, spending                                                                                    | autoFiled, periods, periodOpen, periodLines, mortgage, spendingCategoryMap, stats mortgage-payments, salaries, contributions, mortgage-own, fixed-items, settlements |
+  | fileMortgageSplit                                                   | mortgageSplits, stats mortgage-own                                                                                              | the rest of `BOOKS`                                                                                                                                                  |
+  | saveMortgage                                                        | mortgage                                                                                                                        | the rest of `BOOKS`                                                                                                                                                  |
+  | closePeriod                                                         | adminHouseholds, people, periods, periodOpen, stats mortgage-own, spending, settlements                                         | buckets, inbox, autoFiled, rows, periodLines, mortgage, spendingCategoryMap, stats mortgage-payments, salaries, contributions, buffer, fixed-items                   |
+  | addLine, correctLine, retireLine, fileReceipt                       | periodOpen, periodLines, stats spending                                                                                         | the rest of `BOOKS`                                                                                                                                                  |
+  | addRecurring, changeRecurring                                       | recurring, periodOpen, stats fixed-items                                                                                        | the rest of `BOOKS`                                                                                                                                                  |
+  | createRule, editRule                                                | rules, inbox, rows                                                                                                              | —                                                                                                                                                                    |
+  | retireRule                                                          | rules, inbox                                                                                                                    | rows                                                                                                                                                                 |
+  | enterSalaries                                                       | salaries, stats salaries                                                                                                        | ratios and the rest of `BOOKS`                                                                                                                                       |
+  | confirmRatio                                                        | ratios, periodOpen, stats salaries                                                                                              | salaries and the rest of `BOOKS`                                                                                                                                     |
+  | addSpendingCategory, renameSpendingCategory, retireSpendingCategory | spendingCategories, stats spending                                                                                              | spendingCategoryMap, rows, inbox, autoFiled, periodLines                                                                                                             |
+  | setSpendingMapEntry                                                 | inbox, spendingCategoryMap, rows                                                                                                | spendingCategories, autoFiled, periodLines, stats spending                                                                                                           |
+  | setRowSpendingCategory                                              | inbox, rows                                                                                                                     | spendingCategories, spendingCategoryMap, autoFiled, periodLines, stats spending                                                                                      |
+  | importStatement                                                     | inbox, buckets, spendingCategoryMap, rows                                                                                       | autoFiled, periods, periodOpen, periodLines, mortgage, all 8 stats routes                                                                                            |
+  | uploadReceipt, readReceipt, describeWorkbook                        | — (empty, as asserted)                                                                                                          | — (their lists are empty)                                                                                                                                            |
+  | confirmWorkbook                                                     | buckets, salaries, ratios, mortgage, periods, periodOpen, periodLines, spendingCategoryMap, rows, 7 stats (all but fixed-items) | the other 37 routes of `EVERYTHING`, 24 of them never read                                                                                                           |
+
+  Counts: 31 of 31 writes with a non-empty list change at least one answer; 3 of 3
+  with an empty list (`uploadReceipt`, `readReceipt`, `describeWorkbook`) derive the
+  empty set. Two seeds were widened after the first run, because with the narrower
+  ones gate 1's F1 and F2 were not reachable: `closePeriod` first changed neither
+  `people` nor `adminHouseholds` (no retirement waited), and `createRule` and
+  `editRule` left `rows` unchanged (a rule with no spending category gives a row
+  none). Both now change them.
+
+  **2xx, proved by mutation** (each an uncommitted edit, restored with
+  `git checkout 7428f090 -- <path>`). A read: `helpers/inject-fetch.ts`'s
+  `receiptMatches` URL left as `/api/receipts/:id/matches?amountCents=12345&date=2026-09-20`
+  → `Tests 33 failed | 1 passed (34)` (the one is `confirmWorkbook`, which does not
+  read it), each `GET /api/receipts/:id/matches (...) answered 400: {"error":{"code":"BAD_REQUEST",...}}`.
+  The same with `household` left as `/api/households/:id` → `Tests 34 failed (34)`,
+  `answered 403` `FORBIDDEN`: the status the Build had not measured. A write:
+  `readReceipt` sent with id 999 → `1 failed | 33 passed`, `readReceipt: POST
+  /api/receipts/999/read answered 404`. A write goes through `answered`, which
+  names the first non-2xx request it made; `requestJson` would otherwise turn a
+  refusal into an `AppError` that names neither the route nor the status.
+
+  **Planted omission.** Baseline committed at `f27b7b37`; then `ROUTES.people`
+  removed from `closePeriod`'s list in `web/src/writes.ts`: `Tests 1 failed | 33
+  passed (34)`, the failing case `closePeriod marks every route its write changes
+  (lg-108)`, with `+ "closePeriod changed /api/people, which WRITES does not mark"`,
+  and the summary `34 of 34 writes compared; 1 changed routes not marked.`
+  Restored with `git checkout f27b7b37 -- tools/ledger/web/src/writes.ts`; `git
+  status --short` printed nothing after it.
+
+  **The screen case.** `web/test/writes.test.tsx` holds no `EXPECTED` (`grep -c
+  EXPECTED` → 0) and no list of routes: `INPUTS` keeps the `args` and `answer` of
+  the four writes whose patch reads them (`createHousehold`, `classifyRow`,
+  `saveMortgage`, `setRowSpendingCategory`), and each case takes `changes` and
+  `patch.routes` from `WRITES`. Its `test.each` is over `Object.keys(WRITES)`, with
+  the read-again, patched-and-stale and read-once assertions unchanged. The test
+  "this table names every write writes.ts sends" is removed with the table it
+  checked. `npx vitest run tools/ledger/web/test/writes.test.tsx` → `Tests 36 passed
+  (36)` (34 writes, the refused write, the patches).
+
+  **Measured, not changed: `fileReceipt` onto a row.** With the destination
+  `{ to: "row", rowId: <the groceries row> }` instead of a line (a temporary edit,
+  not committed), the case fails: the derived set is `receiptMatches` alone, which
+  `fileReceipt`'s list (`BOOKS`) does not mark, and none of `BOOKS` changes. The web
+  reads matches with a direct `fetchReceiptMatches` in `receipts/Queue.tsx` and
+  `receipts/Receipts.tsx`, never through the cache, so no screen holds a stale
+  answer. The committed case files to a line. Whether to mark it, or to leave
+  uncached routes out of the comparison, is an open decision in the builder's report.
+
+  **Not folded in.** `writes.ts`'s header comment still points at lg-98's Log for
+  "the test that proves each one", where the proof is now this harness; that is a
+  change to `web/src`, which Done when 11 rules out of this branch.
+
+  `npx tsc --build` → 0 `error TS`; `npx oxlint tools/ledger/api tools/ledger/web`
+  exit 0. The ledger suite is left to CI on the draft.
