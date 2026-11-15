@@ -132,6 +132,17 @@ function repoTemplateDir(): string {
   return repoTemplate;
 }
 
+// An `afterAll`, not a last test: under `--sequence.shuffle` a test body that
+// reads the list sees only the shim directories made before it ran, so it
+// cannot be placed "last" (repo-144). A hook runs after every test in the file
+// in either order. It has no floor on `shimDirsMade.length`: a filtered run
+// that makes none must pass, and `makeShimDir records each directory` below
+// proves the recording.
+afterAll(() => {
+  const leftovers = shimDirsMade.filter((dir) => fs.existsSync(dir));
+  expect(leftovers, `leaked: ${leftovers.join(", ")}`).toEqual([]);
+});
+
 afterAll(() => {
   if (repoTemplate !== undefined) fs.rmSync(repoTemplate, { recursive: true, force: true });
 });
@@ -2435,6 +2446,16 @@ function makeShimDir(): string {
   return dir;
 }
 
+test("makeShimDir records each directory (repo-144)", () => {
+  const dir = makeShimDir();
+  try {
+    expect(shimDirsMade).toContain(dir);
+    expect(fs.existsSync(dir)).toBe(true);
+  } finally {
+    removeShimDir(dir);
+  }
+});
+
 function sleepSync(ms: number): void {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
@@ -3045,10 +3066,3 @@ test.skipIf(!HAS_PWSH)(
     }
   },
 );
-
-// Last in the file on purpose: it reads what every test above left behind, and
-// it is the spec a shim test that stops calling `removeShimDir` turns red.
-test("no preflight-ghshim directory this file made is left behind (repo-110)", () => {
-  expect(shimDirsMade.length).toBeGreaterThanOrEqual(3);
-  expect(shimDirsMade.filter((dir) => fs.existsSync(dir))).toEqual([]);
-});
