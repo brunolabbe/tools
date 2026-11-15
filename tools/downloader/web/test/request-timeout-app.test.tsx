@@ -58,9 +58,11 @@ function titleOf(url: string): string {
 
 /**
  * The server's per-client probe rule as `routes/probe.ts` holds it: a slot per
- * unfinished POST, released when its handler ends, a third refused. A POST ends
- * when it is answered or when the client's socket closes (the abort), which is
- * how a client timeout reaches it. `autoAnswer` answers each POST on arrival,
+ * unfinished POST, released when its handler ends, a third refused. This model
+ * frees the slot when the POST is answered or its socket is aborted, which the
+ * line it serves specifies; the real server does not free it on an abort (gate
+ * 1 measured the slot still held 3 s later, 10 of 10 runs), and keeps it until
+ * its own handler ends. `autoAnswer` answers each POST on arrival,
  * which is the server being quick; unset, a POST is held until the test
  * answers it or the socket closes.
  */
