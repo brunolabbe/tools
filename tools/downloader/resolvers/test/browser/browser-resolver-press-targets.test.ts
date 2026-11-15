@@ -268,3 +268,57 @@ describe("a click-only player box beside a press that did not start a player (dl
     },
   );
 });
+
+describe("a player iframe that stays blank until a server tab is pressed (dl-139)", () => {
+  function resolverWith(waits: Waits = BASE_WAITS): BrowserResolver {
+    return new BrowserResolver({
+      pool,
+      hlsParser: recordingHlsParser().parser,
+      ...waits,
+      emptyMinWaitMs: NO_EMPTY_FLOOR_MS,
+    });
+  }
+
+  test(
+    "presses the active tab, and the embed it loads is clicked in its own frame and yields the stream",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      server.requests.length = 0;
+      // The embed is on the other origin and asks for its manifest only after a
+      // click on its `<video>`, which is smaller than the frame, so the click a
+      // wrapper's centre would make misses it: the surface click did this.
+      const result = await probe("/player-tabs-blank-iframe.html", resolverWith(STREAM_WAITS));
+
+      expect(result.variants[0]?.url).toBe(server.secondaryUrl("/media/related/master.m3u8"));
+      expect(server.requests).toContain("/beacon/server-tab-4");
+      // One press is the decision: not the second tab.
+      expect(server.requests).not.toContain("/beacon/server-tab-6");
+    },
+  );
+
+  test(
+    "a Server 2 link and button on a page with no blank player iframe are not pressed, and it ends NO_MEDIA_FOUND",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      server.requests.length = 0;
+      const error = await probeError("/player-tabs-nav-no-iframe.html", resolverWith());
+
+      expectCode(error, "NO_MEDIA_FOUND");
+      expect(server.requests).not.toContain("/beacon/server-2-nav");
+      expect(server.requests).not.toContain("/beacon/server-2-button");
+    },
+  );
+
+  test(
+    "a blank player iframe with no tab to press (a Server 2 link that leaves the page, a Share button) ends NO_MEDIA_FOUND, pressing neither",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      server.requests.length = 0;
+      const error = await probeError("/player-blank-iframe-no-tab.html", resolverWith());
+
+      expectCode(error, "NO_MEDIA_FOUND");
+      expect(server.requests).not.toContain("/beacon/server-2-leaves");
+      expect(server.requests).not.toContain("/beacon/share");
+    },
+  );
+});

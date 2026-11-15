@@ -1711,6 +1711,124 @@ async function clickPlayerBox(frame: Frame): Promise<boolean> {
   }
 }
 
+/** Marks the server tab `MARK_SERVER_TAB_SCRIPT` chose, so the press goes through the locator API (dl-139). */
+const TAB_MARK = "data-downloader-server-tab";
+
+/**
+ * What a server tab says of itself (dl-139): a word for where the player comes
+ * from, then a number or an ordinal — "Player 01", "Server 2", "Mirror #3",
+ * "Source two", "Host B" is not one. Anchored at the start and held to a short
+ * label by the script, so a paragraph that mentions "server 2" is no tab.
+ */
+const SERVER_TAB_WORD = "player|server|source|mirror|host";
+const SERVER_TAB_ORDINAL =
+  "\\d{1,2}|one|two|three|four|five|six|first|second|third|fourth|fifth|sixth";
+export const SERVER_TAB_LABEL = new RegExp(
+  `^(?:${SERVER_TAB_WORD})s?\\s*[#:.-]?\\s*(?:${SERVER_TAB_ORDINAL})\\b`,
+  "i",
+);
+/** The longest label, in characters, that can be a server tab: a tab is a word and a number. */
+const SERVER_TAB_MAX_LABEL = 24;
+
+/**
+ * Chooses the one server tab to press when a player iframe is still blank, and
+ * marks it (dl-139). Returns whether a control was marked.
+ *
+ * **The precondition is a blank player iframe**: visible by
+ * `CHOOSE_VIDEO_INDEX_FN`'s rule, with a `src` that is absent or `about:blank`,
+ * no `srcdoc`, and a player-ish class, id or title on it or an ancestor. A page
+ * with a "Server 2" link and no such iframe is left alone entirely.
+ *
+ * **A control is a tab when** it is a button, link, `role=button`, `role=tab` or
+ * list item, visible, outside any form or label, and either carries a
+ * `data-player`, `data-server` or `data-source` attribute or its label is
+ * `SERVER_TAB_LABEL`. **A link that would leave the page is not a tab**: its
+ * address must be the page's own, or a fragment of it, or a `javascript:` URL,
+ * which is how a tab built from a link is written. A new-tab link never is.
+ *
+ * The one marked is the one the page shows as active (a class, or an `aria-`
+ * state), otherwise the first in document order.
+ */
+const MARK_SERVER_TAB_SCRIPT = `(() => {
+  var label = new RegExp(${JSON.stringify(SERVER_TAB_LABEL.source)}, ${JSON.stringify(SERVER_TAB_LABEL.flags)});
+  var blank = (${ALL_MEDIA_FN})('iframe').filter(function (frame) {
+    if (frame.hasAttribute('srcdoc')) return false;
+    var src = (frame.getAttribute('src') || '').trim().toLowerCase();
+    if (src !== '' && src !== 'about:blank') return false;
+    if (frame.closest && frame.closest('[class*="player"], [id*="player"]')) return true;
+    return /player|video/i.test(frame.getAttribute('title') || '');
+  });
+  if ((${CHOOSE_VIDEO_INDEX_FN})(blank) === -1) return false;
+  var here = location.href.split('#')[0];
+  var tabs = (${ALL_MEDIA_FN})('button, a, [role="button"], [role="tab"], li').filter(function (el) {
+    var rect = el.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return false;
+    var style = getComputedStyle(el);
+    if (style.visibility === 'hidden' || style.display === 'none') return false;
+    if (el.closest('form, label')) return false;
+    if (el.tagName === 'A' && el.hasAttribute('href')) {
+      if (el.getAttribute('target') === '_blank') return false;
+      try {
+        var to = new URL(el.href, location.href);
+        if (to.protocol !== 'javascript:' && to.href.split('#')[0] !== here) return false;
+      } catch (e) {
+        return false;
+      }
+    }
+    if (el.hasAttribute('data-player') || el.hasAttribute('data-server') || el.hasAttribute('data-source')) return true;
+    var text = (el.getAttribute('aria-label') || el.textContent || '').replace(/\\s+/g, ' ').trim();
+    return text.length <= ${SERVER_TAB_MAX_LABEL} && label.test(text);
+  });
+  if (tabs.length === 0) return false;
+  var active = tabs.filter(function (el) {
+    var cls = typeof el.className === 'string' ? el.className : '';
+    return /(^|[\\s_-])(active|current|selected|checked)($|[\\s_-])/i.test(cls) ||
+      el.getAttribute('aria-selected') === 'true' ||
+      el.getAttribute('aria-pressed') === 'true' ||
+      el.hasAttribute('aria-current');
+  });
+  (active.length > 0 ? active[0] : tabs[0]).setAttribute(${JSON.stringify(TAB_MARK)}, '');
+  return true;
+})()`;
+
+const UNMARK_SERVER_TAB_SCRIPT = `(() => {
+  var marked = (${ALL_MEDIA_FN})('[${TAB_MARK}]');
+  for (var i = 0; i < marked.length; i++) marked[i].removeAttribute(${JSON.stringify(TAB_MARK)});
+})()`;
+
+/**
+ * Presses the server tab of a page whose player iframe is blank until one is
+ * pressed (dl-139). Returns whether a control was found; the caller treats that
+ * as the one press this probe makes, whether or not the page then loaded the
+ * player: **one press is the decision, not a search**, so a tab that did
+ * nothing is never followed by the next one.
+ *
+ * Top frame only, and never in the subframe: a blank frame passes
+ * `isScriptableFrame`, but the embed it becomes does not. Not counted as a play
+ * press either — it loads a player, it does not start one — so the box click
+ * and the surface click that follow it are untouched. The departure guard
+ * covers a tab that turns out to navigate.
+ */
+async function pressServerTab(frame: Frame, timeoutMs: number): Promise<boolean> {
+  let marked = false;
+  try {
+    marked = await frame.evaluate<boolean>(MARK_SERVER_TAB_SCRIPT);
+    if (!marked) return false;
+    await frame.locator(`[${TAB_MARK}]`).first().click({ timeout: timeoutMs });
+  } catch {
+    // Covered, detached, or gone before the click landed.
+  } finally {
+    if (marked) {
+      try {
+        await frame.evaluate(UNMARK_SERVER_TAB_SCRIPT);
+      } catch {
+        // The press navigated the frame.
+      }
+    }
+  }
+  return marked;
+}
+
 /**
  * What a person does before looking for a play button: scrolls the wheel
  * (dl-81). Some pages inject their player only on the first `wheel`, and until
@@ -1778,6 +1896,7 @@ export function cappedTimeout(timeoutMs: number, cap: number | undefined): numbe
  * | press consent                | every (locator-only where not scriptable)                |
  * | confirm age                  | scriptable only                                          |
  * | scroll the largest candidate | every                                                    |
+ * | press a server tab (dl-139)  | top frame, once per probe, while nothing is captured     |
  * | play-ish selectors and text  | every (locator API)                                      |
  * | click the chosen `<video>`   | every                                                    |
  * | `play()`                     | scriptable: every media; other: the chosen, if none seen |
@@ -1785,7 +1904,13 @@ export function cappedTimeout(timeoutMs: number, cap: number | undefined): numbe
 async function provokeFrame(
   frame: Frame,
   pageOrigin: string | undefined,
-  options: { confirmAge: boolean; hasPlayable: () => boolean; clickTimeoutMs?: number | undefined },
+  options: {
+    confirmAge: boolean;
+    hasPlayable: () => boolean;
+    clickTimeoutMs?: number | undefined;
+    /** One probe's single server-tab press (dl-139), shared by both passes. */
+    serverTab: { attempted: boolean };
+  },
 ): Promise<boolean> {
   const scriptable = isScriptableFrame(frame, pageOrigin);
   // The three waits a covering layer can make a probe sit out in full (dl-118):
@@ -1807,6 +1932,13 @@ async function provokeFrame(
     await frame.evaluate<boolean>(SCROLL_SCRIPT);
   } catch {
     // Frame navigated away mid-probe.
+  }
+
+  // A player that stays blank until a server tab is pressed (dl-139): one press,
+  // in the top frame, while nothing has been captured. Not a play press, so it
+  // is not part of what this returns.
+  if (frame.parentFrame() === null && !options.serverTab.attempted && !options.hasPlayable()) {
+    if (await pressServerTab(frame, blockable)) options.serverTab.attempted = true;
   }
 
   const playClicks = await clickVisible(frame, PLAY_SELECTORS, {
@@ -1880,6 +2012,7 @@ export async function provokePlayback(
 ): Promise<void> {
   const pageOrigin = originOf(page.url());
   const hasPlayable = options.hasPlayable ?? (() => false);
+  const serverTab = { attempted: false };
   for (let pass = 0; pass < 2; pass++) {
     throwIfAborted(options.signal);
     if (remaining(options.deadline) < 2000) return;
@@ -1894,6 +2027,7 @@ export async function provokePlayback(
             confirmAge: options.confirmAge,
             hasPlayable,
             clickTimeoutMs: options.clickTimeoutMs,
+            serverTab,
           })
         ) {
           pressed = true;

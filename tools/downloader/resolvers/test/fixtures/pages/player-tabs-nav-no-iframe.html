@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A page with a Server 2 link in its menu and no blank player iframe</title>
+  </head>
+  <body style="margin: 0">
+    <!-- dl-139's negative case: the words of a server tab on controls that are not
+         one. The page holds no blank player iframe, so nothing may press them;
+         the link's target and the button each record a beacon if pressed. -->
+    <nav>
+      <a href="/beacon/server-2-nav">Server 2</a>
+      <button data-server="2" id="status-btn">Server 2</button>
+    </nav>
+    <p>An article, with no player on it.</p>
+    <script>
+      document.getElementById("status-btn").addEventListener("click", function () {
+        fetch("/beacon/server-2-button").catch(function () {});
+      });
+    </script>
+  </body>
+</html>
