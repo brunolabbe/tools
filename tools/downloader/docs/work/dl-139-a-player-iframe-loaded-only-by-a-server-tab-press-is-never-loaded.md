@@ -126,6 +126,33 @@ Three questions, put at the orchestrator's checkpoint 3 after gate 1 graded
    the comment only. **Answer: file a ticket.** The orchestrator files it; this
    branch does not touch that script or the Trap.
 
+### Gate round 1, the `window.open` button — answered by the owner (recorded 2026-11-15)
+
+Raised in round 1's report and answered after it; an earlier dispatch told the
+lander to record it, and it is recorded here so it is not lost. The builder's
+open decision: a matching button whose handler calls `window.open` still opens
+a second page, and nothing in its markup says so. Options: (1) leave as is, the
+builder's recommendation; (2) file a ticket for the tier; (3) close popups for
+the press only. **Answer: (1), leave as is.** No recommendation was overridden.
+
+### Gate round 2 — answered 2026-11-15 by the owner
+
+Two questions, put at the orchestrator's checkpoint 5 after gate 2 graded
+`6efde6e1` and left one finding open. The orchestrator made no recommendation on
+the first.
+
+1. **Gate 2's F1 remainder**: the form rule runs on the candidate and not on what
+   it holds, so a wrapper reading "Server 2" around a form's submit button is
+   pressed and its click submits the form. Options: (a) fix it with a fresh
+   builder and a narrow gate 3; (b) the lander rewords the doc comment and the
+   gap stays recorded; (c) record only. **Answer: (a).**
+2. **Gate 2's low**: adr/005's register command
+   `grep -rn 'codeql\[' --include='*.ts' .` misses this branch's `.html` excuse.
+   Options: (A) a separate `docs(repo)` change, the gate's recommendation; (B)
+   fold it into dl-139's landing; (C) leave it. **Answer: (A).** The orchestrator
+   handles it in its own pull request; this branch does not touch
+   `docs/adr/005`.
+
 ## Build
 
 Written for option A, which the owner chose.
@@ -278,8 +305,9 @@ Traps:
     page's markup says so, and the only guard is to close pages the press opened,
     which changes what the whole browser tier does about popups (the play presses
     carry the same mechanism and capture listens on the whole context) — a
-    decision about the tier, not about this press. Open decision in the round's
-    report, not made here.
+    decision about the tier, not about this press. Put to the owner after the round
+    and answered: leave as is (option 1; _Gate round 1, the `window.open` button_
+    in the Decision).
   - **Numeric ordinals (low).** `SERVER_TAB_LABEL` now takes `1st`, `2nd`,
     `3rd`, `4th` after the digits; "Player 1stage" and "Host 2024 awards" still
     do not match (`provoke.test.ts`, "SERVER_TAB_LABEL (dl-139)").
