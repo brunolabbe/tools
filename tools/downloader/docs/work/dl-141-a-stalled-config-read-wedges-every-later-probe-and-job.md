@@ -3,7 +3,7 @@ id: dl-141
 tool: downloader
 title: A stalled `GET /api/config` read leaves every later probe and job creation pending for the life of the page
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -156,6 +156,52 @@ reverses an answered question of dl-138.
 - On a deployment that wants the check, the box shows the `HUMAN_CHECK_FAILED`
   message rather than "Analysing" for a stalled read.
 - `npm run check` exits 0 and `npm test -- tools/downloader/web` passes.
+
+## Review
+
+**Gate: CONCERNS** — 2026-11-15 · `5f15e56f..2a80720d` · Opus 5.5, depth full
+
+| Done when                                                                                                        | Proof                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ---------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A stalled `GET /api/config` no longer leaves a later `probe` or `createJob` pending, after the bound, red before | `web/test/human-check.test.ts` › "two probes and a createJob are freed at the bound, sent with no token, and a later call reads the config again" ✓ — all three pending at 14,999 ms with `/api/config` the only fetch, none pending at 15,000 ms. Red against the base's `web/src`: `expected true to be false` (4 of 18 failed across this file and the App file)                                                        |
+| A timed-out read is not memoised: the next call reads again                                                      | `web/test/human-check.test.ts` › "every call waiting on the shared read is freed together, and the next call reads again" ✓ (`readConfig` called once, then twice, and the retry yields `token-1`), and the transport case above (`configReads` is 2). A planted "keep a `TIMEOUT` memoised" turns both red                                                                                                                |
+| On a deployment that wants the check, the box shows the `HUMAN_CHECK_FAILED` message, not "Analysing"            | `web/test/request-timeout-app.test.tsx` › "on a deployment that wants the check, a stalled config read ends in the human-check message, not in Analysing (dl-141)" ✓ — "Analysing" at 14,999 ms with no probe sent; at 15,000 ms one token-less probe and "Could not confirm you are a person". The modelled refusal matches the real api's status, code and `retryable` (measured); its message does not (second finding) |
+| `npm run check` exits 0 and `npm test -- tools/downloader/web` passes                                            | **verified** — `npm run check` exit 0; `npm test -- tools/downloader/web` 25 of 25 files, 360 of 360 tests. CI `check` and `test (ubuntu-latest)` green at `2a80720d`                                                                                                                                                                                                                                                      |
+
+- **med** · no `Done when` line depends on it · `nfr:reliability` — nothing tests that the
+  abort reaches the network. Remove the signal from the config reader in `http.ts`
+  (`createHttpClient`'s `humanCheck` reader → `request(..., {})`) and all 30 tests in
+  `human-check.test.ts`, `request-timeout-app.test.tsx`, `request-timeout.test.ts` and
+  `http-client.test.ts` stay green. Over a real port the stalled config socket then stays
+  open: 0 of 3 closed, against 3 of 3 (and 20 of 20) at the head. The Decision's stated
+  reason for changing `ReadClientConfig`'s type is the open fetch ("leaves the stalled fetch
+  open, and each retry opens another"), and the comments on `ReadClientConfig` and
+  `readWithin` promise the socket closes. Both are true today and unguarded. Direction: in
+  the transport case, keep the `init.signal` the `/api/config` fetch receives and assert it
+  is aborted at the bound.
+- **low** · `nfr:maintainability` — the App test's modelled refusal carries the message "The
+  automatic check did not pass.", and its comment says it is refused "as `routes/probe.ts`
+  refuses one". The real api answers `403 {"code":"HUMAN_CHECK_FAILED","message":"We could
+  not confirm this request came from a person. Try again.","retryable":false}`, and
+  `ErrorPanel` prints that message. The comment is false only about the message, and that
+  is the safe direction: no assertion reads it.
+- **dropped** · under the dropped-signal plant, the first network run read 12,711–12,714 ms,
+  under the 15 s bound. That was the probe's wall clock (`Date.now`) on this machine, not
+  the bound firing early: on `performance.now` the same plant read 15,026–15,029 ms. Not a
+  defect.
+- **dropped** · the read's `TIMEOUT` never reaches a caller, because `next()` swallows it and
+  sends no token. That is the decided path (option A, "no token is sent and the server
+  decides"), so it is not a defect.
+- **dropped** · the config wait adds to dl-138's bounds: a fully stalled server times out a
+  probe at 105 s and a job creation at 45 s (measured), not at 90 s and 30 s. The comment on
+  `CONFIG_READ_TIMEOUT_MS` says so, and no copy on the page promises a total. This was
+  chosen, not a defect.
+- **findings** · the hunt returned 5; 2 carried, 3 dropped.
+- Positive controls: changing the bound to `60_000` fails four tests (the three new
+  `human-check.test.ts` cases and the App case). Making a timed-out read stay memoised fails
+  two (the two not-memoised proofs above). Dropping the signal fails none (the med above).
+- NFR: security ✓ (a token-less request is still refused by the server) · performance n/a ·
+  reliability — above · maintainability — above.
 
 ## Log
 
