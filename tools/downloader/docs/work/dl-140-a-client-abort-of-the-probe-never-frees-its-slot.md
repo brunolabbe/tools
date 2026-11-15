@@ -235,6 +235,54 @@ Traps:
   (one listener per request, as before) · reliability — F1 · maintainability —
   F2, F3.
 
+### Gate 2
+
+**Gate: PASS** — 2026-11-15 · `bc800d3a..c1abda7d` · Opus 5.5, depth narrow
+
+| Done when                                                                                                                                      | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ---------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A real-port, real aborted `fetch` frees the per-client and the global slot (abort during the chain) within a stated bound, and fails on `main` | `api/test/routes.test.ts` › "a client that aborts POST /api/probe" › "during the chain frees both slots at once, not at the chain's deadline" ✓ — untouched by the round, whose `.ts` diff is comments and one test title; 48 of 48 at `c1abda7d`                                                                                                                                                                                                                            |
+| A normally completed request frees its slot as today and does not abort the controller                                                         | `api/test/routes.test.ts` › "a request that completes normally frees its slots and never aborts its signal" ✓ — untouched by the round; 48 of 48 at `c1abda7d`                                                                                                                                                                                                                                                                                                               |
+| The Log states the event, the measurement that chose it, and what an abort during the output vet still does                                    | **verified** by reading against gate 1's probe re-run at `c1abda7d`: an abort during a held vet with a thumbnail answering after 2 s freed the per-client slot 2,013 ms after the vet returned and ended `ok`; without a thumbnail it ended `ok`, cached, `info probe complete`, no `request rejected`, report `attempted 1, successes 1, canceled 0`. The Log's amendment and its _Also_ bullet state both, generally; F1's residual below is a scoping in two other places |
+
+- **F1** · **fixed in part** — every sentence gate 1 named is corrected and
+  true as measured (the Log's Done when 3 bullet and _Also_ bullet, the
+  amendment, Build 3's struck sentence, case 4's title and comment, the dl-138
+  line, the PR body). What remains is graded **low**, about a detail nothing
+  relies on: (a) the dl-138 line, the Log's Done when 3 bullet and the PR body
+  attach "ends `ok`" to a probe that names a thumbnail only, where a probe that
+  names none ends `ok` too (re-measured), so a reader of those three alone may
+  infer it ends `CANCELED` — false in the direction that understates what the
+  report counts, and the dl-140 Log's amendment and _Also_ bullet say it
+  generally; (b) the dl-138 line's "holds the per-client slot up to about 4 s
+  after the vet" omits the thumbnail URL's own `guard.assertAllowed` in
+  `captureThumbnail`, which runs before the 4 s `AbortSignal.timeout` and takes
+  neither a signal nor a timeout (read from `thumbnails.ts` and `ssrf.ts`, not
+  measured) — the same unsignalled DNS shape the text already states for the
+  output vet. Not a `high`: the owner's choice was taken on gate 1's full
+  report, which named the DNS vet, and Done when 3 is met by the dl-140 Log.
+- **F2** · **fixed** — the `routes/probe.ts` comment and the Log's _Not
+  measured_ now say a reply cut mid-flush reads `writableFinished` true at
+  `close`. Re-measured: 20 of 20 mid-body at 50 ms, every `close` `wf=true`,
+  0 aborts, 20 `ok` outcomes.
+- **F3** · **fixed** — the Log's (b) and case 3's comment now scope `"unknown"`
+  to the limiter off. Re-measured: key `unknown` with the harness default,
+  `127.0.0.1` with `rateLimitProbePerMinute: 10`, `203.0.113.7` with
+  `trustProxy` and `X-Forwarded-For`.
+- **dropped** · the owner's intake entry still quotes "one during the vet frees
+  it when the vet returns": it is the record of the option as offered, and the
+  amendment names that sentence false. Not a surviving claim.
+- **findings** · the round's lines returned 3 (F1's two residual clauses, one
+  bullet, and the intake quote); 2 carried as F1's residual, 1 dropped. No new
+  finding outside F1's mechanism; nothing here is a `high`.
+- The round changed no behaviour: `git diff bc800d3a c1abda7d -- '*.ts'` has one
+  non-comment line, the test title.
+- CI at `c1abda7d`: `check`, `CodeQL`, `codeql`, `docker`, `e2e (direct)`,
+  `e2e (sniffer)`, `dependency-review`, `changes` pass; `test (ubuntu-latest)`
+  and `test (windows-latest, informational)` pending when read. No row rests on
+  them; the lander reads them.
+- NFR: not swept (narrow); the round is text only.
+
 ## Log
 
 - 2026-11-15 — Filed from dl-138's first gate (Opus 5.5), on the owner's answer
