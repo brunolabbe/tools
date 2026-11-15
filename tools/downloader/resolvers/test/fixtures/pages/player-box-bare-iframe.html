@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A player-classed iframe that is the only player-ish box on the page</title>
+  </head>
+  <body style="margin: 0">
+    <!-- dl-142: the box click's candidates are `[class*="player"]` and
+         `[id*="player"]`, and this iframe is the only one. Its content is another
+         document the box click's checks cannot see into, so it is never pressed
+         (owner's decision 1, 2026-10-07): the frame records any click on it. -->
+    <iframe
+      id="pf"
+      class="player-frame"
+      src="/player-box-frame-inner.html"
+      width="640"
+      height="360"
+      style="border: 0"
+    ></iframe>
+  </body>
+</html>

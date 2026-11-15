@@ -1644,6 +1644,8 @@ const BOX_MIN_HEIGHT = 120;
  */
 const MARK_PLAYER_BOX_SCRIPT = `(() => {
   var candidates = (${ALL_MEDIA_FN})('[class*="player"], [id*="player"]').filter(function (box) {
+    // A frame is never the box (dl-142; the selector alone lets \`class="player-frame"\` in).
+    if (box.tagName === 'IFRAME') return false;
     var size = box.getBoundingClientRect();
     return size.width >= ${BOX_MIN_WIDTH} && size.height >= ${BOX_MIN_HEIGHT};
   });

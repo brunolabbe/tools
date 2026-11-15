@@ -302,3 +302,43 @@ describe("a player that waits for the visitor's first input (dl-81)", () => {
     );
   });
 });
+
+describe("the box click and a frame (dl-142)", () => {
+  function resolverWith(): BrowserResolver {
+    return new BrowserResolver({
+      pool,
+      hlsParser: recordingHlsParser().parser,
+      ...BASE_WAITS,
+      emptyMinWaitMs: NO_EMPTY_FLOOR_MS,
+    });
+  }
+
+  // `server.requests` records every path, and the frame's document beacons its own
+  // click, so a click that landed in the frame is a request, not an inference.
+  test(
+    "a player-classed iframe that is the only box is never clicked into, and the probe ends NO_MEDIA_FOUND",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      server.requests.length = 0;
+      const error = await probeError("/player-box-bare-iframe.html", resolverWith());
+
+      expectCode(error, "NO_MEDIA_FOUND");
+      // The frame's own document was loaded, so an absent beacon is not an absent frame.
+      expect(server.requests).toContain("/player-box-frame-inner.html");
+      expect(server.requests).not.toContain("/beacon/inner-click");
+    },
+  );
+
+  test(
+    "a div box that holds a frame beside its centre is still clicked, and the frame is not",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      server.requests.length = 0;
+      const error = await probeError("/player-box-iframe-wrapper.html", resolverWith());
+
+      expectCode(error, "NO_MEDIA_FOUND");
+      expect(server.requests).toContain("/beacon/wrapper-clicked");
+      expect(server.requests).not.toContain("/beacon/inner-click");
+    },
+  );
+});
