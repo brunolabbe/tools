@@ -143,3 +143,54 @@ resolved in about 5 s, which is what isolates the delay as the cause.
   failure is shown to also fail on `main`.
 
 ## Log
+
+- 2026-11-15 — Built (option A). `provoke.ts`: the blank-player-iframe predicate
+  is lifted out of `MARK_SERVER_TAB_SCRIPT` into `BLANK_PLAYER_IFRAMES_FN`, which
+  the press and the new wait both read (no second predicate). `waitForBlankPlayerFill`
+  marks the chosen blank iframe, then polls until its `src` has left `about:blank`
+  and its child frame has been `complete` on one address for
+  `BLANK_PLAYER_STABLE_MS` (800 ms), which is the final document after an in-frame
+  hop. Bounded by `BLANK_PLAYER_FILL_WAIT_MS` (3000, exported) across the probe,
+  the deadline and the abort signal; never an error; a page with no blank player
+  iframe returns after one evaluate. Fixtures: `player-delayed-single.html`
+  (`?plain` swaps the iframe for a div, `?never` releases but never fills),
+  `player-delayed-tabs.html`, `player-delayed-embed-hop.html`. Three tests at the
+  end of `browser-resolver-press-targets.test.ts`. Nothing in `browser.ts`.
+  - **Step 3, the frame list: route taken is re-reading `page.frames()` before
+    each visit** (a `visited` set in `provokePlayback`), not once per pass. Why:
+    the wait runs in the top frame's visit, so what it fills is visited after it
+    in the same pass and in its final state; a frame created by the wait is
+    included; it costs one call per frame.
+  - **The brief's order is not enough for the delayed-tab shape.** "After the press"
+    alone leaves the press to run straight after the scroll, before the plugin has
+    registered the tab handlers; it does nothing, and the press is once per probe.
+    So the wait is in two calls sharing one 3000 ms budget: up to
+    `BLANK_PLAYER_RELEASE_WAIT_MS` (1000) before the press, then the rest after
+    it. Cost: a page with a blank player iframe that no script fills pays 1 s
+    before its press (dl-139's own tab page: it pays no more than the wait
+    ends early once the iframe fills). A page with no blank iframe pays nothing.
+  - **Fixture timing is not the live timing, and says why.** The harness's own
+    pointer activity at load can release a delay-JS page before provocation, and
+    on `main` pass 1's in-frame click lands about 1.6 s after the scroll. Live
+    numbers (fill 0.2-0.6 s, hop 0.4 s) passed on `main` three times in three.
+    The fixture is slower (fill 1200 ms, hop 600 ms, tab handlers 1000 ms) so that
+    it is red on `main` every run; the stability window (800 ms) sits above the
+    hop (600 ms) on purpose, and a hop longer than it is not waited for.
+  - **Red on `main`'s `provoke.ts`** (three runs each): the single-iframe test
+    `AppError: No downloadable video stream was found on that page.` (about 3.0 s);
+    the delayed-tab test, same error (about 2.9 s); the no-wait test
+    `AssertionError: expected 56 to be greater than NaN` (the exported constant
+    does not exist on `main`, so this one is red by import, not by timing; with the
+    constant present and the wait removed it is `neverMs - plainMs` near 0).
+  - **Mutations**: `waitForBlankPlayerFill` returning at once turns all three red.
+    `BLANK_PLAYER_STABLE_MS = 0` leaves all three green: the hop is covered in
+    these fixtures by pass 1 re-clicking after it, so the stability window is not
+    pinned by a test. Left so rather than tuning a fixture to a race.
+  - Runs: press-targets spec 38 of 38 earlier at 138 s; `npm run check` exit 0;
+    `npm test -- --project downloader` 2668 passed, 2 skipped (130 files, 1
+    skipped), exit 0. e2e and container gates not run; CI has not proved them.
+  - **Live check** (the live post, `BrowserResolver` from this worktree's dist,
+    sandbox firewall as found): still `NO_MEDIA_FOUND`, provoke-playback 3.8 s to
+    8.1 s (so the wait ran), settle-requests ended at 17.2 s. Not proved either
+    way: this environment may not reach the embed host, and I could not tell.
+    The owner's dev run is the real reading.

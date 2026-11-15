@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A video page whose player iframe is filled by a delayed script</title>
+  </head>
+  <body style="margin: 0">
+    <!-- dl-143: the shape of a WordPress page under a delay-JS plugin. The player
+         is one iframe at about:blank with its address base64-encoded in
+         `data-enc`, and nothing on the page runs until the window sees a first
+         interaction; 1.2 s after that the player script sets the iframe's `src`.
+         There is no tab. With `?plain` the iframe is a div instead, which is the
+         same page with no blank player iframe, and with `?never` the script
+         releases but never fills the iframe. -->
+    <div class="player-wrap" id="wrap">
+      <iframe
+        id="player-0"
+        class="player-frame"
+        src="about:blank"
+        width="640"
+        height="360"
+        style="border: 0"
+        loading="lazy"
+        title="Video player"
+      ></iframe>
+    </div>
+
+    <script>
+      (function () {
+        var query = location.search;
+        if (query.indexOf("plain") !== -1) {
+          document.getElementById("wrap").innerHTML =
+            '<div class="player-frame" style="width: 640px; height: 360px"></div>';
+        }
+        var frame = document.getElementById("player-0");
+        var embed = "{{SECONDARY}}/player-delayed-embed-hop.html";
+        if (frame) frame.setAttribute("data-enc", btoa(embed + "?player=0"));
+
+        // The delay-JS loader: nothing below the listeners runs until the window
+        // sees one of these, registered on window and passive the way the plugin
+        // does it, and no timer runs it anyway. A timer then stands in for the
+        // delayed bundle loading.
+        var EVENTS = [
+          "mouseover",
+          "click",
+          "keydown",
+          "wheel",
+          "touchmove",
+          "touchstart",
+          "pointerup",
+          "pointerdown",
+        ];
+        var released = false;
+        function release() {
+          if (released) return;
+          released = true;
+          for (var k = 0; k < EVENTS.length; k++) window.removeEventListener(EVENTS[k], release);
+          setTimeout(playerScript, 1200);
+        }
+        for (var j = 0; j < EVENTS.length; j++) {
+          window.addEventListener(EVENTS[j], release, { passive: true });
+        }
+
+        function playerScript() {
+          if (!frame || query.indexOf("never") !== -1) return;
+          // js/xss-through-dom, excused under docs/adr/005 by category, in
+          // tools/downloader/resolvers/test/fixtures/pages/player-delayed-single.html,
+          // 2026-11-15, by the owner (dl-143, answer A): this is a test fixture,
+          // served only by the test's own server, and it copies a DOM attribute
+          // into an iframe's src on purpose, because that is the page dl-143
+          // reproduces: the live page keeps the player's address in a data
+          // attribute and sets it only once a delay-JS plugin has run its scripts.
+          // It never ships, and no visitor reaches it. Field five has no production
+          // design behind it to regress: what goes red if the fixture stops doing
+          // it is "a player iframe that a delay-JS plugin fills after the first
+          // interaction resolves" in browser-resolver-press-targets.test.ts, since
+          // the iframe then stays blank and the probe ends NO_MEDIA_FOUND.
+          // The assignment is on one line because the suppression covers exactly
+          // the line after the comment.
+          // codeql[js/xss-through-dom]
+          frame.src = atob(frame.getAttribute("data-enc"));
+        }
+      })();
+    </script>
+  </body>
+</html>

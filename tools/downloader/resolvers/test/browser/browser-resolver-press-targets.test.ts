@@ -4,6 +4,7 @@
 
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import type { BrowserPool } from "../../src/browser/pool.ts";
+import { BLANK_PLAYER_FILL_WAIT_MS, provokePlayback } from "../../src/browser/provoke.ts";
 import { BrowserResolver } from "../../src/resolvers/browser.ts";
 import { recordingHlsParser } from "./helpers/fake-parsers.ts";
 import type { FixtureServer } from "./helpers/fixture-server.ts";
@@ -406,4 +407,76 @@ describe("the server-tab press and what it must not set off (dl-139 gate round 1
     expectCode(error, "NO_MEDIA_FOUND");
     expect(server.requests.filter((pathname) => pathname.startsWith("/beacon/"))).toEqual([]);
   });
+});
+
+describe("a player iframe that a delay-JS plugin fills after the first interaction (dl-143)", () => {
+  function resolverWith(waits: Waits = BASE_WAITS): BrowserResolver {
+    return new BrowserResolver({
+      pool,
+      hlsParser: recordingHlsParser().parser,
+      ...waits,
+      emptyMinWaitMs: NO_EMPTY_FLOOR_MS,
+    });
+  }
+
+  test(
+    "a player iframe that a delay-JS plugin fills after the first interaction resolves, once its embed has hopped to the document with the player",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      server.requests.length = 0;
+      // Nothing on the page runs until the scroll; the iframe is filled 0.4 s
+      // later and its embed replaces itself 0.4 s after loading, and the embed
+      // asks for its manifest only after a click on its `<video>`.
+      const result = await probe("/player-delayed-single.html", resolverWith(STREAM_WAITS));
+
+      expect(result.variants[0]?.url).toBe(server.secondaryUrl("/media/related/master.m3u8"));
+    },
+  );
+
+  test(
+    "a server tab whose handler a delay-JS plugin registers late is pressed once the page is ready",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      server.requests.length = 0;
+      const result = await probe("/player-delayed-tabs.html", resolverWith(STREAM_WAITS));
+
+      expect(result.variants[0]?.url).toBe(server.secondaryUrl("/media/related/master.m3u8"));
+      expect(server.requests).toContain("/beacon/delayed-tab-0");
+    },
+  );
+
+  test(
+    "a page with no blank player iframe pays no wait, and one whose iframe never fills pays the bound",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      async function provokeFor(pathname: string): Promise<number> {
+        return await pool.withBrowser({ signal: new AbortController().signal }, async (browser) => {
+          const context = await browser.newContext();
+          try {
+            const page = await context.newPage();
+            await page.goto(server.url(pathname), { waitUntil: "domcontentloaded" });
+            const startedAt = Date.now();
+            await provokePlayback(page, {
+              deadline: Date.now() + 30_000,
+              signal: new AbortController().signal,
+              confirmAge: false,
+              passPauseMs: 0,
+            });
+            return Date.now() - startedAt;
+          } finally {
+            await context.close();
+          }
+        });
+      }
+
+      // The same page twice: with its iframe swapped for a div, and with the
+      // iframe left blank because the script never fills it. What differs is the
+      // wait, so the difference is what is measured, not either duration.
+      const plainMs = await provokeFor("/player-delayed-single.html?plain");
+      const neverMs = await provokeFor("/player-delayed-single.html?never");
+
+      expect(neverMs - plainMs).toBeGreaterThan(BLANK_PLAYER_FILL_WAIT_MS - 1000);
+      expect(plainMs).toBeLessThan(BLANK_PLAYER_FILL_WAIT_MS);
+    },
+  );
 });

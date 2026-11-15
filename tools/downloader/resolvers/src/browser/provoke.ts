@@ -1731,6 +1731,23 @@ export const SERVER_TAB_LABEL = new RegExp(
 const SERVER_TAB_MAX_LABEL = 24;
 
 /**
+ * Every player-ish iframe whose `src` is absent or `about:blank` (dl-139), in
+ * document order and shadow roots included: no `srcdoc`, and a player-ish class,
+ * id or title on it or an ancestor. The one definition of "a blank player
+ * iframe": the server-tab press and the wait for such an iframe to fill (dl-143)
+ * both read it, so they cannot disagree about which page has one.
+ */
+const BLANK_PLAYER_IFRAMES_FN = `function () {
+  return (${ALL_MEDIA_FN})('iframe').filter(function (frame) {
+    if (frame.hasAttribute('srcdoc')) return false;
+    var src = (frame.getAttribute('src') || '').trim().toLowerCase();
+    if (src !== '' && src !== 'about:blank') return false;
+    if (frame.closest && frame.closest('[class*="player"], [id*="player"]')) return true;
+    return /player|video/i.test(frame.getAttribute('title') || '');
+  });
+}`;
+
+/**
  * Chooses the one server tab to press when a player iframe is still blank, and
  * marks it (dl-139). Returns whether a control was marked.
  *
@@ -1763,13 +1780,7 @@ const SERVER_TAB_MAX_LABEL = 24;
  */
 const MARK_SERVER_TAB_SCRIPT = `(() => {
   var label = new RegExp(${JSON.stringify(SERVER_TAB_LABEL.source)}, ${JSON.stringify(SERVER_TAB_LABEL.flags)});
-  var blank = (${ALL_MEDIA_FN})('iframe').filter(function (frame) {
-    if (frame.hasAttribute('srcdoc')) return false;
-    var src = (frame.getAttribute('src') || '').trim().toLowerCase();
-    if (src !== '' && src !== 'about:blank') return false;
-    if (frame.closest && frame.closest('[class*="player"], [id*="player"]')) return true;
-    return /player|video/i.test(frame.getAttribute('title') || '');
-  });
+  var blank = (${BLANK_PLAYER_IFRAMES_FN})();
   if ((${CHOOSE_VIDEO_INDEX_FN})(blank) === -1) return false;
   var here = location.href.split('#')[0];
   // A link that would take the page somewhere, or open a window: an address
@@ -1863,6 +1874,135 @@ async function pressServerTab(frame: Frame, timeoutMs: number): Promise<boolean>
   return marked;
 }
 
+/** Marks the blank player iframe the wait is for (dl-143). */
+const FILL_MARK = "data-downloader-blank-player";
+
+const MARK_BLANK_PLAYER_SCRIPT = `(() => {
+  var blank = (${BLANK_PLAYER_IFRAMES_FN})();
+  var index = (${CHOOSE_VIDEO_INDEX_FN})(blank);
+  if (index === -1) return false;
+  blank[index].setAttribute(${JSON.stringify(FILL_MARK)}, '');
+  return true;
+})()`;
+
+const UNMARK_BLANK_PLAYER_SCRIPT = `(() => {
+  var marked = (${ALL_MEDIA_FN})('[${FILL_MARK}]');
+  for (var i = 0; i < marked.length; i++) marked[i].removeAttribute(${JSON.stringify(FILL_MARK)});
+})()`;
+
+/**
+ * How long a probe waits, in all, for a blank player iframe to get its address
+ * and finish loading (dl-143). A page that runs its scripts only after a first
+ * interaction (a "delay JS" plugin) fills the iframe 0.2-0.6 s after the scroll
+ * that released it, and the embed behind it may hop to a mirror about 0.4 s
+ * after that; 3 s covers both with room. Spent once per probe, split in two by
+ * the server-tab press, and only on a page that has a blank player iframe.
+ */
+export const BLANK_PLAYER_FILL_WAIT_MS = 3000;
+/**
+ * The part of that wait made before the server-tab press (dl-143): a plugin that
+ * registers the tabs' handlers only after its release drops a press that comes
+ * straight after the scroll, and the press is once per probe. An iframe that no
+ * tab fills fills within this on its own, or not before the press.
+ */
+export const BLANK_PLAYER_RELEASE_WAIT_MS = 1000;
+/** A filled frame is loaded when its final document has been `complete` and unchanged this long. */
+const BLANK_PLAYER_STABLE_MS = 800;
+const BLANK_PLAYER_POLL_MS = 100;
+
+/** One probe's wait for a blank player iframe (dl-143), shared by both passes. */
+interface BlankPlayerWait {
+  /** Over: the iframe filled and loaded, there was none, or the wait is spent. */
+  done: boolean;
+  /** The iframe is marked in the page, so a second call finds it though it is no longer blank. */
+  marked: boolean;
+  spentMs: number;
+}
+
+/**
+ * Waits for the blank player iframe to fill (dl-143), in the top frame. It looks
+ * only at the iframe: its `src` leaving `about:blank`, then its frame sitting
+ * `complete` on one address for `BLANK_PLAYER_STABLE_MS`, which is the final
+ * document when an embed hops to a mirror after it loads. It does not matter
+ * which step released the page's scripts. Never an error: an iframe that does
+ * not fill, a frame that detaches, or a deadline that arrives only ends the wait.
+ *
+ * Two calls share `state.spentMs`; the second (`last`) removes the mark.
+ */
+async function waitForBlankPlayerFill(
+  frame: Frame,
+  state: BlankPlayerWait,
+  options: { capMs: number; deadline: number; signal: AbortSignal; last: boolean },
+): Promise<void> {
+  if (state.done) return;
+  try {
+    if (!state.marked) {
+      if (!(await frame.evaluate<boolean>(MARK_BLANK_PLAYER_SCRIPT))) {
+        state.done = true;
+        return;
+      }
+      state.marked = true;
+    }
+    const handle = await frame.locator(`[${FILL_MARK}]`).first().elementHandle({ timeout: 500 });
+    const startedAt = Date.now();
+    const allowedMs = Math.max(
+      0,
+      Math.min(
+        options.capMs,
+        BLANK_PLAYER_FILL_WAIT_MS - state.spentMs,
+        remaining(options.deadline) - 1500,
+      ),
+    );
+    let seen = "";
+    let stableSince = 0;
+    try {
+      while (Date.now() - startedAt < allowedMs) {
+        throwIfAborted(options.signal);
+        let sample = "";
+        try {
+          const src = await handle.evaluate((el) => (el.getAttribute("src") ?? "").trim());
+          const child =
+            src !== "" && src.toLowerCase() !== "about:blank" ? await handle.contentFrame() : null;
+          if (child !== null && child.url() !== "about:blank") {
+            const ready = await child.evaluate<string>("document.readyState");
+            if (ready === "complete") sample = child.url();
+          }
+        } catch {
+          // Mid-navigation: not yet a document to read.
+        }
+        if (sample !== "" && sample === seen) {
+          if (Date.now() - stableSince >= BLANK_PLAYER_STABLE_MS) {
+            state.done = true;
+            return;
+          }
+        } else {
+          seen = sample;
+          stableSince = Date.now();
+        }
+        await sleep(BLANK_PLAYER_POLL_MS, options.signal);
+      }
+    } finally {
+      state.spentMs += Date.now() - startedAt;
+      await handle.dispose().catch(() => undefined);
+    }
+  } catch (error) {
+    if (options.signal.aborted) throw error;
+    // Detached, never found, or the page went away: the wait is over.
+    state.done = true;
+  } finally {
+    if (state.done || options.last) {
+      if (state.marked) {
+        try {
+          await frame.evaluate(UNMARK_BLANK_PLAYER_SCRIPT);
+        } catch {
+          // The frame navigated.
+        }
+      }
+      state.done = true;
+    }
+  }
+}
+
 /**
  * What a person does before looking for a play button: scrolls the wheel
  * (dl-81). Some pages inject their player only on the first `wheel`, and until
@@ -1944,6 +2084,10 @@ async function provokeFrame(
     clickTimeoutMs?: number | undefined;
     /** One probe's single server-tab press (dl-139), shared by both passes. */
     serverTab: { attempted: boolean };
+    /** One probe's wait for a blank player iframe to fill (dl-143), shared by both passes. */
+    blankPlayer: BlankPlayerWait;
+    deadline: number;
+    signal: AbortSignal;
   },
 ): Promise<boolean> {
   const scriptable = isScriptableFrame(frame, pageOrigin);
@@ -1971,8 +2115,30 @@ async function provokeFrame(
   // A player that stays blank until a server tab is pressed (dl-139): one press,
   // in the top frame, while nothing has been captured. Not a play press, so it
   // is not part of what this returns.
-  if (frame.parentFrame() === null && !options.serverTab.attempted && !options.hasPlayable()) {
+  const topFrame = frame.parentFrame() === null;
+  const waitOptions = { deadline: options.deadline, signal: options.signal };
+  // A page whose scripts wait for a first interaction (dl-143): the scroll above
+  // released them, and they fill the blank player iframe, or register the tabs'
+  // handlers, a moment later. Look before pressing, since a press that comes
+  // first is dropped and the press is once per probe.
+  if (topFrame && !options.hasPlayable()) {
+    await waitForBlankPlayerFill(frame, options.blankPlayer, {
+      ...waitOptions,
+      capMs: BLANK_PLAYER_RELEASE_WAIT_MS,
+      last: false,
+    });
+  }
+  if (topFrame && !options.serverTab.attempted && !options.hasPlayable()) {
     if (await pressServerTab(frame, blockable)) options.serverTab.attempted = true;
+  }
+  // Then until the iframe has its address and its final document, so that the
+  // in-frame clicks below, and the next pass, reach a player and not a blank.
+  if (topFrame && !options.hasPlayable()) {
+    await waitForBlankPlayerFill(frame, options.blankPlayer, {
+      ...waitOptions,
+      capMs: BLANK_PLAYER_FILL_WAIT_MS,
+      last: true,
+    });
   }
 
   const playClicks = await clickVisible(frame, PLAY_SELECTORS, {
@@ -2047,13 +2213,20 @@ export async function provokePlayback(
   const pageOrigin = originOf(page.url());
   const hasPlayable = options.hasPlayable ?? (() => false);
   const serverTab = { attempted: false };
+  const blankPlayer: BlankPlayerWait = { done: false, marked: false, spentMs: 0 };
   for (let pass = 0; pass < 2; pass++) {
     throwIfAborted(options.signal);
     if (remaining(options.deadline) < 2000) return;
 
     let pressed = false;
-    const frames = page.frames();
-    for (const frame of frames) {
+    // The frame list is read again before each visit, not once per pass (dl-143):
+    // the top frame's wait can end with a player iframe that was not in the list
+    // when the pass began, or one that was mid-navigation in it.
+    const visited = new Set<Frame>();
+    for (;;) {
+      const frame = page.frames().find((candidate) => !visited.has(candidate));
+      if (frame === undefined) break;
+      visited.add(frame);
       if (remaining(options.deadline) < 1500) return;
       try {
         if (
@@ -2062,6 +2235,9 @@ export async function provokePlayback(
             hasPlayable,
             clickTimeoutMs: options.clickTimeoutMs,
             serverTab,
+            blankPlayer,
+            deadline: options.deadline,
+            signal: options.signal,
           })
         ) {
           pressed = true;
