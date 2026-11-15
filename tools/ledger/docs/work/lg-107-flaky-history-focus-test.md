@@ -267,3 +267,122 @@ The filer measured no lg-99 loop. The two tests' rates are therefore each from o
   - **Options:** (1) the product fix, making `Refile`'s focus restore a `useLayoutEffect`, with the Done when's window reworded; (2) the test fix, waiting for focus in the two tests; (3) close with the cause recorded and no fix.
   - **Chosen: (1).** The builder and the orchestrator had both recommended it, and nothing was overridden.
   - **With it, the owner accepted a reworded proof.** That is the amendment under `## Done when`: an interleaved window on `a100f429`, per test, comparing no change with the one-line change. It keeps the ticket's 40-to-100-pair window, its 3 reds against 0, `unproven` at 100 pairs with no further run, and red scored by the assertion's content. On the branch, the change is in `History.tsx`, the whole of `history.test.tsx` passes as a single file, and the focus assertions stay exactly as written. `npm run check` exits 0, and the ledger suite is left to CI. The three Done when lines this replaces are marked superseded and left in place.
+- 2026-11-15 — **The fix, on the branch (`9c4f2c28`).** `Refile`'s focus restore in `tools/ledger/web/src/history/History.tsx` is now a `useLayoutEffect`. Its body, its condition and its dependencies are unchanged. A comment says why. `useLayoutEffect` joins the `react` import. `history.test.tsx` is untouched: `git diff --stat 4e040577 HEAD` lists only `History.tsx` and this ticket, and lines 588, 596, 755 and 764 still read `expect(document.activeElement).toBe(button);`. On the branch, `npx vitest run tools/ledger/web/test/history.test.tsx` gave `Tests 32 passed (32)`. `npx oxlint tools/ledger/web` exited 0, and `npm run check` exited 0 at `9c4f2c28`. The timeline probe from the Build 2 entry, run 5 times on the branch (15 cases), had focus on the button at the assertion in 15 of 15. The `focus()` ran from `flushLayoutEffects` ← `commitRoot`, inside the commit that removes the control. The ledger project's suite is left to CI on #808.
+- 2026-11-15 — **The amended Done when's windows, both met.** Each ran in one tree at `a100f429`, farmed with `bash .claude/scripts/worktree-farm.sh` and built with `npm run build` (exit 0), then removed. Before each run the tree's `History.tsx` was set to arm A (the file at `a100f429`, compared with `cmp`) or arm B (that file with the effect as `useLayoutEffect`, made by script; `diff` shows only the import line and line 601). Every arm A run had 0 `useLayoutEffect` in the file at its start and every arm B run 2. Each run was the `## Reproduction` loop command under `timeout 120`, one at a time, alternating A, B, A, B. Red is scored as the amendment says. No run failed any other way. Load is the 1-minute average from `/proc/loadavg` at each run's start, and the vitest count is `ps -eo args | grep -c '[v]itest'` at the same moment.
+
+  | Test  | Pairs | Arm A red | Arm B red | 1-min load   | vitest processes | Mean run |
+  | ----- | ----- | --------- | --------- | ------------ | ---------------- | -------- |
+  | lg-95 | 40    | 5         | 0         | 6.02 – 12.88 | 1 – 20           | 2.5 s    |
+  | lg-99 | 60    | 3         | 0         | 3.57 – 6.02  | 0 – 14           | 2.1 s    |
+
+  The lg-95 window stopped at 40 pairs with arm A at 5 reds. Each red was `history.test.tsx:588:34`, the save path, with `Tests 1 failed | 28 skipped (29)`. The lg-99 window had 1 arm A red at 40 pairs, so it was extended by 20, and it had 3 at 60. All three failed at `history.test.tsx:747:36` on the `focused` arm, with `Tests 1 failed | 1 passed | 27 skipped (29)`.
+
+  The lg-95 window, pair by pair:
+
+  | Pair | A (no change)  | B (`useLayoutEffect`) | Load at A | Load at B | vitest at A / B |
+  | ---- | -------------- | --------------------- | --------- | --------- | --------------- |
+  | 1    | green          | green                 | 7.48      | 7.48      | 12 / 12         |
+  | 2    | green          | green                 | 7.36      | 7.36      | 12 / 11         |
+  | 3    | green          | green                 | 7.09      | 7.09      | 12 / 12         |
+  | 4    | green          | green                 | 7.01      | 7.01      | 12 / 12         |
+  | 5    | green          | green                 | 7.00      | 6.84      | 11 / 11         |
+  | 6    | green          | green                 | 6.84      | 7.02      | 12 / 12         |
+  | 7    | green          | green                 | 7.02      | 6.86      | 12 / 11         |
+  | 8    | green          | green                 | 8.15      | 8.15      | 12 / 12         |
+  | 9    | green          | green                 | 7.66      | 7.66      | 12 / 12         |
+  | 10   | **red** (:588) | green                 | 7.52      | 7.52      | 18 / 20         |
+  | 11   | **red** (:588) | green                 | 7.88      | 9.41      | 19 / 16         |
+  | 12   | green          | green                 | 10.50     | 10.50     | 16 / 16         |
+  | 13   | green          | green                 | 10.22     | 12.12     | 12 / 20         |
+  | 14   | **red** (:588) | green                 | 12.12     | 12.03     | 12 / 16         |
+  | 15   | green          | green                 | 12.11     | 12.34     | 12 / 6          |
+  | 16   | green          | green                 | 12.88     | 12.88     | 20 / 10         |
+  | 17   | green          | green                 | 12.25     | 12.25     | 7 / 8           |
+  | 18   | green          | green                 | 11.59     | 11.59     | 13 / 13         |
+  | 19   | green          | green                 | 11.30     | 11.30     | 11 / 11         |
+  | 20   | green          | green                 | 10.87     | 10.87     | 13 / 8          |
+  | 21   | **red** (:588) | green                 | 10.24     | 10.24     | 9 / 9           |
+  | 22   | green          | green                 | 9.74      | 9.74      | 5 / 9           |
+  | 23   | green          | green                 | 9.36      | 9.36      | 8 / 9           |
+  | 24   | green          | green                 | 8.93      | 8.93      | 9 / 4           |
+  | 25   | green          | green                 | 8.78      | 8.78      | 4 / 1           |
+  | 26   | green          | green                 | 8.39      | 8.39      | 4 / 3           |
+  | 27   | green          | green                 | 7.96      | 7.96      | 8 / 8           |
+  | 28   | green          | green                 | 7.73      | 7.73      | 4 / 8           |
+  | 29   | green          | green                 | 7.59      | 7.59      | 5 / 8           |
+  | 30   | green          | green                 | 7.38      | 7.38      | 5 / 8           |
+  | 31   | green          | green                 | 7.35      | 7.35      | 8 / 8           |
+  | 32   | green          | green                 | 7.08      | 7.08      | 11 / 13         |
+  | 33   | green          | green                 | 6.83      | 6.83      | 11 / 13         |
+  | 34   | green          | green                 | 6.61      | 6.61      | 8 / 9           |
+  | 35   | green          | green                 | 6.88      | 6.88      | 13 / 13         |
+  | 36   | **red** (:588) | green                 | 6.73      | 6.73      | 13 / 13         |
+  | 37   | green          | green                 | 6.59      | 6.59      | 13 / 13         |
+  | 38   | green          | green                 | 6.30      | 6.30      | 13 / 13         |
+  | 39   | green          | green                 | 6.20      | 6.20      | 13 / 10         |
+  | 40   | green          | green                 | 6.02      | 6.02      | 13 / 13         |
+
+  The lg-99 window, pair by pair:
+
+  | Pair | A (no change)  | B (`useLayoutEffect`) | Load at A | Load at B | vitest at A / B |
+  | ---- | -------------- | --------------------- | --------- | --------- | --------------- |
+  | 1    | green          | green                 | 6.02      | 5.70      | 13 / 13         |
+  | 2    | green          | green                 | 5.70      | 5.88      | 13 / 13         |
+  | 3    | green          | green                 | 5.88      | 5.73      | 13 / 9          |
+  | 4    | green          | green                 | 5.73      | 5.59      | 9 / 9           |
+  | 5    | green          | green                 | 5.59      | 5.30      | 9 / 9           |
+  | 6    | green          | green                 | 5.30      | 5.30      | 6 / 9           |
+  | 7    | green          | green                 | 5.12      | 5.12      | 9 / 9           |
+  | 8    | green          | green                 | 4.95      | 4.95      | 9 / 9           |
+  | 9    | green          | green                 | 4.95      | 4.95      | 4 / 7           |
+  | 10   | green          | green                 | 4.64      | 4.64      | 8 / 7           |
+  | 11   | green          | green                 | 4.51      | 4.51      | 12 / 9          |
+  | 12   | green          | green                 | 4.39      | 4.39      | 9 / 8           |
+  | 13   | green          | green                 | 4.39      | 4.19      | 9 / 9           |
+  | 14   | green          | green                 | 4.19      | 4.02      | 8 / 9           |
+  | 15   | green          | green                 | 4.02      | 3.78      | 9 / 9           |
+  | 16   | green          | green                 | 3.78      | 3.71      | 9 / 10          |
+  | 17   | green          | green                 | 3.71      | 3.90      | 13 / 12         |
+  | 18   | green          | green                 | 3.90      | 3.99      | 13 / 9          |
+  | 19   | green          | green                 | 3.99      | 3.99      | 9 / 9           |
+  | 20   | green          | green                 | 3.91      | 3.91      | 5 / 8           |
+  | 21   | green          | green                 | 3.91      | 3.91      | 9 / 9           |
+  | 22   | green          | green                 | 5.84      | 5.84      | 5 / 9           |
+  | 23   | green          | green                 | 5.62      | 5.62      | 12 / 10         |
+  | 24   | green          | green                 | 5.57      | 5.57      | 10 / 2          |
+  | 25   | green          | green                 | 5.36      | 5.36      | 5 / 5           |
+  | 26   | green          | green                 | 5.09      | 5.09      | 4 / 5           |
+  | 27   | green          | green                 | 4.92      | 4.92      | 4 / 8           |
+  | 28   | green          | green                 | 4.92      | 4.77      | 8 / 3           |
+  | 29   | green          | green                 | 4.77      | 4.79      | 7 / 7           |
+  | 30   | green          | green                 | 4.79      | 4.72      | 5 / 8           |
+  | 31   | green          | green                 | 4.72      | 4.75      | 7 / 5           |
+  | 32   | green          | green                 | 4.75      | 4.93      | 4 / 10          |
+  | 33   | green          | green                 | 4.93      | 5.17      | 4 / 6           |
+  | 34   | **red** (:747) | green                 | 5.17      | 5.24      | 1 / 4           |
+  | 35   | green          | green                 | 5.24      | 5.22      | 1 / 4           |
+  | 36   | green          | green                 | 5.22      | 4.88      | 0 / 0           |
+  | 37   | green          | green                 | 4.88      | 4.88      | 3 / 3           |
+  | 38   | green          | green                 | 4.65      | 4.65      | 4 / 4           |
+  | 39   | green          | green                 | 4.44      | 4.44      | 4 / 4           |
+  | 40   | green          | green                 | 4.40      | 4.40      | 4 / 4           |
+  | 41   | green          | green                 | 4.29      | 4.29      | 0 / 4           |
+  | 42   | green          | green                 | 4.29      | 4.03      | 4 / 4           |
+  | 43   | **red** (:747) | green                 | 4.03      | 3.94      | 0 / 0           |
+  | 44   | green          | green                 | 3.94      | 3.87      | 0 / 3           |
+  | 45   | **red** (:747) | green                 | 3.87      | 3.80      | 4 / 3           |
+  | 46   | green          | green                 | 3.80      | 3.73      | 4 / 3           |
+  | 47   | green          | green                 | 3.73      | 4.48      | 4 / 0           |
+  | 48   | green          | green                 | 4.48      | 4.48      | 0 / 0           |
+  | 49   | green          | green                 | 4.20      | 4.20      | 0 / 0           |
+  | 50   | green          | green                 | 3.94      | 3.94      | 0 / 0           |
+  | 51   | green          | green                 | 3.94      | 3.71      | 0 / 0           |
+  | 52   | green          | green                 | 3.71      | 3.57      | 0 / 0           |
+  | 53   | green          | green                 | 3.57      | 4.72      | 14 / 7          |
+  | 54   | green          | green                 | 4.72      | 4.83      | 4 / 4           |
+  | 55   | green          | green                 | 4.83      | 5.00      | 4 / 8           |
+  | 56   | green          | green                 | 5.00      | 5.00      | 5 / 4           |
+  | 57   | green          | green                 | 4.92      | 4.92      | 4 / 4           |
+  | 58   | green          | green                 | 4.85      | 4.85      | 4 / 3           |
+  | 59   | green          | green                 | 4.78      | 4.78      | 4 / 0           |
+  | 60   | green          | green                 | 4.56      | 4.56      | 0 / 0           |
