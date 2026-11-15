@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A frame in an open shadow root that covers the box's centre</title>
+  </head>
+  <body style="margin: 0">
+    <!-- dl-142 gate 1: `document.elementFromPoint` returns the shadow host, not the
+         frame in its shadow root, so a check that reads only the topmost element
+         never meets the frame. The frame records any click on its document.
+         Default: the host is itself the player-classed box. `?wrapper`: the box is
+         a `.player-wrap` div and the host inside it is unclassed. -->
+    <div id="mount"></div>
+    <script>
+      var host = document.createElement("div");
+      host.style.cssText = "display: block; width: 640px; height: 360px";
+      var wrapper = location.search === "?wrapper";
+      if (wrapper) {
+        var box = document.createElement("div");
+        box.className = "player-wrap";
+        box.style.cssText = "width: 640px; height: 360px";
+        box.appendChild(host);
+        document.getElementById("mount").appendChild(box);
+        box.addEventListener("click", function () {
+          fetch("/beacon/wrapper-clicked").catch(function () {});
+        });
+      } else {
+        host.className = "player-host";
+        document.getElementById("mount").appendChild(host);
+      }
+      host.attachShadow({ mode: "open" }).innerHTML =
+        '<iframe src="/player-box-frame-inner.html" width="640" height="360" style="border: 0; display: block"></iframe>';
+    </script>
+  </body>
+</html>
