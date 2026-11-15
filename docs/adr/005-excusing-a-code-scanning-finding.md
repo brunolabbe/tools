@@ -86,17 +86,19 @@ Four rules, each carrying its own weight:
    The command lists the excluded types rather than the included ones. The token
    appears in prose that quotes it, and `.md` and `.yml` files are where that
    prose lives (this record, the tickets, `security.yml`); leaving them out
-   keeps the list to comments that excuse something. A file type CodeQL scans
+   keeps the list to code comments, one of which (`stats.ts`) quotes the token
+   rather than excusing anything. A file type CodeQL scans
    needs no edit here: a new excuse in a `.tsx`, `.mjs` or `.html` file is
    listed the day it is written, where a list of included types would miss it
    until someone remembered to extend it. `git grep` reads tracked files only,
    so it does not read other agents' worktrees or `node_modules` the way
    `grep -rn .` does from a shared checkout. The first excuse outside a
    `.ts` file is the one dl-139 (PR #802) adds, in the inline script of an
-   `.html` test fixture page. What is not established is that CodeQL extracts that script and honours the excuse in it.
-   The AlertSuppression query's source reads a `//` comment through its
-   `JS::Comment` branch, which would cover it if the extractor reads the script;
-   that waits for dl-139 to merge.
+   `.html` test fixture page. CodeQL extracts that script: PR #802's check
+   raised its alert there, at the `frame.src` line under the excuse. Whether
+   CodeQL honours the excuse waits for dl-139 to merge. The AlertSuppression
+   query's source reads a `//` comment through its `JS::Comment` branch, which
+   would cover it.
 
 Rule 4 is [003](./003-the-status-page-is-generated.md)'s reasoning applied to a
 second projection. A hand-maintained register of excused findings needs a writer,
