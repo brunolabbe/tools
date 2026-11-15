@@ -3,7 +3,7 @@ id: dl-137
 tool: downloader
 title: An unbroken page title or error message widens the page past the screen
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: [dl-133]
 difficulty: standard
@@ -328,6 +328,28 @@ this ticket `dropped` with the reason. If C, `depends_on` stays empty.
    it: `E2E_PORT=<free port> npm run e2e:downloader -- tools/downloader/e2e/layout.spec.ts`,
    the failing and passing output in the Log.
 6. `npm run check` and `npm test -- --project downloader` pass.
+
+## Review
+
+**Gate: PASS** — 2026-11-15 · `4e040577..8f64987c` · Opus 5.5, depth full
+
+| Done when                                                                                                              | Proof                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1. `overflow-wrap: anywhere` on `.card__title` and `.notice__message`, on no wrapper                                   | **verified** — the diff of `web/src/styles.css` adds exactly those two declarations and nothing else; the built CSS counts 6 `overflow-wrap:anywhere` on the head, 4 on the base stylesheet                                                                                                                                                                                                                  |
+| 2. Four elements fit at 360 and 1280 with a 200-character unbroken string, each its own case                           | `e2e/layout.spec.ts` › "an unbroken page title in the analysis box's heading wraps (dl-137)", "an unbroken page title in a running job's heading wraps (dl-137)", "a restored job's address as its heading wraps (dl-137)", "a restored job's unbroken error message wraps (dl-137)": `fitsBothWidths`' `scrollWidth <= innerWidth` ✓ — CI `e2e (direct)` (downloader) success at `8f64987c`; local 14 of 14 |
+| 3. Text equals the string, taller than one line, right edge inside `innerWidth`; Log describes four opened screenshots | the same four cases, `wrapsWhole`: `toHaveText`, height > 1.5 × computed `line-height` (26.04 px), `right <= innerWidth`, `scrollWidth - clientWidth <= 0` ✓ (CI as above). Screenshot clause **verified** by reading the Log, with two descriptions wrong (low below)                                                                                                                                       |
+| 4. Spaced-title case green before and after; the file's other cases green                                              | **verified** — "a title with spaces still wraps at them (dl-137)" and the nine older cases pass on the base stylesheet and on the head (10 of 14 and 14 of 14)                                                                                                                                                                                                                                               |
+| 5. The four unbroken cases fail on the base at both widths, pass after                                                 | **verified** — base stylesheet in the head tree: `4 failed, 10 passed`, each at both widths, readings 1846/1998, 1846/1998, 2091/2243, 2505/2658 px, equal to the Log's; head `14 passed`                                                                                                                                                                                                                    |
+| 6. `npm run check` and `npm test -- --project downloader` pass                                                         | **verified** — check exit 0; 2622 passed, 2 skipped of 2624 (127 of 128 files, 1 skipped)                                                                                                                                                                                                                                                                                                                    |
+
+- **Positive controls:** `overflow-wrap` removed from `.notice__message` alone turns only the error-message case red, at both widths, on the width, height and overflow assertions, and the three title cases stay green. Removed from `.card__title` alone, it turns the three title cases red the same way and leaves the message case green. `right edge inside the window` failed in neither control: the overflow assertion carries that part of the clause.
+- **low** · F1 · no `Done when` line depends on it · on `main` already, not caused by this branch: a subtitle track's language widens the page. A 200-character unbroken `language` in `probe.subtitles` reaches the "Embed subtitles (…)" label in `ProbePanel.tsx` (`.options__row label`, `display: inline-flex`, no `overflow-wrap`). It reads `scrollWidth` 1875 at 360 px and 2028 at 1280 px, the same on the base and on the head. A remote manifest controls the value: `resolvers/src/manifest/hls.ts` copies the subtitle rendition's `LANGUAGE` attribute as it is. It is outside the four elements the owner chose (open decision in the report).
+- **low** · F2 · `nfr:maintainability` · the running-job case's comment says the job is "still downloading while it is measured". The head's screenshot `Unbroken title, running job-1280.png` shows `Re-analysing` (`probing`), 0 B. That is false in the safe direction, because every active status draws the same `BoxHead` heading.
+- **low** · F3 · the Log's screenshot descriptions are partly wrong: the running job's title sits **above** the `Re-analysing` pill, not under it. The restored job's address takes seven lines at 360 px, not six. Both are false in the safe direction, because the assertions do not rest on them.
+- **dropped** · rendition label, video codec, audio codec and language cells at 200 characters: the page stays at 360 and 1280 px. `.tablewrap`'s `overflow-x: auto` holds the table, at a `scrollWidth` of up to 2271 px, inside its own scroller. That is the table's design, not a page scroll.
+- **dropped** · `wrapsWhole`'s right-edge assertion never goes red, even on the base. Not a defect: the Log says so itself, and the overflow assertion catches a cut string.
+- **findings** · the hunt returned 5; 3 carried, 2 dropped.
+- NFR: security n/a (CSS and a test) · performance n/a · reliability ✓ (no base/head change in 242 element boxes over 16 state-widths of ordinary text) · maintainability — F2.
 
 ## Log
 
