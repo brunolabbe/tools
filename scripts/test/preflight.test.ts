@@ -132,6 +132,17 @@ function repoTemplateDir(): string {
   return repoTemplate;
 }
 
+// An `afterAll`, not a last test: under `--sequence.shuffle` a test body that
+// reads the list sees only the shim directories made before it ran, so it
+// cannot be placed "last" (repo-144). A hook runs after every test in the file
+// in either order. It has no floor on `shimDirsMade.length`: a filtered run
+// that makes none must pass, and `makeShimDir records each directory` below
+// proves the recording.
+afterAll(() => {
+  const leftovers = shimDirsMade.filter((dir) => fs.existsSync(dir));
+  expect(leftovers, `leaked: ${leftovers.join(", ")}`).toEqual([]);
+});
+
 afterAll(() => {
   if (repoTemplate !== undefined) fs.rmSync(repoTemplate, { recursive: true, force: true });
 });
@@ -2434,17 +2445,6 @@ function makeShimDir(): string {
   shimDirsMade.push(dir);
   return dir;
 }
-
-// An `afterAll`, not a last test: under `--sequence.shuffle` a test body that
-// reads the list sees only the shim directories made before it ran, so it
-// cannot be placed "last" (repo-144). A hook runs after every test in the file
-// in either order. It has no floor on `shimDirsMade.length`: a filtered run
-// that makes none must pass, and `makeShimDir records each directory` below
-// proves the recording.
-afterAll(() => {
-  const leftovers = shimDirsMade.filter((dir) => fs.existsSync(dir));
-  expect(leftovers, `leaked: ${leftovers.join(", ")}`).toEqual([]);
-});
 
 test("makeShimDir records each directory (repo-144)", () => {
   const dir = makeShimDir();
