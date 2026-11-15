@@ -35,6 +35,20 @@
         var frame = document.getElementById("player-0");
         var embed = "{{SECONDARY}}/player-delayed-embed-hop.html";
         if (frame) frame.setAttribute("data-enc", btoa(embed + "?player=0"));
+        // With `?slow` the page holds its `load` event for 3 s on a script that
+        // answers late, and puts its player iframe in only once `load` has fired:
+        // a probe that looks while the document is still loading finds no iframe,
+        // which is a page that is not ready, not a page without one.
+        if (frame && query.indexOf("slow") !== -1) {
+          var slowHolder = frame.parentNode;
+          slowHolder.removeChild(frame);
+          var late = document.createElement("script");
+          late.src = "/slow-asset.js";
+          document.head.appendChild(late);
+          window.addEventListener("load", function () {
+            slowHolder.appendChild(frame);
+          });
+        }
         // The reloaded document (`?reload`, second visit) puts its player iframe in
         // only 600 ms later, as a page that builds its player in script does, so a
         // probe that looks for it straight after the reload finds none yet.
@@ -63,7 +77,10 @@
         // With `?hover` only a pointer hearing the window releases it: no wheel,
         // click, key or touch, and the page is too short to scroll, so the
         // probe's scroll moves nothing and sends nothing the page listens to.
-        var hoverOnly = query.indexOf("hover") !== -1 || query.indexOf("reload") !== -1;
+        var hoverOnly =
+          query.indexOf("hover") !== -1 ||
+          query.indexOf("reload") !== -1 ||
+          query.indexOf("slow") !== -1;
         if (hoverOnly) EVENTS = ["mouseover", "pointerup", "pointerdown"];
         // With `?reload` the first visit is a cache plugin's first-visit page: its
         // first interaction sets a cookie and reloads the document, which is how a
@@ -73,6 +90,19 @@
         // every run.
         var firstVisit =
           query.indexOf("reload") !== -1 && document.cookie.indexOf("dl143reload=1") === -1;
+        // With `?reload=early` the first visit has a dialog over the page whose
+        // Close button the probe's first step presses; that press is the first
+        // interaction, so the page reloads (above) before the wait for the iframe has
+        // begun, and the new document has not parsed its iframe yet.
+        if (firstVisit && query.indexOf("reload=early") !== -1) {
+          var dialog = document.createElement("div");
+          dialog.setAttribute("role", "dialog");
+          dialog.setAttribute("aria-modal", "true");
+          dialog.style.cssText =
+            "position: fixed; top: 20px; left: 300px; width: 900px; height: 600px; background: #fff";
+          dialog.innerHTML = '<button aria-label="Close">x</button>';
+          document.body.appendChild(dialog);
+        }
         var released = false;
         function release() {
           if (released) return;

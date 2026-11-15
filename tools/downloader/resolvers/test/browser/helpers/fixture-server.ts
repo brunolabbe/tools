@@ -168,6 +168,19 @@ function makeHandler(
         return;
       }
 
+      // dl-143: a script that answers after 3 s, so a page that adds it holds its
+      // `load` event, and `readyState` at `loading`, that long.
+      if (pathname === "/slow-asset.js") {
+        setTimeout(() => {
+          response.writeHead(200, {
+            "content-type": "text/javascript",
+            "cache-control": "no-store",
+          });
+          response.end("");
+        }, 3000);
+        return;
+      }
+
       // A login wall reached by redirect, which is the shape real sites use.
       if (pathname === "/gated") {
         response.writeHead(302, { location: "/login.html" });

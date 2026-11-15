@@ -1922,6 +1922,8 @@ interface BlankPlayerWait {
   /** The hovers made so far, over both calls (dl-143). */
   hovers: number;
   spentMs: number;
+  /** Main-frame navigations since provocation began (dl-143): a document replaced before the wait started counts. */
+  navigations: () => number;
 }
 
 /** How often the pointer moves over a blank player iframe while it is waited for (dl-143). */
@@ -1986,7 +1988,10 @@ async function waitForBlankPlayerFill(
   let seen = "";
   let stableSince = 0;
   let hoveredAt = 0;
-  let replaced = false;
+  // A document replaced since provocation began, not since the wait began: a
+  // reload can land in the modal or consent step, and the new document has not
+  // parsed its iframe by the time the wait looks.
+  let replaced = state.navigations() > 0;
   try {
     // One round per document: a page that reloads itself (a cache plugin's
     // first-visit reload) detaches the marked iframe under the poll, and the round
@@ -1999,8 +2004,11 @@ async function waitForBlankPlayerFill(
         if (!state.marked) {
           if (!(await frame.evaluate<boolean>(MARK_BLANK_PLAYER_SCRIPT))) {
             // No blank player iframe at all, which ends it; but in a document
-            // that replaced one it may only not have parsed it yet.
-            if (!replaced) {
+            // that replaced one, or one still loading (a reload that landed before
+            // provocation began, on a slow connection), it may only not have
+            // parsed or laid it out yet.
+            const loading = (await frame.evaluate<string>("document.readyState")) !== "complete";
+            if (!replaced && !loading) {
               state.done = true;
               break;
             }
@@ -2285,48 +2293,63 @@ export async function provokePlayback(
   const pageOrigin = originOf(page.url());
   const hasPlayable = options.hasPlayable ?? (() => false);
   const serverTab = { attempted: false };
-  const blankPlayer: BlankPlayerWait = { done: false, marked: false, hovers: 0, spentMs: 0 };
-  for (let pass = 0; pass < 2; pass++) {
-    throwIfAborted(options.signal);
-    if (remaining(options.deadline) < 2000) return;
+  let navigations = 0;
+  const onNavigated = (frame: Frame): void => {
+    if (frame === page.mainFrame()) navigations++;
+  };
+  page.on("framenavigated", onNavigated);
+  const blankPlayer: BlankPlayerWait = {
+    done: false,
+    marked: false,
+    hovers: 0,
+    spentMs: 0,
+    navigations: () => navigations,
+  };
+  try {
+    for (let pass = 0; pass < 2; pass++) {
+      throwIfAborted(options.signal);
+      if (remaining(options.deadline) < 2000) return;
 
-    let pressed = false;
-    // The frame list is read again before each visit, not once per pass (dl-143):
-    // the top frame's wait can end with a player iframe that was not in the list
-    // when the pass began, or one that was mid-navigation in it.
-    const visited = new Set<Frame>();
-    for (;;) {
-      const frame = page.frames().find((candidate) => !visited.has(candidate));
-      if (frame === undefined) break;
-      visited.add(frame);
-      if (remaining(options.deadline) < 1500) return;
-      try {
-        if (
-          await provokeFrame(frame, pageOrigin, {
-            confirmAge: options.confirmAge,
-            hasPlayable,
-            clickTimeoutMs: options.clickTimeoutMs,
-            serverTab,
-            blankPlayer,
-            deadline: options.deadline,
-            signal: options.signal,
-          })
-        ) {
-          pressed = true;
+      let pressed = false;
+      // The frame list is read again before each visit, not once per pass (dl-143):
+      // the top frame's wait can end with a player iframe that was not in the list
+      // when the pass began, or one that was mid-navigation in it.
+      const visited = new Set<Frame>();
+      for (;;) {
+        const frame = page.frames().find((candidate) => !visited.has(candidate));
+        if (frame === undefined) break;
+        visited.add(frame);
+        if (remaining(options.deadline) < 1500) return;
+        try {
+          if (
+            await provokeFrame(frame, pageOrigin, {
+              confirmAge: options.confirmAge,
+              hasPlayable,
+              clickTimeoutMs: options.clickTimeoutMs,
+              serverTab,
+              blankPlayer,
+              deadline: options.deadline,
+              signal: options.signal,
+            })
+          ) {
+            pressed = true;
+          }
+        } catch {
+          // A frame can detach at any moment; the others still deserve a try.
         }
-      } catch {
-        // A frame can detach at any moment; the others still deserve a try.
+      }
+      if (pass === 0) {
+        if (remaining(options.deadline) >= 1500) {
+          await provokeInput(page, { pressed, hasPlayable });
+        }
+        await sleep(
+          budget(options.deadline, options.passPauseMs ?? PROVOKE_PASS_PAUSE_MS),
+          options.signal,
+        );
       }
     }
-    if (pass === 0) {
-      if (remaining(options.deadline) >= 1500) {
-        await provokeInput(page, { pressed, hasPlayable });
-      }
-      await sleep(
-        budget(options.deadline, options.passPauseMs ?? PROVOKE_PASS_PAUSE_MS),
-        options.signal,
-      );
-    }
+  } finally {
+    page.off("framenavigated", onNavigated);
   }
 }
 

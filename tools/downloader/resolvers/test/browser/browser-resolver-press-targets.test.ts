@@ -530,3 +530,50 @@ describe("a delay-JS page that reloads itself while the probe waits on its playe
     },
   );
 });
+
+describe("a reload that lands before the wait for the player iframe has begun (dl-143 round 4)", () => {
+  test(
+    "a reload from the dialog's Close button, before the wait starts, does not end the wait on a document that has not parsed its iframe",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      server.requests.length = 0;
+      const result = await probe(
+        "/player-delayed-single.html?reload=early",
+        new BrowserResolver({
+          pool,
+          hlsParser: recordingHlsParser().parser,
+          ...STREAM_WAITS,
+          emptyMinWaitMs: NO_EMPTY_FLOOR_MS,
+        }),
+      );
+
+      expect(result.variants[0]?.url).toBe(server.secondaryUrl("/media/related/master.m3u8"));
+      expect(
+        server.requests.filter((pathname) => pathname === "/player-delayed-single.html"),
+      ).toHaveLength(2);
+    },
+  );
+});
+
+describe("a document still loading when the wait for the player iframe begins (dl-143 round 4)", () => {
+  test(
+    "a page that is still loading, with no iframe in it yet, is not a page without a blank player iframe",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      server.requests.length = 0;
+      // The iframe is added only once `load` fires, 3 s in, and the tier stops
+      // waiting for `load` after 1.5 s.
+      const result = await probe(
+        "/player-delayed-single.html?slow",
+        new BrowserResolver({
+          pool,
+          hlsParser: recordingHlsParser().parser,
+          ...STREAM_WAITS,
+          emptyMinWaitMs: NO_EMPTY_FLOOR_MS,
+        }),
+      );
+
+      expect(result.variants[0]?.url).toBe(server.secondaryUrl("/media/related/master.m3u8"));
+    },
+  );
+});

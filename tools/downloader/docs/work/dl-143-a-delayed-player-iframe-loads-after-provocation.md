@@ -301,3 +301,42 @@ resolved in about 5 s, which is what isolates the delay as the cause.
     provocation over at 6.4 s: the retry case above).
   - `npm run check` exit 0; `npm test -- --project downloader` 2670 passed, 2
     skipped. e2e and container gates not run.
+- 2026-11-15 — Round 4 (the "not covered" case happens live). The coordinator's
+  6 runs of b1705c67 came to 5 of 6; the miss had its second load 0.8 s into
+  provocation. My own 6 runs of the same code, then 6 of a first round-4 build,
+  each had one miss of the same family, which shows the two ways the wait could
+  still end on "no blank iframe" in a document that was not ready.
+  - **Replacement is counted from the start of `provokePlayback`, not of the
+    wait.** `provokePlayback` listens for main-frame `framenavigated` for the
+    whole call (removed in a `finally`) and hands the count to the wait
+    (`BlankPlayerWait.navigations`); a wait that begins after a reload began
+    already counts as replaced, so "no blank iframe" in the new document is
+    retried instead of ending it. Fixture `player-delayed-single.html?reload=early`
+    adds a dialog over the page whose Close button the tier's first step presses;
+    that press is the first interaction, so the page reloads before the wait has
+    begun. **Red on b1705c67's `provoke.ts`** 3 of 3 (`AppError: No downloadable
+    video stream was found on that page.`, 3.1-5.5 s); mutation `let replaced =
+    false` (wait-relative tracking) red 2 of 2 on the final fixture. The first
+    version of the fixture also reloaded from the Close handler and the page was
+    requested three times; the handler no longer reloads, the count asserted is 2.
+  - **A document still loading is not a page without the iframe.** The last
+    live miss (second load at 5.5 s, provoke-playback at 6.0 s, provocation over
+    at 7.4 s) had the reload land before provocation began, so the counter above
+    did not see it, and the document was still loading when the wait looked.
+    The mark script found no visible blank iframe and the wait ended. A no-match
+    in a document whose `readyState` is not `complete` is now retried, bounded
+    like the rest; a complete document with none still ends it at once, so a page
+    with no blank iframe pays nothing. I did not observe this directly (no
+    instrumentation in the run); it is the reading that fits the log and the
+    fixture reproduces the shape. Fixture `?slow`: the page holds its `load`
+    event 3 s on a script from a new fixture-server route `/slow-asset.js`, and
+    puts the iframe in only at `load`. **Red** before the change (2 of 2, same
+    error, 4.5 s).
+  - Live, the final build, `resolve-ls.mjs`, 6 of 6 (OK 20.4, 23.6, 19.1, 16.6,
+    21.4, 20.1 s). Second main load / provoke-playback start: 3.6/4.1, 5.0/5.2,
+    3.8/4.1, 3.8/4.0, 3.5/4.3, 3.7/4.3. In the 12 runs before it the shape that
+    failed was a second load at or after provoke start (runs resolved when it
+    landed 0.5 s after: 1.9/4.4 with the load at 4.9). The earlier round-4 build
+    (counter only): 5 of 6, its miss the slow-document one above.
+  - `npm run check` exit 0; `npm test -- --project downloader` 2672 passed, 2
+    skipped. e2e and container gates not run.
