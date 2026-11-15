@@ -105,6 +105,27 @@ is pressed?
 Recommended: **A**. It covers this page and the XHR variant that B misses, and
 it adds no new kind of action, only a new label to an existing kind.
 
+### Gate round 1 — answered 2026-11-15 by the owner
+
+Three questions, put at the orchestrator's checkpoint 3 after gate 1 graded
+`f4483f8e` CONCERNS. No recommendation was overridden.
+
+1. **Which findings to fix in this round.** Options: (a) the untested
+   once-per-probe flag, the wrapped-link bypass, and the three lows (a button
+   owned by a form, a press that opens a second page, numeric ordinals);
+   (b) the first two only; (c) no round. **Answer: (a)**, the orchestrator's
+   recommendation.
+2. **The `CodeQL` alert** on the fixture's `frame.src = atob(...)`
+   (`js/xss-through-dom`, High). Options: (A) excuse it under adr/005, with the
+   gate's recommendation; (B) rewrite the fixture so it does not copy a DOM
+   attribute into `src`; (C) leave the check red and dismiss the alert by hand.
+   **Answer: (A).**
+3. **The pre-existing `MARK_PLAYER_BOX_SCRIPT` iframe click** (gate attack 4),
+   which the Trap and the script's doc comment both say cannot happen. Options:
+   file a ticket (the gate's recommendation); fold the fix into dl-139; correct
+   the comment only. **Answer: file a ticket.** The orchestrator files it; this
+   branch does not touch that script or the Trap.
+
 ## Build
 
 Written for option A, which the owner chose.
