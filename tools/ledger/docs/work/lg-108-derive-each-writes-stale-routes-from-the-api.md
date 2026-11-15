@@ -3,7 +3,7 @@ id: lg-108
 tool: ledger
 title: Derive each write's stale routes from the API, not from a hand-typed table
 kind: work-package
-status: ready
+status: done
 milestone: null
 depends_on: [lg-98]
 difficulty: hard
@@ -308,6 +308,65 @@ screen case still proves were open here until the owner answered them on
 - `npm run check` passes, and so does the ledger suite (`npm test -- --project
   ledger`), which contains the harness.
 
+## Review
+
+**Gate: CONCERNS** — 2026-11-15 · `4e040577..79f1fdbd` (the branch has not merged `origin/main` at `e7d791d6`, three downloader `.md` files, so the merge base is the base sha) · Sonnet 5.5, depth full
+
+| Done when                                                           | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. 34 cases, one per key of `WRITES`                                | `api/test/writes-derived.test.ts` › "`<write>` marks every route its write changes (lg-108)" ×34, a `test.each` over `Object.keys(WRITES)`. The verbose run lists 34, each under `ledger (isolated)`; CI's ubuntu leg runs 34 tests in the file ✓                                                                                                                                                                                                                                                                                                                          |
+| 2. the harness names no write request; `WRITES` is used             | **verified** — ran the greps: harness `grep -nE '"(POST\|PUT\|PATCH\|DELETE)"\|method:\|"/api/'` → 0 lines, `grep -c WRITES` → 8, helper `grep -nE '"(POST\|PUT\|PATCH\|DELETE)"\|"/api/'` → 0. Every write and seed goes through `writeOf(name)`, which is `WRITES[name].write()`. No test asserts the grep                                                                                                                                                                                                                                                               |
+| 3. `EXPECTED` gone; 34 of 34 derived                                | `grep -c EXPECTED tools/ledger/web/test/writes.test.tsx` → 0. The comparison is the same `test.each` over every key, and the run prints `lg-108: 34 of 34 writes compared; 0 changed routes not marked.` `INPUTS` in the screen file holds only `args` and `answer` (verified by reading) ✓                                                                                                                                                                                                                                                                                |
+| 4. every request asserted 2xx, by a mutation                        | `helpers/inject-fetch.ts` › `answered` and `readJson`. Re-ran three mutations: `receiptMatches` left as `:id` → `GET /api/receipts/:id/matches (...) answered 400` on each case I read (`addHouseholdMember`, `renameHousehold`, `adminRenameHousehold`; the Log counts 33 of 34, which I did not count); `household` left as `:id` → `answered 403`; `renameHousehold` sent an empty name → `renameHousehold: POST /api/households/home/rename answered 400`, `1 failed \| 33 passed`. Each names the route and the status ✓                                              |
+| 5. a changed, unmarked route fails, naming write and route; count 0 | `writes-derived.test.ts`, the `unmarked` assertion. Plants: `editRule` and `createRule` minus `rows`, `addRecurring` minus `recurring`, `confirmRatio` minus `ratios`, `adminRenamePerson` minus `people`, `fileMortgageSplit` minus `mortgageSplits` each → `1 failed \| 33 passed`, `"<write> changed <route>, which WRITES does not mark"`. At head: 0 ✓ (bounded by each seed: F1)                                                                                                                                                                                     |
+| 6. marked and unchanged are printed, none fails                     | `renameHousehold` plus `ROUTES.statsSpending` → 34 passed, exit 0, and the run prints `renameHousehold: changed 2 [...]; marked and unchanged 3 [/api/me /api/people /api/stats/spending]`. The Log's table matches the run on every row I compared. The lines appear under `--reporter=verbose` and in CI's log; the default agent reporter hides them ✓                                                                                                                                                                                                                  |
+| 7. 31 change an answer, 3 derive empty                              | the case's `if (marked.size === 0) expect(derived).toEqual([]) else expect(derived.length).toBeGreaterThan(0)`. Run: 0 changed for `uploadReceipt`, `readReceipt`, `describeWorkbook`, 1 to 16 for the other 31. A mark added to `uploadReceipt` fails with "seed changes nothing it reads". Not planted: an empty-list write whose seed changes something ✓                                                                                                                                                                                                               |
+| 8. planted `closePeriod` omission                                   | re-ran: `Tests 1 failed \| 33 passed (34)`, `+ "closePeriod changed /api/people, which WRITES does not mark"`, summary `1 changed routes not marked`. Tree restored, clean ✓                                                                                                                                                                                                                                                                                                                                                                                               |
+| 9. every `ROUTES` entry read 2xx or named                           | 29 reads, each asserted 2xx by `readJson`. Cross-checked with Fastify's `printRoutes`: 29 GET routes registered, 29 read, 0 registered and not read. The other 24 have only `POST`; a `GET` to each answers 404. `household` is read with the id from `/api/me`, `receiptMatches` with the uploaded receipt's id, amount and date. The Log names the 24 and the one case that does not read `receiptMatches` ✓                                                                                                                                                             |
+| 10. screen case runs all 34                                         | `web/test/writes.test.tsx` › "after each write, what it changes is read again and shown, and nothing else is (lg-98)" ×34: `Tests 36 passed (36)` locally and in CI. Base and head bodies compared: the three assertions are unchanged; only the source of `changed` and `patched` moved from the table to `WRITES` ✓                                                                                                                                                                                                                                                      |
+| 11. harness in `api/test`; only two changes outside                 | **verified** — the diff touches `api/test/writes-derived.test.ts`, `api/test/helpers/inject-fetch.ts`, `web/test/writes.test.tsx`, `tsconfig.tests.json` (the one reference) and the ticket                                                                                                                                                                                                                                                                                                                                                                                |
+| 12. `npm run check` and the ledger suite                            | `check` and `test (ubuntu-latest)` read SUCCESS on `79f1fdbd` in `gh pr checks 806`: 350 files passed, 1 skipped; 7,718 tests passed, 2 skipped, the harness and the screen file among them. I ran neither locally, as dispatched. Windows (informational) is red on `household-command.test.ts` › "remove prints the address it removed with each character of the 69 escaped" (20 s timeout), which the diff does not reach; no completed reading of that leg on `main` in the fourteen newest push runs (five succeeded with the matrix skipped, nine were cancelled) ✓ |
+
+- **med** · no `Done when` line depends on it · `nfr:maintainability` · **F1, open decision** — `retireRule`'s seed cannot reach `/api/rows`, so the omission lg-98's F2 named for the third rule write passes the harness. Plant `retireRule: entry(() => retireRule, [ROUTES.rules, ROUTES.inbox])` in `web/src/writes.ts` → `Tests 34 passed (34)`, exit 0; the head's screen case also passes (36 of 36); the base's `EXPECTED` screen case fails on the same plant (`retireRule`, `1 failed | 36 passed (37)`). So the branch drops a guard the base had on the defect the ticket's Why cites. A second method shows `rows` does change: with a seed whose retired rule is the `MORTGAGE_RULE` that `createRule`'s seed uses, `retireRule` derives `[/api/rules /api/inbox /api/rows]`, and the same plant then fails naming `retireRule changed /api/rows, which WRITES does not mark`. `createRule` and `editRule` were widened for F2; `retireRule` was not, and the Log's table lists `rows` as its marked-and-unchanged route. Options: (1) widen `retireRule`'s seed, a few lines in the case, run on the plant and on the head as above; (2) record it with the accepted bound. Recommendation: (1). Population: of 375 marks across the 33 writes other than `confirmWorkbook`, 90 are routes the seeds change, so removing one fails a case; 285 are marked and unchanged, where the harness cannot tell over-invalidation from a hole. I examined `retireRule` only; whether another of the 285 is reachable is unmeasured. The bound is the owner's (Question 5), so only this write is the finding.
+- **low** · **F2** · `web/src/writes.ts`'s header says the lg-98 Log "lists these 34 with the test that proves each one"; that table is gone, and the proof is this harness. Disclosed in the Log as out of scope (Done when 11); false in the safe direction, no live call site.
+- **dropped** · a mark added to an empty-list write (`uploadReceipt` plus `ROUTES.receipts`) fails, which reads against Done when 6. It is Done when 7's other half: the write then has a non-empty list and must change an answer. Not a defect.
+- **dropped** · the summary is not printed by `npx vitest run` under the default agent reporter, so "printed in the run" looked unmet. It prints under `--reporter=verbose` and is in CI's ubuntu log (`stdout | tools/ledger/api/test/writes-derived.test.ts`). Not a defect.
+- **findings** · the hunt returned 4; 2 carried, 2 dropped.
+- Positive controls: the `closePeriod` plant and the six plants of row 5 each went red naming the route, so the harness can produce the failure; F1 is believed only because the richer-seed probe made `rows` change and the plant then failed.
+- Isolation: the file runs under `ledger (isolated)` and under no `ledger (shared)` (`--project "ledger (shared)"` → "No test files found"). `vi.unstubAllGlobals()` is first in a module-level `afterEach`; a case planted to throw after the stub was in place was followed by a test reading `REAL_FETCH restored: true`.
+- Determinism: five plain runs and one shuffled run (`--sequence.shuffle --sequence.seed=7`) each `34 passed (34)`, 4.5 to 6.5 s; the printed summary (each of the 34 writes' changed and marked-and-unchanged sets) was identical across six verbose runs: a baseline, four repeats and one shuffled.
+- Seam: `check` is green in CI on this head, `packages/core/test/image-closure.test.ts` → 8 of 8 locally, `npm run build` exit 0; the one new `tsconfig.tests.json` reference is a project reference to a tool's own `web`, no cross-tool import.
+- NFR: security n/a (no network, no credential, fake reader and describer, no model) · performance ✓ (about 100 ms a case, rate limits off) · reliability ✓ (above) · maintainability — F1, F2.
+
+### Gate 2
+
+**Gate: PASS** — 2026-11-15 · `79f1fdbd..43cb05bf` (the three first-parent commits of the round, no merge in the range; the branch has not merged `origin/main`) · Sonnet 5.5, depth medium, scoped to the dispatch's five attacks
+
+The round touched two files: `tools/ledger/api/test/writes-derived.test.ts` (`retireRule`'s seed) and the ticket's Log. Rows the round cannot reach carry gate 1's proof, and say so.
+
+| Done when                                                           | Proof at the new head                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1. 34 cases, one per key of `WRITES`                                | `api/test/writes-derived.test.ts` › "`<write>` marks every route its write changes (lg-108)" ×34: `--reporter=verbose` → 34 case lines, `Tests 34 passed (34)` ✓                                                                                                                                                                                                                                                                                                                           |
+| 2. no write request in the harness; `WRITES` used                   | **verified** — re-ran the three commands: harness grep → 0 lines, `grep -c WRITES` → 8, helper grep → 0. The new seed goes through `seed(context, "createRule", …)`, which is `writeOf(name)`                                                                                                                                                                                                                                                                                              |
+| 3. `EXPECTED` gone; 34 of 34 derived                                | `grep -c EXPECTED` on `web/test/writes.test.tsx` → 0 (file untouched by the round); the run prints `lg-108: 34 of 34 writes compared; 0 changed routes not marked.` ✓                                                                                                                                                                                                                                                                                                                      |
+| 4. every request asserted 2xx                                       | carried from gate 1 (three mutations re-run there); the round does not touch `helpers/inject-fetch.ts`, and the new seed write is sent through `answered`, which asserts 2xx. I did not re-run the three mutations at this head                                                                                                                                                                                                                                                            |
+| 5. a changed, unmarked route fails, naming write and route; count 0 | `writes-derived.test.ts`, the `unmarked` assertion. Re-ran gate 1's plants: `closePeriod` minus `people`, `editRule` minus `rows`, `createRule` minus `rows`, `addRecurring` minus `recurring`, `confirmRatio` minus `ratios`, `adminRenamePerson` minus `people`, `fileMortgageSplit` minus `mortgageSplits`: each `1 failed \| 33 passed (34)` naming the route; **`retireRule` minus `rows` now fails too**: `"retireRule changed /api/rows, which WRITES does not mark"`. At head: 0 ✓ |
+| 6. marked and unchanged printed, none fails                         | `renameHousehold` plus `ROUTES.statsSpending` → `34 passed (34)`; 36 printed lines (header, `Not read`, 34 writes) ✓                                                                                                                                                                                                                                                                                                                                                                       |
+| 7. 31 change an answer, 3 derive empty                              | `changed 0` for exactly `uploadReceipt`, `readReceipt`, `describeWorkbook`; `changed` ≥ 1 for the other 31; `uploadReceipt` plus `ROUTES.receipts` fails with "seed changes nothing it reads" ✓                                                                                                                                                                                                                                                                                            |
+| 8. planted `closePeriod` omission                                   | the plant above (control), `1 failed \| 33 passed (34)`, `closePeriod changed /api/people`; tree restored, clean ✓                                                                                                                                                                                                                                                                                                                                                                         |
+| 9. every `ROUTES` entry read 2xx or named                           | the round does not touch the reads; the printed `Not read` line (24 names) is identical to the line at gate 1's head ✓                                                                                                                                                                                                                                                                                                                                                                     |
+| 10. screen case runs all 34                                         | the file is untouched by the round; gate 1's `screen-plant.mjs` re-run at this head ran it, with `retireRule` minus `rows` planted: `Tests 36 passed (36)`; CI's ubuntu job succeeded ✓                                                                                                                                                                                                                                                                                                    |
+| 11. harness in `api/test`; two changes outside                      | **verified** — `git diff --name-only <base> 43cb05bf`: `api/test/writes-derived.test.ts`, `api/test/helpers/inject-fetch.ts`, `web/test/writes.test.tsx`, `tsconfig.tests.json`, the ticket; the round adds nothing to that list                                                                                                                                                                                                                                                           |
+| 12. `npm run check` and the ledger suite                            | `check` (twice) and `test (ubuntu-latest)` read success on this head (run `43746896703`); `test (windows-latest, informational)` was pending when read. The ubuntu per-test log is unavailable while that run is in progress, so its counts are unread. I ran neither locally ✓                                                                                                                                                                                                            |
+
+- **F1 — fixed.** `retireRule`'s seed now creates a rule from `MORTGAGE_RULE` and retires it. With the plant `retireRule: entry(() => retireRule, [ROUTES.rules, ROUTES.inbox])` the harness gives `Tests 1 failed | 33 passed (34)` naming `retireRule changed /api/rows, which WRITES does not mark` (gate 1: `34 passed`, exit 0). Restored; `git status --short` empty. Population at the head over the 33 writes other than `confirmWorkbook`: 91 derived-and-marked (was 90), 284 marked-and-unchanged (was 285), 375 marks; `retireRule` is the one that moved.
+- **F2 — not fixed, low, on purpose.** `web/src/writes.ts`'s header still points at the lg-98 Log's table; the owner recorded it unfixed (outside Done when 11). False in the safe direction, no live call site.
+- **No new finding in the lines the round touched.** The seed change moves no other write: the 34 printed `changed`/`marked and unchanged` lines, the header and the `Not read` line, from the gate-1 head's file and the new head's file, differ in exactly one line, `retireRule`'s, `changed 2 [/api/rules /api/inbox]; marked and unchanged 1 [/api/rows]` → `changed 3 [/api/rules /api/inbox /api/rows]; marked and unchanged 0 []`. Determinism: three plain runs and one `--sequence.shuffle --sequence.seed=7` run each `34 passed (34)`; two more verbose runs (one shuffled) print the same 36 lines as the first. The Log's two owner-answer entries match the dispatch (F1 → option 1; `fileReceipt` onto a row → accepted as a known limit, recorded). The Log's table row (`createRule, editRule, retireRule | rules, inbox, rows | —`) matches the three printed lines, and its claim that the other 33 lines are identical is the diff above.
+- **dropped** · the Log's "Counts" paragraph still says "Two seeds were widened after the first run". It is the build's dated account, and the round's entry says `retireRule` is the third; nothing relies on it. Not a defect.
+- **findings** · the hunt returned 1 (the dropped one); 0 carried, 1 dropped; gate 1's two findings are verdicts above, not new findings.
+- Positive controls: nine of the ten plants went red naming the route or the seed (the tenth, `renameHousehold` plus an extra mark, passes by design), and the old file (copied from gate 1's head and run beside the new one) printed `retireRule` at `changed 2`, so the comparison could see a difference.
+- NFR: security n/a · performance ✓ (the file runs in 3.6 to 3.7 s, 34 tests) · reliability ✓ (determinism above) · maintainability ✓ (F2 only). No `high`.
+
 ## Log
 
 - 2026-11-10: filed by a maintenance dispatch, from the owner's decision of the same
@@ -403,3 +462,192 @@ screen case still proves were open here until the owner answered them on
 - 2026-11-10 — Fixed at landing by owner choice: gate 2, N4 — the probe entry's order of events is withdrawn in place above, with the corrected order and the second `react`. Proof, run after the commit: `git diff dfebaca7 HEAD -- <ticket> | grep -v 'Fixed at landing' | grep -c '^+.*exit 0 comes only after the scratch install'` → 1 (an added line, so the `grep -v` keeps this entry's own quotation out).
 - 2026-11-10 — Gate 1's and gate 2's full reports are on the pull request thread,
   #793; status unchanged.
+- 2026-11-15 — **Built** (builder, Opus 5.5), on `lg-108-stale-routes-from-api` from
+  `4e040577`. Harness `api/test/writes-derived.test.ts` and helper
+  `api/test/helpers/inject-fetch.ts` at `7428f090`; `EXPECTED` retired at `f27b7b37`.
+  Commands are run from the worktree root.
+
+  **The run.** `npx vitest run tools/ledger/api/test/writes-derived.test.ts
+  --reporter=verbose` → `Tests 34 passed (34)`, one case per key of `WRITES`, each
+  named `<write> marks every route its write changes (lg-108)`, and the summary it
+  prints: `lg-108: 34 of 34 writes compared; 0 changed routes not marked.` Every
+  write, the seeds' included, is sent through `WRITES[name].write()`, the web's own
+  function; the file writes no request. Done when 2's greps:
+  `grep -nE '"(POST|PUT|PATCH|DELETE)"|method:|"/api/' <harness> | wc -l` → 0,
+  `grep -c 'WRITES' <harness>` → 8, and on `helpers/inject-fetch.ts`
+  `grep -nE '"(POST|PUT|PATCH|DELETE)"|"/api/' | wc -l` → 0.
+
+  **Which half it lands in.** The isolated one. The harness puts its `fetch` in place
+  with `vi.stubGlobal` and takes it away with `vi.unstubAllGlobals` in `afterEach`,
+  so `NEEDS_ISOLATION` reads it into `ledger (isolated)`; the verbose run prints
+  `|ledger (isolated)|` on 34 lines and `|ledger (shared)|` on 0. (Correction to
+  the Build's placement paragraph: there is no longer one ledger project with
+  `environment: "node"`; `tools/ledger/vitest.config.ts` is a `splitProject`
+  since repo-129, both halves node.)
+
+  **The reads.** Asked of Fastify, not listed: `getRoutes` keeps each `ROUTES` key
+  for which `app.server.hasRoute({ method: "GET", url })` holds, 29 routes (the 21
+  non-stats `app.get(` sites and the 8 stats routes). `household` takes the
+  caller's household from `GET /api/me`; `receiptMatches` takes the receipt the
+  seed uploaded, with the amount and date the fake reader states for it
+  (`amountCents=12345&date=2026-09-20`); each stats route is read with no range;
+  `rows` is read unfiltered and with `spendingCategory=none`; `periodLines` is read
+  from the open period's start, which is `null` (from the beginning) in every seed,
+  so it is read whole. No variant beyond these. The one case that does not read
+  `receiptMatches` is `confirmWorkbook`, whose seed uploads nothing (an import goes
+  into books that hold nothing). The 24 keys not read have no `GET` and are only
+  written to: `householdMembers`, `householdRename`, `adminMembers`,
+  `adminMemberRemove`, `adminHouseholdRename`, `adminMemberAddress`,
+  `adminPersonRename`, `adminPersonRetire`, `statements`, `rule`, `ruleRetire`,
+  `classifications`, `periodClose`, `periodLine`, `periodLineRetire`,
+  `recurringItem`, `spendingCategory`, `spendingCategoryRetire`,
+  `spendingCategoryOverrides`, `receipts`, `receiptRead`, `receiptFile`,
+  `workbookDescribe`, `workbookConfirm` (the run prints this list). No `ROUTES`
+  key returns a file.
+
+  **The clock** is pinned (`2026-10-03T09:30:00Z`) rather than any field left out:
+  `health`'s `uptimeSec` is then 0 before and after, and it is read in every case
+  and changes in none.
+
+  **The seeds.** One app per write, `rateLimitReadsPerMinute: 0`. The caller is
+  alex, `DEV_IDENTITY` and an admin, so every directory read and write is theirs.
+  A fake `receiptReader` and a fake `layoutAsk` (answering lg-7's correct layout);
+  no model. The base seed, sent through the web's functions: 2026 salaries and a
+  ratio, a spending category the bank's `Épicerie` maps to, `TRANSFER_RULE` with
+  that category, `helpers/classification.ts`'s paste, a line, a recurring item, a
+  live mortgage and one uploaded receipt. Per write on top of it: `adminRetirePerson`
+  removes sam's address first; `closePeriod` removes sam's address and retires
+  sam, so the close has a retirement to apply; `confirmRatio` enters 2026 salaries
+  again; `setRowSpendingCategory` adds a second category. `confirmWorkbook` has no
+  seed. Nothing was lifted from `receipts.test.ts` or `people.test.ts`: the seeds
+  go through the web's functions, so `jpeg`, `upload` and `salary` were not needed,
+  and a photo is a `Blob` written in the harness.
+
+  **Shared or rebuilt seed (the Unknown): rebuilt for each write.** Measured with a
+  temporary timing edit, restored from `7428f090` and not committed: the seed costs
+  9.4–22.4 ms a write (82.0 ms for the first, which warms the modules), a boot
+  8.4–21.0 ms; serialising the seeded books costs 0.03–0.30 ms and a boot from them
+  8.3–19.8 ms. So a copy saves at most the seed, about 0.45 s over 33 seeds, and it
+  costs correctness: `booksTemplate` is the template of every household the app
+  opens, so `createHousehold`'s new household would start with the seeded books, and
+  the directory (members, sam's removal, the retirement) is not in the books at all.
+
+  **Derived set and marked-and-unchanged routes, per write** (the run prints both;
+  none fails a case):
+
+  | Write                                                               | Changed                                                                                                                         | Marked and unchanged                                                                                                                                                 |
+  | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | addHouseholdMember, adminAddMember                                  | household, adminHouseholds, people, buckets, mortgage, stats salaries, contributions, mortgage-own                              | me, inbox, autoFiled, rows, periods, periodOpen, periodLines, spendingCategoryMap, stats mortgage-payments, buffer, spending, fixed-items, settlements               |
+  | renameHousehold, adminRenameHousehold, adminChangeAddress           | household, adminHouseholds                                                                                                      | me, people                                                                                                                                                           |
+  | createHousehold                                                     | adminHouseholds                                                                                                                 | —                                                                                                                                                                    |
+  | adminRemoveMember                                                   | household, adminHouseholds                                                                                                      | me, people and all of `BOOKS`                                                                                                                                        |
+  | adminRetirePerson                                                   | adminHouseholds                                                                                                                 | me, household, people and all of `BOOKS`                                                                                                                             |
+  | adminRenamePerson                                                   | household, adminHouseholds, people                                                                                              | me                                                                                                                                                                   |
+  | classifyRow                                                         | inbox, buckets, rows, stats buffer, spending                                                                                    | autoFiled, periods, periodOpen, periodLines, mortgage, spendingCategoryMap, stats mortgage-payments, salaries, contributions, mortgage-own, fixed-items, settlements |
+  | fileMortgageSplit                                                   | mortgageSplits, stats mortgage-own                                                                                              | the rest of `BOOKS`                                                                                                                                                  |
+  | saveMortgage                                                        | mortgage                                                                                                                        | the rest of `BOOKS`                                                                                                                                                  |
+  | closePeriod                                                         | adminHouseholds, people, periods, periodOpen, stats mortgage-own, spending, settlements                                         | buckets, inbox, autoFiled, rows, periodLines, mortgage, spendingCategoryMap, stats mortgage-payments, salaries, contributions, buffer, fixed-items                   |
+  | addLine, correctLine, retireLine, fileReceipt                       | periodOpen, periodLines, stats spending                                                                                         | the rest of `BOOKS`                                                                                                                                                  |
+  | addRecurring, changeRecurring                                       | recurring, periodOpen, stats fixed-items                                                                                        | the rest of `BOOKS`                                                                                                                                                  |
+  | createRule, editRule, retireRule                                    | rules, inbox, rows                                                                                                              | —                                                                                                                                                                    |
+  | enterSalaries                                                       | salaries, stats salaries                                                                                                        | ratios and the rest of `BOOKS`                                                                                                                                       |
+  | confirmRatio                                                        | ratios, periodOpen, stats salaries                                                                                              | salaries and the rest of `BOOKS`                                                                                                                                     |
+  | addSpendingCategory, renameSpendingCategory, retireSpendingCategory | spendingCategories, stats spending                                                                                              | spendingCategoryMap, rows, inbox, autoFiled, periodLines                                                                                                             |
+  | setSpendingMapEntry                                                 | inbox, spendingCategoryMap, rows                                                                                                | spendingCategories, autoFiled, periodLines, stats spending                                                                                                           |
+  | setRowSpendingCategory                                              | inbox, rows                                                                                                                     | spendingCategories, spendingCategoryMap, autoFiled, periodLines, stats spending                                                                                      |
+  | importStatement                                                     | inbox, buckets, spendingCategoryMap, rows                                                                                       | autoFiled, periods, periodOpen, periodLines, mortgage, all 8 stats routes                                                                                            |
+  | uploadReceipt, readReceipt, describeWorkbook                        | — (empty, as asserted)                                                                                                          | — (their lists are empty)                                                                                                                                            |
+  | confirmWorkbook                                                     | buckets, salaries, ratios, mortgage, periods, periodOpen, periodLines, spendingCategoryMap, rows, 7 stats (all but fixed-items) | the other 37 routes of `EVERYTHING`, 24 of them never read                                                                                                           |
+
+  Counts: 31 of 31 writes with a non-empty list change at least one answer; 3 of 3
+  with an empty list (`uploadReceipt`, `readReceipt`, `describeWorkbook`) derive the
+  empty set. Two seeds were widened after the first run, because with the narrower
+  ones gate 1's F1 and F2 were not reachable: `closePeriod` first changed neither
+  `people` nor `adminHouseholds` (no retirement waited), and `createRule` and
+  `editRule` left `rows` unchanged (a rule with no spending category gives a row
+  none). Both now change them.
+
+  **2xx, proved by mutation** (each an uncommitted edit, restored with
+  `git checkout 7428f090 -- <path>`). A read: `helpers/inject-fetch.ts`'s
+  `receiptMatches` URL left as `/api/receipts/:id/matches?amountCents=12345&date=2026-09-20`
+  → `Tests 33 failed | 1 passed (34)` (the one is `confirmWorkbook`, which does not
+  read it), each `GET /api/receipts/:id/matches (...) answered 400: {"error":{"code":"BAD_REQUEST",...}}`.
+  The same with `household` left as `/api/households/:id` → `Tests 34 failed (34)`,
+  `answered 403` `FORBIDDEN`: the status the Build had not measured. A write:
+  `readReceipt` sent with id 999 → `1 failed | 33 passed`, `readReceipt: POST
+  /api/receipts/999/read answered 404`. A write goes through `answered`, which
+  names the first non-2xx request it made; `requestJson` would otherwise turn a
+  refusal into an `AppError` that names neither the route nor the status.
+
+  **Planted omission.** Baseline committed at `f27b7b37`; then `ROUTES.people`
+  removed from `closePeriod`'s list in `web/src/writes.ts`: `Tests 1 failed | 33
+  passed (34)`, the failing case `closePeriod marks every route its write changes
+  (lg-108)`, with `+ "closePeriod changed /api/people, which WRITES does not mark"`,
+  and the summary `34 of 34 writes compared; 1 changed routes not marked.`
+  Restored with `git checkout f27b7b37 -- tools/ledger/web/src/writes.ts`; `git
+  status --short` printed nothing after it.
+
+  **The screen case.** `web/test/writes.test.tsx` holds no `EXPECTED` (`grep -c
+  EXPECTED` → 0) and no list of routes: `INPUTS` keeps the `args` and `answer` of
+  the four writes whose patch reads them (`createHousehold`, `classifyRow`,
+  `saveMortgage`, `setRowSpendingCategory`), and each case takes `changes` and
+  `patch.routes` from `WRITES`. Its `test.each` is over `Object.keys(WRITES)`, with
+  the read-again, patched-and-stale and read-once assertions unchanged. The test
+  "this table names every write writes.ts sends" is removed with the table it
+  checked. `npx vitest run tools/ledger/web/test/writes.test.tsx` → `Tests 36 passed
+  (36)` (34 writes, the refused write, the patches).
+
+  **Measured, not changed: `fileReceipt` onto a row.** With the destination
+  `{ to: "row", rowId: <the groceries row> }` instead of a line (a temporary edit,
+  not committed), the case fails: the derived set is `receiptMatches` alone, which
+  `fileReceipt`'s list (`BOOKS`) does not mark, and none of `BOOKS` changes. The web
+  reads matches with a direct `fetchReceiptMatches` in `receipts/Queue.tsx` and
+  `receipts/Receipts.tsx`, never through the cache, so no screen holds a stale
+  answer. The committed case files to a line. Whether to mark it, or to leave
+  uncached routes out of the comparison, is an open decision in the builder's report.
+
+  **Not folded in.** `writes.ts`'s header comment still points at lg-98's Log for
+  "the test that proves each one", where the proof is now this harness; that is a
+  change to `web/src`, which Done when 11 rules out of this branch.
+
+  `npx tsc --build` → 0 `error TS`; `npx oxlint tools/ledger/api tools/ledger/web`
+  exit 0. The ledger suite is left to CI on the draft.
+
+- 2026-11-15 — **Owner answers after the build** (owner, 2026-11-15; recorded by the
+  round-1 fixer, Sonnet 5.5). Two decisions, each with the options put to the owner
+  and the choice.
+  1. Gate 1's F1, `retireRule`'s seed cannot reach `/api/rows` (the plant
+     `retireRule: entry(() => retireRule, [ROUTES.rules, ROUTES.inbox])` passed the
+     harness). Options: (1) widen `retireRule`'s seed; (2) record it under the
+     accepted bound (Question 5). **Chosen: (1).** The seed now retires a rule that
+     files an unfiled row; see the round entry below.
+  2. The builder's open decision on `fileReceipt` filed onto a row: only
+     `receiptMatches` changes, and `fileReceipt`'s list does not mark it, because the
+     web reads matches uncached through `fetchReceiptMatches`. Options: (1) accept
+     as a known limit, recorded in the Log; (2) add `ROUTES.receiptMatches` to
+     `fileReceipt`'s list plus a row case, as a follow-up ticket; (3) the harness
+     skips uncached routes from a hand-written list. **Chosen: (1).** Known limit:
+     the committed case files `fileReceipt` to a line, so an omission of
+     `receiptMatches` on a filing onto a row is not caught, and no screen holds that
+     answer stale.
+- 2026-11-15 — **Round 1, gate 1's F1** (fixer, Sonnet 5.5; gate 1 at `79f1fdbd`).
+  `retireRule`'s seed now creates a rule from `MORTGAGE_RULE`, the one `createRule`'s
+  seed uses, and retires that, so the retirement changes `rows` (commit `77b67ed8`).
+  The per-write table above is corrected in place: `retireRule` joins `createRule`
+  and `editRule` on one row, changed `rules, inbox, rows`, marked and unchanged none;
+  the two-seed paragraph under it is the build's own account and stands, with
+  `retireRule` the third seed widened. Before and after the seed, the printed
+  `changed` lines of all 34 writes are identical except `retireRule`'s (a `diff` of
+  the two verbose runs prints that one line: `changed 2 [/api/rules /api/inbox];
+  marked and unchanged 1 [/api/rows]` → `changed 3 [/api/rules /api/inbox
+  /api/rows]; marked and unchanged 0 []`).
+  Plant before: `retireRule: entry(() => retireRule, [ROUTES.rules, ROUTES.inbox])`
+  in `web/src/writes.ts` → `Tests 34 passed (34)`. After, on the committed seed:
+  `Tests 1 failed | 33 passed (34)`, `retireRule marks every route its write changes
+  (lg-108)`, `+ "retireRule changed /api/rows, which WRITES does not mark"`, summary
+  `1 changed routes not marked.` Restored with `git checkout 77b67ed8 -- tools/ledger/web/src/writes.ts`,
+  `git status --short` empty. Head: `npx vitest run
+  tools/ledger/api/test/writes-derived.test.ts --reporter=verbose` → `Tests 34 passed
+  (34)`, `lg-108: 34 of 34 writes compared; 0 changed routes not marked.`;
+  `npx vitest run tools/ledger/web/test/writes.test.tsx` → `Tests 36 passed (36)`.
+  Not changed: gate 1's low F2 (`writes.ts` header), outside Done when 11.

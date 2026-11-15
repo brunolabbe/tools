@@ -132,6 +132,7 @@
     { "path": "./tools/ledger/contract" },
     { "path": "./tools/ledger/books" },
     { "path": "./tools/ledger/receipts" },
-    { "path": "./tools/ledger/api" }
+    { "path": "./tools/ledger/api" },
+    { "path": "./tools/ledger/web" }
   ]
 }
