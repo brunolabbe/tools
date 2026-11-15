@@ -127,6 +127,39 @@ results for the three pages, which is the "pre-existing" reading.
 - **findings** · the hunt returned 6; 4 carried, 2 dropped.
 - NFR: security — the high and the first low (a click into another document is the advertiser-link risk dl-81's decision closed) · performance n/a (one string compare, one selector) · reliability ✓ (dl-139's server-tab press and a cross-origin frame's own pass still yield media) · maintainability — the third low.
 
+### Gate 2
+
+**Gate: PASS** — 2026-11-15 · `d3ab6c31..74e003a4` · Opus 5.5, depth narrow
+
+| Done when                                                                                                                      | Proof                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A committed test with a bare player-classed `<iframe>` shows no click inside the frame, and is red on `main` before the change | `resolvers/test/browser/browser-resolver-player-input.test.ts` › "a player-classed iframe that is the only box is never clicked into, and the probe ends NO_MEDIA_FOUND" ✓. The round leaves it unchanged. Gate 1 measured it red on `main`. In this gate's sweep, `player-box-bare-iframe.html` is still marked and clicked at `5f15e56f` and refused at head                                                 |
+| The existing box-click tests (dl-81, dl-100) pass unchanged, so a `div` player is still clicked                                | `browser-resolver-player-input.test.ts` › "clicks the middle of the largest player-ish box when no <video> was clicked" and `browser-resolver-press-targets.test.ts` › "ctl=autoplay (a toggle labelled Autoplay) is pressed but does not hold back the box click" ✓. The round's test diff adds 57 lines and removes 0. Both pass in the project run                                                          |
+| The Log says what was decided about a wrapper whose centre is over a frame, with the measurement                               | **verified** by reading. The round does not change those entries                                                                                                                                                                                                                                                                                                                                               |
+| `npm run check` exits 0 and the downloader project passes                                                                      | **verified**. `npm run check` exits 0. The downloader project: 2675 passed, 1 failed, 2 skipped of 2678. The failure is the dl-115 quiet-wait timing test, which read 803 ms by `performance.now` and 3363 ms by `Date.now`, so the sandbox's two clocks disagreed. That file re-run alone: 19 passed of 19. PR #817's `test (ubuntu-latest)` passes at `74e003a4`, as do the other 10 checks, CodeQL included |
+
+- **F1 (high), fixed in part.** The drill closes every open-shadow-root page:
+  - gate 1's host-is-the-box and wrapper pages are refused, with no beacon;
+  - nested roots (a host inside a shadow root inside a host), bare and wrapped, are refused;
+  - a host whose shadow root answers the host itself still ends the loop, and that host is still pressed at base and at head.
+
+  Removing the loop turns both `player-box-shadow-frame.html` rows red (2 failed, 9 passed, 20 skipped of 31). **What remains: a closed shadow root.** A `class="player-host"` whose closed root holds a 640x360 iframe is marked and clicked into, at base and at head, and the same holds with a `.player-wrap` around it. That is the limit of option (a), which the owner chose and which names open roots. The docstring and the drill's comment both say "every open shadow root". The comment on `unsafe` says "however deep in shadow roots", and the older docstring sentence "A frame is never clicked blind" is still false for a closed root. Both are false in the unsafe direction. I grade the remainder **low** rather than high: no live call site is known, and the same function states the true bound twice before the paraphrase. The fix is text only, "however deep in open shadow roots".
+
+- **F2 (low), fixed.** All five `frame`/`object`/`embed` attack pages are refused at head, with no beacon. Removing `object, embed` from `unsafe` turns the two wrapped rows red (2 failed, 9 passed, 20 skipped of 31). The `<frame>` half has no test: see N1.
+- **F3 (low), fixed.** With the candidate filter removed, the HTML and XHTML rows of "a large player-classed frame does not win the choice over a smaller div player" fail: 2 failed, 9 passed, 20 skipped of 31, which matches the Log.
+- **F4 (low), fixed.** Reverting to `box.tagName === 'IFRAME'` turns the XHTML row red (1 failed, 10 passed, 20 skipped of 31). The new `.xhtml` entry in `fixture-server.ts` is keyed on the lower-cased `path.extname`. `player-box-frame-beside-div.xhtml` is the only `.xhtml` file in the repo, so no other fixture's served type changes.
+- **N1 · low** · `nfr:maintainability` · **`frame` in the filter and in `unsafe` has no test.** Removing it from both leaves the dl-142 describe green, 11 passed of 11. The test comment and the Log say "a `<frame>` exists only in a frameset, which cannot sit beside a player, so no fixture reaches it". That is half true:
+  - A `<frame>` outside a frameset loads no document. Inserted by script into an HTML body, or in an XHTML body, it is marked at base, but its document never beacons. So the wrapper case has no fixture.
+  - The bare case does. Gate 1's `a-frameset.html`, a frameset whose `<frame class="player">` is the box, is clicked into at base and refused at head.
+
+  Direction: a frameset fixture with a player-classed `<frame>`, and a test that its inner beacon never fires. I did not run it as a test.
+
+- **dropped** · the project run's one failure. It is the clock disagreement above, and the file passes alone and in CI on this head.
+- **dropped** · `player-host` with an open `<slot>` whose light-DOM iframe covers the centre. `main` pressed it and head refuses it. The refusal comes from the light-DOM walk (option A's accepted cost), not from the drill.
+- **findings** · the round's attacks returned 4: 1 carried as N1, 1 folded into F1 as its remainder, 2 dropped.
+- Sweep: 159 URLs (gate 1's 151 plus the round's 8). `5f15e56f` and head differ on 10, every one a branch fixture. None of the 149 pre-existing URLs differs; `player-nav-first.html` did not recur.
+- NFR: security — F1's remainder (closed roots) · performance n/a (the loop is bounded by shadow nesting depth) · reliability ✓ (dl-139's tab and cross-origin pages are unchanged) · maintainability — N1.
+
 ## Log
 
 - 2026-11-15 — Filed from dl-139's first gate (Opus 5.5), attack 4, on the owner's
