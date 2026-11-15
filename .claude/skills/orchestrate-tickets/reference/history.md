@@ -7268,3 +7268,46 @@ Wall times of about 10–11 h on three agents and the orchestrator are a 5-hour 
 **Worked, and worth keeping:**
 - The intake measurement (0 of 8 nightlies, about 675 runs against 4 occurrences) put repo-146's run count and its "why fix it" to the owner with numbers. It turned a hard ticket into a $1.88 static look, with no reproduction runs bought.
 - Gates handed the earlier gate's probe scripts (`remedy.mjs`, `leak-probe.test.ts`) let the lander apply a measured remedy, and let gate 2 re-check a claim without rebuilding the probe.
+
+### Batch 2026-11-15 (tools-fc, lg-106 lg-107 lg-108, testing.md reworded) — base 4e040577
+
+| PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| — | — | Sonnet 5.5 / high | a1c3a45e69a7dce82 | seam-mapper, lg-106 lg-107 lg-108 | 3m13s / 3m12s | 0 | $0.3402 |
+| #805 | open, ready, mergeable, 11/11 green at 277dd263 (CodeQL, Windows) | Sonnet 5.5 / high | a203a20d5b6d8485f | builder-standard, lg-106, resumed for round 1 | 24m01s / 41m40s | 0 | $1.6713 |
+| #805 | as above | Opus 5.5 / high | a786e3bce53132cbb | ticket-reviewer-opus, lg-106 gate 1 | 14m05s / 13m53s | 0 | $2.9227 |
+| #805 | as above | Opus 5.5 / high | a851d6a36c2719e12 | ticket-reviewer-opus, lg-106 gate 2 | 7m24s / 13m17s | 0 | $2.2433 |
+| #805 | as above | Sonnet 5.5 / high | af463f8124d1d47b5 | fixer, lg-106 round 2 (gate 2's high) | 7m52s / 7m51s | 0 | $0.4522 |
+| #805 | as above | Opus 5.5 / high | a1735da5a11f426a6 | ticket-reviewer-opus, lg-106 gate 3, narrow | 6m36s / 6m34s | 0 | $1.7163 |
+| #805 | as above | Sonnet 5.5 / high | a0c9e76f56ec8ea9e | fixer, lg-106 three lows at landing + landing | 5m42s / 5m38s | 0 | $0.6274 |
+| #808 | open, ready, mergeable, 11/11 green at 4ba4f312 (CodeQL, Windows) | Opus 5.5 / high | a540f8e104993848b | builder-hard, lg-107, resumed for one owner stop (useLayoutEffect + reworded proof) | 29m51s / 1h01m26s | 0 | $7.1145 |
+| #808 | as above | Sonnet 5.5 / xhigh | aab39e1070199c665 | ticket-reviewer-sonnet, lg-107 gate 1 | 22m42s / 22m10s | 0 | $2.2952 |
+| #808 | as above | Sonnet 5.5 / high | a0be4990cc319d846 | fixer, lg-107 one low at landing + landing | 3m45s / 3m37s | 0 | $0.4614 |
+| #806 | open, ready, 11/11 green at fba3bdda (CodeQL, Windows) | Opus 5.5 / high | aeb79c220f760dff5 | builder-hard, lg-108 | 15m48s / 15m41s | 0 | $6.4395 |
+| #806 | as above | Sonnet 5.5 / xhigh | a29f5e72c72e4305e | ticket-reviewer-sonnet, lg-108 gate 1 | 15m12s / 14m57s | 0 | $2.4031 |
+| #806 | as above | Sonnet 5.5 / high | aabf9d40eab8d9f88 | fixer, lg-108 round 1 (retireRule seed) | 4m36s / 4m36s | 0 | $0.6194 |
+| #806 | as above | Sonnet 5.5 / xhigh | a912996f4f12a4811 | ticket-reviewer-sonnet, lg-108 gate 2 | 8m02s / 7m51s | 0 | $1.4387 |
+| #806 | as above | Sonnet 5.5 / high | ae5bf83456ca7b0c1 | fixer, lg-108 landing, resumed once after preflight's untouched-file failure | 7m28s / 7m27s | 0 | $0.4533 |
+| #812 | open, draft (held until #805 merges), green at 450dc098 (test skipped, md) | Sonnet 5.5 / high | a1b93df87c705789b | builder-standard, `.claude/rules/testing.md` sentence, owner-directed | 1m46s / 1m43s | 0 | $0.2835 |
+| #812 | as above | Opus 5.5 / high | aa408755620a70164 | ticket-reviewer-opus, #812 gate 1, narrow | 3m34s / 3m31s | 0 | $1.1812 |
+| — | — | Opus 5.5 / high | orchestrator 171abd50 | orchestrator (floor) | 1h44m34s / 1h41m04s | 0 | $7.4464 |
+| | | | | **total** (rates read 2026-10-10), before the log fixer | 4h46m14s | 0 | **$40.1095** |
+
+**Tickets:**
+
+- lg-106 → #805: gate 1 FAIL (F1 high, an open decision: the log tests no longer read refused requests' lines. The owner chose option 1, the tests make the refused requests themselves). Round 1 by the resumed builder, read at $0.83 against the $10 bar. Gate 2 FAIL (F1's workbook half still high). Round 2 by a fixer. Gate 3, narrow, PASS. Three lows fixed at landing by owner choice; gate 3's P2 stays recorded.
+- lg-107 → #808: the builder showed the cause by a run and found that main no longer goes red (0 of 100 per test; TanStack's timer masks the race). Owner stop: useLayoutEffect, with the proof reworded to a window on a100f429. The builder was read at $5.13 against the bar. Gate 1 PASS (its own 40-pair window: A 6, B 0). F1 fixed at landing by owner choice; F2 (one unrelated lg-98 test red at load) stays recorded.
+- lg-108 → #806: an owner stop at the build (fileReceipt onto a row accepted as a known limit). Builder read at $6.44, not resumed. Gate 1 CONCERNS (F1 med, open: retireRule's seed could not reach rows; the owner chose to widen it). Round 1 by a fixer. Gate 2 PASS. Gate 1's F2 low stays recorded. The landing preflight's `npm test` failed in untouched `stats-rows.test.tsx:803` at load 9; the `--only check` rerun exited 0.
+- #812 (no ticket): `.claude/rules/testing.md`'s shuffle sentence, reworded on the owner's instruction after lg-106 and repo-144 (#803) made its named examples false. One narrow gate, PASS.
+
+**Defects in the skill:**
+
+1. `reference/records.md`, _Fixed at landing_. The page says the wording-proof fragment is "plain words", but not that it must not span a code span in the source line. A fragment copied from rendered text across a backticked word counts `0`. Reproduction: `git diff b34060c9 277dd263 -- tools/ledger/docs/work/lg-106-the-log-tests-read-what-earlier-tests-logged.md | grep -c '^-.*No LOGGED precondition'` → `0`; the same diff piped to `grep -c '^-.*precondition in either file is satisfied'` → `1`.
+2. `.claude/agents/ticket-reviewer-opus.md`, the dispatch preamble. Its line 17 runs one `git show` over two pages, `roles/common.md` and `roles/reviewer.md`. `roles/common.md` line 4 says "one `git show` per page", and the combined output overflows the tool's cap, which costs the gate an extra `Read`. Reproduction: `git show origin/main:.claude/skills/orchestrate-tickets/roles/common.md origin/main:.claude/skills/orchestrate-tickets/roles/reviewer.md | wc -c` → `37699`. The #812 gate saw `Output too large (36.8KB)`; that is relayed, and only the byte count was re-run by me. tools-bb's board noted the same.
+3. `roles/reviewer.md`, _What makes a gate worth its cost_ › "Reproduce, do not assess". It says a spec's `console.log` lines "did not appear in a ledger project run (lg-23)", but that depends on the reporter. Reproduction, relayed from lg-108's gates 1 and 2 and not re-run by me (the file reaches main with #806): `npx vitest run tools/ledger/api/test/writes-derived.test.ts` at fba3bdda prints no `lg-108:` line; with `--reporter=verbose`, `grep -c 'lg-108:'` → `1`.
+
+**Worked, and worth keeping:**
+
+- _An answer given on a premise a later measurement changed is re-asked_: the testing.md answer was re-asked twice. The first time was against lg-106's Build 4 and Done when 6. The second was after repo-144 emptied the parenthesis. Both times the owner re-chose.
+- A third gate after gate 2's high, narrow and with no owner question, closed lg-106 at $1.72.
+- records.md's rule for a suite failing in an untouched file landed lg-108 with one `--only check` rerun and no second `--land`.
