@@ -334,7 +334,7 @@ test("on a deployment that wants the check, a stalled config read ends in the hu
             {
               error: {
                 code: "HUMAN_CHECK_FAILED",
-                message: "The automatic check did not pass.",
+                message: "We could not confirm this request came from a person. Try again.",
                 retryable: false,
               },
             },

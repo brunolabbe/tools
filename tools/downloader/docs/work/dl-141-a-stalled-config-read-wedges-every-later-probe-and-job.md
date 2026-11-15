@@ -262,3 +262,19 @@ reverses an answered question of dl-138.
   - **Checks.** `npm run check` exit 0 (24 warnings, none in files this branch
     touches). `npm test -- tools/downloader/web`: `25 passed (25)` files,
     `360 passed (360)` tests.
+- 2026-11-15 — Fixed at landing by owner choice: gate 1, the med — "nothing tests
+  that the abort reaches the network". New test at the end of the transport
+  describe in `web/test/human-check.test.ts`, "the config fetch is handed a
+  signal, aborted at the bound and not before, so a read given up on is closed
+  (dl-141)", keeps the `init.signal` the `/api/config` fetch receives and asserts
+  it is not aborted at 14,999 ms and is at 15,000 ms. Red with the signal dropped
+  from the config reader in `http.ts` (`request(..., {})`): 1 of 31 failed across
+  `human-check.test.ts`, `request-timeout-app.test.tsx`, `request-timeout.test.ts`
+  and `http-client.test.ts`, with `expected undefined to be false`; green with it
+  restored: 31 of 31.
+- 2026-11-15 — Fixed at landing by owner choice: gate 1, the low — "the App test's
+  modelled refusal carries the message". The modelled `HUMAN_CHECK_FAILED` in
+  `web/test/request-timeout-app.test.tsx` now carries the real api's message,
+  "We could not confirm this request came from a person. Try again." Proof:
+  `git diff 2a80720d HEAD -- tools/downloader/web/test/request-timeout-app.test.tsx | grep -c '^-.*did not pass'`
+  gives 1.

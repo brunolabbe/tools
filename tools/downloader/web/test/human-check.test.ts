@@ -382,4 +382,28 @@ describe("the HTTP transport over a config read that never answers (dl-141)", ()
     await client.probe({ url: "https://example.com/d" });
     expect(configReads).toBe(2);
   });
+
+  test("the config fetch is handed a signal, aborted at the bound and not before, so a read given up on is closed (dl-141)", async () => {
+    vi.useFakeTimers();
+    const signals: (AbortSignal | null | undefined)[] = [];
+    const fetchSpy = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      if (String(input) === ROUTES.config) {
+        signals.push(init?.signal);
+        return await new Promise<Response>(() => {});
+      }
+      return Response.json({ probe: probe(), cached: false });
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+    const client = createHttpClient({ humanCheck: createTurnstileCheck });
+
+    const call = client.probe({ url: "https://example.com/a" });
+
+    await vi.advanceTimersByTimeAsync(CONFIG_READ_TIMEOUT_MS - 1);
+    expect(signals).toHaveLength(1);
+    expect(signals[0]?.aborted).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(signals[0]?.aborted).toBe(true);
+    await call;
+  });
 });
