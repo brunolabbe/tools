@@ -61,6 +61,8 @@ clicks") was rejected by the owner then, for the settle window. A narrows the
 window it leaves open and does not reopen that decision: after the first press,
 every top-frame navigation still counts, whether or not a click caused it.
 
+Gate round 1 — answered 2026-11-15 by the owner: fix both meds and the low in this round.
+
 ## Build
 
 1. **Fixture first, red on `main`.** A page on the fixture origin whose script,
@@ -174,6 +176,50 @@ every top-frame navigation still counts, whether or not a click caused it.
     `{{PRIMARY}}` are substituted only in `.html`, as expected. No existing test
     changed.
   - **Not proved by CI:** e2e and the container build were not run.
+
+- 2026-11-15 — round 1 (gate 1, CONCERNS; owner: fix both meds and the low).
+  - **Med 1, the captured set.** `HitCollector.exclude(predicate)` rules hits out
+    of `hits` and `hasPlayableHit()` alike, so ranking, the `hasPlayable` the press
+    gates read and `waitForQuiet`'s empty floor (dl-80) see one set. `browser.ts`
+    installs it from the guard and no longer filters before `rankHits`;
+    `countPlayedSegments` reads the same set. Test: "a hit the result will ignore
+    does not end the empty floor on the mirror" (first document fetches a manifest
+    and hops, the mirror fetches 5 s after its load). Red at 0359e152:
+    `AppError: No downloadable video stream was found on that page.` after 5.9 s.
+    The press-gate half is covered by the same single set, not by its own test (the
+    gate had no working control for it either).
+  - **Med 2, by document.** The guard now adds a landing URL to `left` only when a
+    top-frame document request (`isNavigationRequest`) preceded the navigation, so
+    a `replaceState`/`pushState` leaves nothing behind; and `isLeftBehind` never
+    answers true for the current landing URL, so A, B, A keeps the final document.
+    Tests: "a same-document rewrite before the first press keeps the page's own
+    stream" and "a hop out and back to the same address keeps the final document's
+    stream" (cookie tells A's second visit from its first). Both red at 0359e152
+    with the same `NO_MEDIA_FOUND` error. Cost: hits of the _first_ A document are
+    kept in an A, B, A bounce, since they carry the same address as the final one.
+  - **Mutations** (each turns exactly its own test red, the other two stay green):
+    `hasPlayableHit` back to the raw map -> floor test; `left.add` without the
+    document-request test -> replaceState test; `isLeftBehind` without the
+    current-landing-URL guard -> bounce test.
+  - **Low, the comment.** The cost is any self-redirect after the first press, not
+    "within milliseconds". The gate measured, on a primary page with a 640x360
+    player box and a hop at `load` + 1000 ms, the box pressed on the primary first
+    and the probe ending `navigated-away` at 1.65 s: on a page with something to
+    press, the first press can come within about 0.5 s of the landing read. The
+    reported embed is clear of it (first press ~1 s after its hop, two live runs).
+    `watchForDeparture`'s comment now says so; the Decision above is the owner's
+    wording and is left as answered.
+  - **A flake seen, not explained.** dl-105's "a wall clock stepped back before
+    the wait does not read as a floor that returned early" failed intermittently
+    while this round was built (`expected 1410 / 1607 to be greater than or equal
+    to 3000`: the wait ended at its quiet gate, as if a playable hit were
+    captured): two full-suite runs and 3 of ~10 file runs. Nothing in this round
+    touches a page with no hits (`exclude` is unset-equivalent there). I could
+    not reproduce it with a debug dump of the hits, alone (0 of 12), nor at
+    0359e152's sources (0 of ~16, including 6 interleaved pairs where the new
+    sources failed 1 of 6). The last two full-suite runs at the final head were
+    clean (2670 passed, 2 skipped). Treat it as an open question for whoever
+    next sees it, not as cleared.
 
 ## Review
 

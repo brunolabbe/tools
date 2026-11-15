@@ -619,6 +619,44 @@ describe("a page's own redirect before the tier's first press is not a departure
   );
 });
 
+describe("what a page asked for before it moved itself is judged by document (dl-144, gate 1)", () => {
+  test(
+    "a hit the result will ignore does not end the empty floor on the mirror",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      // Production floor on purpose: the mirror asks ~5 s after its load, which
+      // only dl-80's extended wait covers. The first document's own manifest is
+      // dropped from the result, so it must not count as "captured" for the floor.
+      const hls = recordingHlsParser();
+      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+      const result = await probe("/guard-late-embed-late-mirror.html", resolver);
+      expect(result.variants[0]?.url).toBe(server.secondaryUrl("/media/hls/master.m3u8"));
+    },
+  );
+
+  test(
+    "a same-document rewrite before the first press keeps the page's own stream",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const hls = recordingHlsParser();
+      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...STREAM_WAITS });
+      const result = await probe("/guard-replace-state-after-settle.html", resolver);
+      expect(result.variants[0]?.url).toBe(server.url("/media/hls/master.m3u8"));
+    },
+  );
+
+  test(
+    "a hop out and back to the same address keeps the final document's stream",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const hls = recordingHlsParser();
+      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...STREAM_WAITS });
+      const result = await probe("/guard-late-embed-bounce.html", resolver);
+      expect(result.variants[0]?.url).toBe(server.url("/media/hls/master.m3u8"));
+    },
+  );
+});
+
 /** Elapsed milliseconds since the call, off a clock that follows no one's `date`. */
 function startStopwatch(): () => number {
   const startedAt = performance.now();

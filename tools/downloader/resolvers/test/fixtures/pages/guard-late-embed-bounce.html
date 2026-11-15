@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Guard: a hop out and back to the same address</title>
+  </head>
+  <body>
+    <h1>Guard: a hop out and back to the same address</h1>
+    <!-- A, then B, then A again before anything is pressed (dl-144, gate 1). A cookie tells the second visit to A from the first. The final document's own stream is at A's address, the same as the first document's: it must not be dropped as 'left behind'. -->
+    <script>
+      (function () {
+        if (location.origin === "{{PRIMARY}}") {
+          if (document.cookie.indexOf("bounced=1") >= 0) {
+            fetch("/media/hls/master.m3u8")
+          .then(function (r) {
+            return r.text();
+          })
+          .then(function () {
+            return fetch("/media/hls/v720.m3u8");
+          })
+          .then(function (r) {
+            return r.text();
+          })
+          .catch(function () {});
+            return;
+          }
+          document.cookie = "bounced=1; path=/";
+          window.addEventListener("load", function () {
+            setTimeout(function () {
+              location.replace("{{SECONDARY}}" + location.pathname);
+            }, 1000);
+          });
+          return;
+        }
+        location.replace("{{PRIMARY}}" + location.pathname);
+      })();
+    </script>
+  </body>
+</html>

@@ -88,6 +88,8 @@ export class HitCollector {
   /** Inflated length of every compressed typed read that has returned (dl-91). */
   #encodedInflated = 0;
   #seq = 0;
+  /** Hits the caller has ruled out of the result (dl-144); see `exclude`. */
+  #excluded: ((hit: NetworkHit) => boolean) | undefined;
   #lastActivityAt = Date.now();
   #attached = false;
 
@@ -119,7 +121,20 @@ export class HitCollector {
    * arrives and whose hit is recorded once its body has been read (dl-79).
    */
   get hits(): NetworkHit[] {
-    return [...this.#hits.values()];
+    const all = [...this.#hits.values()];
+    const excluded = this.#excluded;
+    return excluded === undefined ? all : all.filter((hit) => !excluded(hit));
+  }
+
+  /**
+   * Rules hits out of everything this collector reports (dl-144): `hits`, and so
+   * ranking, and `hasPlayableHit`, and so the press gates and the empty floor.
+   * One set read everywhere, so a hit the result will ignore cannot also end the
+   * wait for one it will use. The hit stays recorded (the predicate is read each
+   * time), so a hit that arrives late is judged by the same rule.
+   */
+  exclude(predicate: (hit: NetworkHit) => boolean): void {
+    this.#excluded = predicate;
   }
 
   /**
@@ -127,7 +142,7 @@ export class HitCollector {
    * Used by dl-80 to extend the quiet floor when a page has nothing yet.
    */
   hasPlayableHit(): boolean {
-    for (const hit of this.#hits.values()) {
+    for (const hit of this.hits) {
       if (hit.kind !== "segment") return true;
     }
     return false;
