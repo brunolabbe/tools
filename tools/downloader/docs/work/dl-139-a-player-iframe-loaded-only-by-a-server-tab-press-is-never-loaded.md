@@ -339,3 +339,40 @@ Traps:
     `/next-video-b5`; b6 held 2 pages; c2 ended on `/submitted-c2?`) and
     `Player 1st` (label-6) is. b2, the `window.open` button, still opens a second
     page.
+- 2026-11-15 — Gate round 2 (gate 2, `6efde6e1`: F1 fixed in part). The owner's
+  answers are under _Gate round 2_ in the Decision. **F1's remainder (med):** the
+  form rule ran on the candidate and not on what it holds, so a wrapper reading
+  "Server 2" around a form's submit button was pressed and its centre click
+  submitted the form. `MARK_SERVER_TAB_SCRIPT` now also rejects a control that
+  holds a `form` or a `button, input, select, textarea` that a form owns
+  (`.form`), the way `held` already runs the link test, and the doc comment is
+  rewritten to say what is checked (a link's address and target, a form around,
+  owning or inside the control) and that a handler that leaves by script is not
+  seen. Its first sentence now reads "a control whose _markup says_ a click would
+  carry the page off", which the code makes true; the old one, "a control that a
+  click would carry off the page", was false for a script handler and said so two
+  sentences later.
+  - Fixture `player-tabs-unsafe-control.html` gained `li-form`, `role-form` and
+    `li-form-attr`, gate 2's three shapes (`h05`, `h06`, `h04`); the test is a
+    `test.each` appended at the end of the press-targets spec. Red against
+    `6efde6e1`'s `provoke.ts`: `npx vitest run <spec> -t "does not press"` → 3
+    failed, 6 passed, the three new rows each with `/beacon/pressed-<ctl>` and
+    `/beacon/left-<ctl>` requested. Green at `d7dc35f9`: whole spec 32 of 32,
+    81.4 s.
+  - Gate 2's `tabs-probe.mts` against `d7dc35f9`: 19 of 20 as the gate expected.
+    The pressed shapes still pressed: `href="#"`, `#player2`,
+    `javascript:void(0)`, no `href`, `li > a#`, `li > span`, `button`,
+    `role=tab aria-selected`, `target=_self`/`_top`/`_parent`/`_TOP`, an empty
+    `href`, and the live page's `button.player-btn.active[data-player]`
+    (`h03-live-shape`). Not pressed: `?server=2`, `h04`, `h05`, `h06` (ended on the
+    landing page), the `role=link` span. The one mismatch is the gate's own `h09`
+    (`<li class="active"><a href="#">Server 2</a> <a href="/report-h09">report</a></li>`):
+    it marks the inner `#` link, not the `li`, and ends on `#`; the gate read the
+    same at `6efde6e1`.
+  - Gate 1's `controls.sh` and `control-flag.sh` (identical to gate 2's copies),
+    through gate 2's `sweep.sh`: precondition removed → the negative fixture test
+    red (`not.toContain("/beacon/server-2-button")`); press removed → the tab test
+    red; once-per-probe flag removed → `a tab that leaves the player iframe blank
+    is pressed once…` red, 1 failed of 13 run; each restored from `d7dc35f9`
+    (clean `git status`). The gate-1 `provoke-probe.mts` rerun differs from gate
+    2's reading only in its millisecond columns.
