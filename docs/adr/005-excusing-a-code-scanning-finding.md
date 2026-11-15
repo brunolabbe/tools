@@ -75,13 +75,24 @@ Four rules, each carrying its own weight:
    keep in sync:
 
    ```bash
-   grep -rn 'codeql\[' --include='*.ts' .
+   grep -rn 'codeql\[' --include='*.ts' --include='*.html' .
    ```
 
    Every excused finding in the repo, with its reasoning in the lines above it.
    An alert with such a comment was examined; an alert without one was not. That
    is the whole answer to the question in Context, and it cannot drift from the
    code, because it _is_ the code.
+
+   `--include` is there because dropping it matches every document and workflow
+   that quotes the token (55 lines on `main`, 42 of them in `.md` and `.yml`
+   files). So the list of file types is the part that can drift: an excuse in a
+   type it does not name is excused and invisible to the register. `.html` is
+   named because dl-139 (PR #802) puts the repo's first excuse there, in the
+   inline script of a test fixture page. Name a new type here in the same change
+   that first excuses a finding in it. The AlertSuppression query's source has a
+   case for comments in HTML files, so `.html` is a candidate; that CodeQL
+   extracts that fixture and honours its excuse is not established, and waits
+   for dl-139 to merge.
 
 Rule 4 is [003](./003-the-status-page-is-generated.md)'s reasoning applied to a
 second projection. A hand-maintained register of excused findings needs a writer,
