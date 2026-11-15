@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.1](https://github.com/brunolabbe/tools/compare/ledger-v0.9.0...ledger-v0.9.1) (2026-11-15)
+
+
+### Fixes
+
+* **ledger:** hand focus back in the commit that closes a history row's control (lg-107) ([#808](https://github.com/brunolabbe/tools/issues/808)) ([83dd1d3](https://github.com/brunolabbe/tools/commit/83dd1d329a8ee25b22bfd00dbc7c32950d0b68c7))
+
 ## [0.9.0](https://github.com/brunolabbe/tools/compare/ledger-v0.8.0...ledger-v0.9.0) (2026-11-11)
 
 
