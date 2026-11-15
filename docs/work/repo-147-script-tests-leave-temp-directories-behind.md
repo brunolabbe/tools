@@ -147,3 +147,33 @@ temp directory reads every earlier run's leftovers.
     `mkdirSync` under `os.tmpdir()`), L3 ("99 call sites" is 98) and L4 (Build 4's
     "cannot be red while the fix is absent" is inverted). Done when 3 to 6 and Build
     4 above are reworded for them.
+- 2026-11-15 — Round 1 built at `729f744f` (code) after `045fc0c4` (the answers). Every
+  count is a private empty `TMPDIR`, `TEMP` and `TMP`, `node-compile-cache` excluded.
+  - **Fourth spec.** `status-gate-record.test.ts` goes through `temp.make`, and the scan
+    holds it at 0. The import block changes by net zero lines (the `os` import and the
+    blank separator out, the `temp-dirs` import and `const temp` in), so the lines
+    repo-73's and repo-76's records cite (56, 68, 113, 135) still read what they cited.
+    Alone: 16 of 16 passing, 0 entries (17 before, as gate 1 measured and a bare
+    `mkdtempSync` put back reproduces below).
+  - **M2.** `describe("tempDirs registers its afterEach", { shuffle: false })` makes a
+    directory in one case and asserts it gone in the next. Deleting the `afterEach`
+    line from `tempDirs()`: `temp-dirs.test.ts` exit 1, `1 failed | 11 passed (12)`,
+    "the next case finds it gone"; the four specs then leave 184 (183 plus that case's
+    own directory).
+  - **L1.** `cleanup` attempts every removal and throws the failures together (the one
+    failure itself when there is one). The case makes `rmSync` throw for two of three
+    directories with a spy rather than `chmod`, so it holds as root and on Windows.
+    With the old loop back, that case is the one red: `1 failed | 11 passed (12)`.
+  - **L2.** The scan counts `mkdtemp\w*(` and any `tmpdir`, so `next-id.test.ts` is held
+    at 2 (the template's call and its `os.tmpdir()`). Planted in an uncalled function:
+    `mkdtempDisposableSync` in `status.test.ts` and `mkdirSync(path.join(os.tmpdir(), …))`
+    in `hooks.test.ts` each turn the scan red (`1 failed | 11 passed (12)`); a case
+    per spelling asserts the pattern matches it.
+  - A bare `mkdtempSync` put back in `status-gate-record.test.ts`: the four specs leave
+    17, and the scan is red.
+  - **L3, L4.** "99 call sites" is 98 calls; Build 4 reads "must be red".
+  - Four specs together: 257 of 257, 0 entries. Alone: `status` 155, `next-id` 52,
+    `hooks` 34, `status-gate-record` 16, `temp-dirs` 12, each 0 entries. Plain
+    `--sequence.shuffle` seeds 1 to 5 over those five files, 269 of 269 each, 0 entries
+    each; `--sequence.shuffle.files --sequence.seed=3` the same. `npm test -- --project
+    repo`: 18 files, `728 passed | 1 skipped (729)`. `npm run check`: exit 0.
