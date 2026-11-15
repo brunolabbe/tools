@@ -177,3 +177,9 @@ temp directory reads every earlier run's leftovers.
     `--sequence.shuffle` seeds 1 to 5 over those five files, 269 of 269 each, 0 entries
     each; `--sequence.shuffle.files --sequence.seed=3` the same. `npm test -- --project
     repo`: 18 files, `728 passed | 1 skipped (729)`. `npm run check`: exit 0.
+- 2026-11-15 — Owner's answer after gate 2 (PASS at `51db3759`), relayed by the
+  coordinator and recorded before the fixes it orders. Question: what the lander
+  does with gate 2's four lows (N1, N3, L2's remainder, N2). Options: fix N1 and N3
+  at landing with no re-gate (recommended), record all four, or also close L2's
+  remainder, which would need a round. **The owner chose to fix N1 and N3 at
+  landing**; L2's remainder and N2 stay recorded and unfixed.
