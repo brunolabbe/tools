@@ -92,3 +92,27 @@ temp directory reads every earlier run's leftovers.
 - 2026-11-15 — Filed and built in one dispatch: the owner chose on 2026-11-15 to fix
   it now, as a third ticket in the batch, rather than only file it. Rated
   `standard` per `docs/01-TICKETS.md` ("a test clean-up inside one package").
+- 2026-11-15 — Built at `49149802`. Every number below is a private empty `TMPDIR`,
+  `TEMP` and `TMP`, `node-compile-cache` excluded (Node's own).
+  - Before, three files together at `e7d791d6`: 166 test-made entries (133 `status`,
+    24 `next-id-edit`, 6 one-offs, 3 `main-writes`), 241 of 241 tests passing.
+  - After, the same command: 0 test-made entries, 241 of 241 passing. In file order,
+    `--sequence.shuffle.files --sequence.seed=1` and `=2`: 0 each. The three specs
+    plus `temp-dirs.test.ts` together, seed 3: 0.
+  - Per file, alone, after: `status.test.ts` 0 (155 tests), `next-id.test.ts` 0 (52),
+    `hooks.test.ts` 0 (34), `temp-dirs.test.ts` 0 (3).
+  - Done when 3, `cleanup`'s loop emptied (`for (const dir of [] as string[])`),
+    each file alone: `status` 133, `next-id` 30, `hooks` 3 (sum 166), and
+    `temp-dirs.test.ts` exit 1, `2 failed | 1 passed (3)`. The three specs stay
+    green with the cleanup disabled, so the helper's own test and the count are
+    what catch it, not the specs. Restored from commit `49149802`.
+  - Done when 4, `hooks.test.ts`'s `checkoutOn` turned back into a bare
+    `fs.mkdtempSync`: `hooks` leaves 3, `temp-dirs.test.ts` exit 1, `1 failed | 2
+    passed (3)`, the diff reading `"hooks.test.ts"` expected 0, found 1.
+  - `npm test -- --project repo`: 18 files, `719 passed | 1 skipped (720)`, exit 0.
+    `npm run check`: exit 0.
+- 2026-11-15 — The brief had nothing wrong. Not folded in: `preflight.test.ts` and
+  `.claude/rules/testing.md` are repo-144's, and the second is a rules page. The
+  other `scripts/test` specs were not surveyed for the same leak, so none is claimed
+  clean. `mergedRemoteTemplate` keeps its own `afterAll`; `tempDirs()`'s `afterEach`
+  is a different hook kind, so repo-144's skipped-`afterAll` trap does not apply.
