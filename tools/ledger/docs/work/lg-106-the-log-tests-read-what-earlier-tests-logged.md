@@ -406,3 +406,31 @@ fixed in `d4448884`.**
   naming `csv-import.test.ts` and `workbook-describe.test.ts` as
   shuffle-order dependent. The owner has said a separate `docs(repo)` pull
   request drops it after #805 merges.
+
+**2026-11-15, round 2 (fixer, Sonnet 5.5), gate 2's finding on `481a23fe`, fixed
+in `c0757103`.**
+
+- Finding, fixed. The workbook log test's refusals upload `notOne`, and neither
+  its bytes nor its base64 were in `secrets`, so a `request rejected` line
+  carrying the refused upload passed. The test lost a guard the base had: at the
+  base spec the base64 plant is red on 12 refusal lines. The workbook test's
+  `secrets` now also hold `notOne.toString("base64")` and `"this is not a
+  workbook"`, the change gate 2 measured as its remedy; nothing else moved. Gate 2's
+  other remedy (refusing a real `lg7` upload as well) is not part of this
+  round.
+- Reproduced before the fix, gate 2's `controls5.sh` at `481a23fe`: under both
+  plants the workbook log test read `Tests 1 passed | 47 skipped (48)` and the
+  CSV log test `1 failed | 62 skipped (63)`.
+- After, `controls5.sh` at `c0757103`, under `-t`: `rejected-b64` and
+  `rejected-text` each give the workbook test `1 failed | 47 skipped (48)`
+  (`expected [ …(2) ] to deeply equal []`) and the CSV test `1 failed | 62
+  skipped (63)`. At the base spec the b64 plant is `1 failed | 47 passed (48)`
+  with 12 lines. `git status --short` empty after the restore.
+- Unplanted: `-t "no line of any request above holds the upload"` reads `1 passed
+  | 47 skipped (48)`, the whole file `48 passed (48)`. Seeds 1 to 20 with
+  `--sequence.shuffle --sequence.seed=N`, workbook-describe alone: `Tests 48
+  passed (48)` for all twenty. `git diff --name-only origin/main...HEAD` lists
+  the two specs and this ticket. `npm run check` exit 0.
+- Recorded unfixed, not touched: gate 2's N1 (the CSV floor comment says "four
+  requests", the slice holds 6), gate 1's F4 (Done when 3's wording) and F5
+  (`.claude/rules/testing.md`, a separate pull request).
