@@ -16,7 +16,7 @@
  * never replaces a newer list.
  */
 
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatCents, parseTypedAmountCents } from "@ledger/books";
 import { AppError, BUCKETS, JOINT_PERSON_FILTER } from "@ledger/contract";
@@ -593,7 +593,10 @@ function Refile({
   // Cancel that had it is gone, and focus would fall to the page. Only when this row's
   // own Cancel or Save closed it, and only when focus did fall: a person who moved it
   // elsewhere while the save ran keeps it there.
-  useEffect(() => {
+  // A layout effect, so focus moves in the same commit that removes the control (lg-107).
+  // As a passive effect it ran in a later task: focus sat on the page in between, and
+  // anything that read focus once the control was gone could find it there.
+  useLayoutEffect(() => {
     if (
       wasOpen.current &&
       !open &&

@@ -3,7 +3,7 @@ id: lg-107
 tool: ledger
 title: The lg-95 and lg-99 focus tests go red now and then on main, and the cause is not yet shown
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: hard
@@ -143,16 +143,49 @@ The filer measured no lg-99 loop. The two tests' rates are therefore each from o
 ## Done when
 
 - The Log names the cause for each test, and the run that shows it, from step 2. It is not a hypothesis. It says whether the two share a cause.
-- **For each of the two tests, an interleaved window shows the fix.** Run the test's loop from `## Reproduction` against the base tree (the tree the branch forked from) and against the branch's tree, alternately, one run at a time, each under `timeout 120`: base, branch, base, branch, so that both trees see the same machine. Record the 1-minute load and the vitest process count with every run, and put the table in the Log. The fix holds for that test when the base goes red **at least 3 times** and the branch goes red **0 times** over the same window.
+- **Superseded on 2026-11-15 by the owner's amendment below; left as it stood.** **For each of the two tests, an interleaved window shows the fix.** Run the test's loop from `## Reproduction` against the base tree (the tree the branch forked from) and against the branch's tree, alternately, one run at a time, each under `timeout 120`: base, branch, base, branch, so that both trees see the same machine. Record the 1-minute load and the vitest process count with every run, and put the table in the Log. The fix holds for that test when the base goes red **at least 3 times** and the branch goes red **0 times** over the same window.
   - The window is **40 pairs** (40 base runs and 40 branch runs). If the base has gone red fewer than 3 times in them, extend it by 20 pairs at a time, up to **100 pairs**.
   - If the base has gone red fewer than 3 times at 100 pairs, the line is **`unproven`**, not passed, if the branch has not gone red: a window in which the base does not fail has not tested the fix, and a quiet machine is that window. Say so in the Log with the counts, and run the window again when the machine is busy.
   - A single red run on the branch, at any point in the window, fails the line at once, whatever the base has done so far, including when it is still under 3 reds: the branch red is read first, and the window stops there. Record it and go back to step 2.
   - **Red means the test failing at its focus assertion**: `history.test.tsx:588` in the lg-95 test, `:747` or `:756` in the lg-99 test (the lines at `a100f429`), with `document.activeElement` being `body`. A `timeout 120` kill, a test timeout or any other failure is not red: it counts toward neither the base's 3 nor the branch's 0, and the Log records it with its run.
   - The two tests each need their own window: their rates differ (see the Log for why 3, 40 and 100).
   - **The cost.** A run took about 2.7 s (the filer, at load 6 to 10) and about 4.8 s at load 15 to 20 (gate 1's lg-95 loop). The 100-pair cap is 200 runs, about 9 to 16 minutes per test, and two tests make two windows. The base needs a second tree, farmed and built, as well.
-- `npx vitest run tools/ledger/web/test/history.test.tsx` passes every test in the file (29 of 29 at `a100f429`, which the Log's measurements also use).
+- **Superseded on 2026-11-15 by the owner's amendment below; left as it stood.** `npx vitest run tools/ledger/web/test/history.test.tsx` passes every test in the file (29 of 29 at `a100f429`, which the Log's measurements also use).
 - `npm run check` passes.
-- The `expect(document.activeElement).toBe(button);` assertions are still in both tests: the save-path one in the lg-95 test (line 588 at `a100f429`) and the first focus assertion in the lg-99 test (line 747), and still assert focus ends on the row's button.
+- **Superseded on 2026-11-15 by the owner's amendment below; left as it stood.** The `expect(document.activeElement).toBe(button);` assertions are still in both tests: the save-path one in the lg-95 test (line 588 at `a100f429`) and the first focus assertion in the lg-99 test (line 747), and still assert focus ends on the row's button.
+
+**The owner's amendment of 2026-11-15** (answer and options in the Log). It replaces the three lines marked superseded above. `main`'s base does not go red: 0 of 100 runs for each test at `4e040577`, because a TanStack Query timer flushes the restore effect before the test reads focus (Log, 2026-11-15). So the window runs on `a100f429`, where the race still shows.
+
+- **For each of the two tests, an interleaved window on `a100f429` shows the fix.** Arm A is `a100f429` with no change. Arm B is `a100f429` with the same one-line change the branch makes: the focus restore in `Refile` becomes a `useLayoutEffect`. Run the test's loop from `## Reproduction` on arm A and arm B alternately, one run at a time, each under `timeout 120`: A, B, A, B. Record the 1-minute load and the vitest process count with every run, and put the table in the Log with the load for each pair. The fix holds for that test when arm A goes red **at least 3 times** and arm B **0 times** over the same window.
+  - The window is **40 pairs**. If arm A has gone red fewer than 3 times in them, extend by 20 pairs at a time, up to **100 pairs**. If arm A is still under 3 reds at 100 pairs, the line is **`unproven`**: say so with the counts, and do not run it longer.
+  - A single red run on arm B fails the line at once, and the window stops there.
+  - **Red is scored by what the failing assertion says, not by a line number.** A run is red when it exits non-zero, a code-frame line in its output points at a line whose source in that tree is `expect(document.activeElement).toBe(button);`, and the output has `expected <body>`. At `a100f429` that is line 588, the lg-95 save path (580, its cancel path, counts as red too), or 747 or 756 in the lg-99 test. A timeout or any other failure is not red, and the Log records it with its run.
+- **On the branch, based on `main`, the change is in `tools/ledger/web/src/history/History.tsx`**, and `npx vitest run tools/ledger/web/test/history.test.tsx` passes every test in the file (32 at `4e040577`).
+- The four `expect(document.activeElement).toBe(button);` assertions in the two tests stay exactly as written. At `4e040577` they are at these lines of `history.test.tsx`, with `a100f429`'s line in brackets: the lg-95 test's cancel path at 588 (580) and its save path at 596 (588); the lg-99 test's first focus assertion at 755 (747) and its second at 764 (756).
+- `npm run check` exits 0. The ledger project's suite is CI's, on the pull request.
+
+## Review
+
+**Gate: PASS** — 2026-11-15 · `4e040577..657c6195` · Sonnet 5.5, depth full
+
+Read against the ticket as amended on 2026-11-15: the three lines marked superseded are not graded, the amended lines are. CI on #808 was read once at `657c6195`: every check `SUCCESS` (`check`, `test (ubuntu-latest)`, `test (windows-latest, informational)`, `e2e` (ledger), `docker` (ledger), `codeql`, `dependency-review`, `changes`; `pr-title` had one superseded `CANCELLED` run and a later `SUCCESS`).
+
+| Done when                                                                                                      | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The Log names the cause for each test, the run that shows it, and whether the two share it                     | **verified** — the Log's "Build 2" entry names it: the restore effect runs in a later scheduler task than the one the test's `waitFor` returns in, and both tests share it. Read, and consistent with the gate's own window below (passive effect red in 6 of 40, layout effect 0 of 40). The probe that shows it is not kept in the repository; the gate did not re-run it.                                                                                                          |
+| Amended window, lg-95 test: arm A (`a100f429`) at least 3 red, arm B (same, effect as `useLayoutEffect`) 0 red | **verified** — the gate re-ran it: 40 pairs, interleaved, one run at a time under `timeout 120`. **Arm A 6 red of 40, arm B 0 red of 40**, 0 runs failing any other way. Every red was the save-path focus assertion with `expected <body>`. Load 4.45 to 15.54, vitest processes 0 to 24. Per-pair table in the full report.                                                                                                                                                         |
+| Amended window, lg-99 test: same bar                                                                           | **verified (rescored, not re-run)** — the dispatch scoped the gate's re-run to the lg-95 loop. The Log's 60-pair table was rescored from the builder's raw logs (120 logs, scored by assertion content independently of the builder's script): arm A 3 red (the first focus assertion, `focused` arm), arm B 0 red, 0 other failures, **0 of 60 pairs differ** from the Log's table in result, load or process count. The window was extended once, 40 to 60 pairs, as the rule says. |
+| On the branch, the change is in `History.tsx`, and `history.test.tsx` passes every test in it (32)             | **verified** — `git diff 4e040577 657c6195 --stat` lists `History.tsx` and the ticket only. Whole file, head tree: **17 of 18 runs passed 32 of 32**; the one red run failed a different test (F2). Main's tree: 8 of 8 passed. CI `test (ubuntu-latest)` `SUCCESS` at this sha. No warning of any kind in the 18 head runs.                                                                                                                                                          |
+| The four focus assertions stay exactly as written, at the lines the ticket names                               | **verified** — `git diff 4e040577 657c6195 -- tools/ledger/web/test/` is empty. The ticket's four line numbers, at both shas, each resolve to `expect(document.activeElement).toBe(button);` in the test the ticket says (the lg-95 cancel path, its save path, the lg-99 first focus assertion, its second).                                                                                                                                                                         |
+| `npm run check` exits 0                                                                                        | **verified** — CI's `check` job, workflow `CI`, `SUCCESS` at `657c6195`. The gate did not run it locally.                                                                                                                                                                                                                                                                                                                                                                             |
+
+- **low** · no `Done when` line depends on it · **F1**: the amendment's red definition says red is scored by content, then lists the save-path line and the lg-99 lines at `a100f429` and names the cancel path in a parenthesis only. By the content rule a failure of the cancel-path assertion is red; by the list it is not named. It matters only for an arm B failing at the cancel path, which no run of either window did. Reword, or say that the cancel path counts.
+- **low** · no `Done when` line depends on it · **F2**: one whole-file run on the head tree failed a test that is not one of the four focus assertions: `a history read again that is refused says so, over the rows it still shows (lg-98)`, timing out in `findByRole("alert")` over its 550-row list (load 5.74, 14 vitest processes from other sessions). It did not recur: 8 of 8 whole-file runs on each tree at load 2 to 4, and 10 of 10 isolated runs of that one test on each tree under 12 busy-loops (load 2.3 to 15.5). It is not attributed to the change (no control is opened in that test, so the restore effect's condition is false throughout) and not shown to be independent of it. Recorded; if it recurs on `main` it is its own filing, with this run as the first sighting.
+- **dropped** · "a layout effect now moves focus where the old passive one would not". The effect's body, condition and dependency list are unchanged (only the hook name and one import differ). The condition fires on an `open` true to false transition, with `closedByOwn` set and focus on `body`. No other code in `tools/ledger/web/src` or `packages/ui/src` moves focus: the one `.focus()` is this one, and there is no `autoFocus`. Not a defect.
+- **dropped** · "`useLayoutEffect` warns on a server or in tests". No `react-dom/server`, `renderToString` or `hydrateRoot` anywhere outside `node_modules`; React is 19, where the warning is gone; `Chart.tsx` already uses the hook; 18 whole-file runs printed no warning. Not a defect.
+- **dropped** · the ticket title still reads "the cause is not yet shown". Filing-time text; the Log carries the cause. Not a defect.
+- **findings** · the hunt returned 5; 2 carried (F1, F2), 3 dropped.
+- NFR: security n/a · performance ✓ (a no-op layout effect per row, 550 rows mounted in the heaviest test) · reliability ✓ (the window in which focus sat on the page is gone, and the window above measures it) · maintainability ✓ (a comment says why the effect is a layout effect).
 
 ## Log
 
@@ -224,3 +257,157 @@ The filer measured no lg-99 loop. The two tests' rates are therefore each from o
 - 2026-11-10 — Fixed at landing by owner choice: gate 2, N5 — "'Red' is not defined ... the `unproven` bullet says 'whatever the branch did' while the next says a branch red fails 'whatever the base did'". Done when now defines red as a failure at the focus assertion (`:588` in the lg-95 test, `:747` or `:756` in the lg-99 test), with a timeout or any other failure not counting, and settles the clash: the `unproven` grade needs the branch not to have gone red, and a branch red fails the line at once, read first, even when the base is under 3 reds. Proof: `git diff 531bd42c HEAD -- tools/ledger/docs/work/lg-107-flaky-history-focus-test.md | grep -c '^-.*whatever the branch did'` → 1 and `^-.*whatever the base did` → 1; for the definition, which only adds, `grep -v 'Fixed at landing' | grep -c '^+.*Red means the test failing at its focus assertion'` → 1.
 - 2026-11-10 — Fixed at landing by owner choice: gate 2, N6 — "The cost is in the Log only ... At the 100-pair cap that is 200 runs, about 9 to 16 minutes a test, two windows, and a second tree to farm and build". Done when now carries the cost, from the measured 2.7 s (filer) and 4.8 s (gate 1's lg-95 loop at load 15 to 20); the Log's earlier "about 10 minutes" is the quiet-machine figure for one test. Proof, an added sentence: `git diff 531bd42c HEAD -- tools/ledger/docs/work/lg-107-flaky-history-focus-test.md | grep -v 'Fixed at landing' | grep -c '^+.*A run took about 2.7 s'` → 1.
 - 2026-11-10 — Gate 1's and gate 2's full reports are on the pull request thread, #790; status unchanged.
+- 2026-11-15 — **Builder, branch `lg-107-focus-flake` off `main` at `4e040577`. Stopped after Build 1 and Build 2. Nothing is fixed: on `main` the base did not go red, and the dispatch says to report that and not build a fix.** The four entries below give the measurements.
+- 2026-11-15 — **What the brief has wrong at `4e040577`.** lg-98 (#785, `332fd3ae`) rewrote `History.tsx` and `history.test.tsx` after `a100f429` and moved History's reads and writes onto TanStack Query. The file now has 32 tests, not 29: the lg-95 loop prints `Tests 1 passed | 31 skipped (32)` and the lg-99 loop `Tests 2 passed | 30 skipped (32)`. The lines moved by +8. At `4e040577` the lg-95 test starts at line 571, its cancel-path assertion is at 588 and its save-path assertion at 596; the lg-99 test's first focus assertion is at 755 and its second at 764. The Done when's `history.test.tsx:588 … :747 or :756` are `a100f429`'s lines. At `4e040577`, `:588` is the cancel path, which has never failed. Every run below therefore scores red by content: exit non-zero, a code-frame line whose source in that run's tree is `expect(document.activeElement).toBe(button);`, and `expected <body>` in the output. That reads 588 at `a100f429` and 596, 755 or 764 at `4e040577`. The `-t` patterns still match. The restore effect is at `History.tsx:596-609` at `4e040577`, its `button.current?.focus()` at 603.
+- 2026-11-15 — **Build 1, both loops on the base `4e040577`, 100 runs each, one at a time under `timeout 120` (the `## Reproduction` commands): 0 red of 100 (lg-95) and 0 red of 100 (lg-99, 200 cases).** No run failed for any other reason. Load is the 1-minute average from `/proc/loadavg` at each run's start. The vitest count is `ps -eo args | grep -c '[v]itest'` at the same moment. The per-run rows were in the builder's scratch directory, which is not kept.
+
+  | Loop  | Runs | Red | 1-min load  | vitest processes | Mean run |
+  | ----- | ---- | --- | ----------- | ---------------- | -------- |
+  | lg-95 | 40   | 0   | 6.43 – 8.11 | 9 – 27           | 2.6 s    |
+  | lg-95 | 60   | 0   | 2.68 – 8.68 | 0 – 18           | 2.7 s    |
+  | lg-99 | 40   | 0   | 5.76 – 8.56 | 3 – 22           | 2.7 s    |
+  | lg-99 | 60   | 0   | 3.93 – 8.30 | 0 – 23           | 2.7 s    |
+
+  The lg-95 loop was also run 20 more times on the base, pinned with `taskset` to one or two CPUs, each shared with a busy `node -e 'for (;;) {}'`: 0 of 10 red on one CPU (load 3.77 – 4.93) and 0 of 10 on two (load 4.85 – 8.69). Those runs slowed to about 5 s each, so pinning does not bring the failure back. The filer's 2 of 20 was at load 6.43 – 10.27, and the 40-run lg-95 block above covers 6.43 – 8.11 of that range with 0 red. On the same machine, at load 4.75 – 5.65, **the lg-95 loop on `a100f429` went red 2 of 20** (runs 8 and 12, both `history.test.tsx:588:34` and `expected <body>…`, `Tests 1 failed | 28 skipped (29)`). So the failure still reproduces at the filing sha at the filer's rate, and stopped reproducing on `main` after lg-98.
+
+- 2026-11-15 — **Build 2, the cause, shown by a run: the restore effect runs after the test's assertion.** The probe was a copy of the lg-95 save path and of the lg-99 test (both arms) down to the first focus assertion. It was never committed and was removed after each run. It records a timeline with no assertions: the control's `<fieldset>` leaving the DOM (React's commit, logged from `Node.prototype.removeChild`), the end of the commit's macrotask (a `queueMicrotask` marker), every `setTimeout` set after the Save click and who set it, each timer firing, every `focus()` call with the stack frames that name its macrotask and React phase, and the `waitFor`'s return. It also records `document.activeElement` at the assertion and 50 ms later, and whether the row's button is still connected and still the one `findByRole` returns. 20 runs on each tree, 60 cases each:
+
+  | Tree       | Case              | Focus on `body` at assertion | Button focused 50 ms later | Button replaced | Route that ran the effect's `focus()`                                                                  |
+  | ---------- | ----------------- | ---------------------------- | -------------------------- | --------------- | ------------------------------------------------------------------------------------------------------ |
+  | `a100f429` | lg-95 save path   | 6 of 20                      | 20 of 20                   | 0               | `flushPassiveEffects` from `processImmediate` (React's scheduler task), 20 of 20                       |
+  | `a100f429` | lg-99 focused     | 3 of 20                      | 20 of 20                   | 0               | same, 20 of 20                                                                                         |
+  | `a100f429` | lg-99 unfocused   | 5 of 20                      | 20 of 20                   | 0               | same, 20 of 20                                                                                         |
+  | `4e040577` | each of the three | 0 of 20                      | 20 of 20                   | 0               | `flushPassiveEffects` from `listOnTimeout`, inside a TanStack Query `setTimeout(0)` callback, 60 of 60 |
+
+  A red case at `a100f429` (lg-99 unfocused), in ms from the test's start: `125.34` the fieldset leaves the DOM, in the scheduler task that commits; `133.18` that task ends; `133.44` RTL's `asyncWrapper` sets its `setTimeout(0)` drain once the `waitFor` callback has passed; `133.93` the drain fires; `134.08` the `waitFor` returns and the assertion reads `body`; `142.05` the effect calls `focus()` on the same, still-connected button, from `flushPassiveEffects` in the next scheduler task. In every one of the 14 red cases the effect ran after the `waitFor` returned, on the same button. So the effect ran, its condition was true when it ran, and the button was not replaced. **The cause is the third of Build 2's four: the effect runs after the test's assertion.** React commits the close in one scheduler task and runs the passive effect (`useEffect`) in a later one. The test's `waitFor` waits for the DOM change and then for one `setTimeout(0)`, and nothing it waits for orders that timer after React's next scheduler task. **The two tests share this cause.** Both arms of the lg-99 test show it too: the `focused` arm also loses focus to `body`, because the focused Save is removed. That arm did not fail in gate 1's ten lg-99 runs, and the probe shows it is open to the same race (3 of 20).
+
+  Why `main` does not show it: on `4e040577` the same effect is flushed earlier, by a `setTimeout(0)` set from `@tanstack/query-core` before the commit. In all 60 cases the timer that fired just before the effect's `focus()` was one of these, set 14.7 to 32.4 ms before the commit. Its callback leads to sync-priority work (`performSyncWorkOnRoot` on the stack), and React flushes pending passive effects before it does sync work. Which TanStack call sets the timer was not traced. The full stack in one run reads `History.tsx:603` ← `flushPassiveEffects` ← `flushPendingEffects` ← `performSyncWorkOnRoot` ← `processRootScheduleInMicrotask` ← `runNextTicks` ← `listOnTimeout`. That timer was set before RTL's drain, so it fires first, and the effect lands before the assertion. **The race is still in the code**: nothing the test waits for orders the effect before the assertion. It is hidden on `main` by a timer the screen's data layer happens to set. These runs do not show whether that ordering holds on every machine.
+
+- 2026-11-15 — **Both candidate fixes were measured on `a100f429`, where the race shows. Neither is committed: choosing between them is the open decision below.** Test side (`await waitFor(() => focus is on the row's button)` after the Save's `waitFor`, the assertion unchanged): the probe gave 0 of 60 cases on `body`, 20 runs. Product side (the restore effect in `Refile` as `useLayoutEffect`, the rest of `History.tsx` unchanged): the probe gave 0 of 60 on `body`, 20 runs, with the `focus()` now inside the commit, from `flushLayoutEffects` ← `commitRoot`. The real loops gave 0 of 20 (lg-95, load 4.05 – 5.09) and 0 of 20 (lg-99, load 3.36 – 3.90), and `npx vitest run tools/ledger/web/test/history.test.tsx` passed `Tests 29 passed (29)`. Neither run is a Done when window: the base was not interleaved with them, and the base for this ticket's window is `main`, where the race does not show.
+- 2026-11-15 — **Open decision, for the owner through the orchestrator.** (a) Make the restore a `useLayoutEffect` in `Refile` (product). Focus moves in the same commit that removes the control, before any timer or microtask, so no frame has focus on the page, and the two assertions stay exactly as written. The Done when's window cannot be met on `main`, whose base does not go red. The proof would be rewritten as an interleaved window on `a100f429` with and without the one-line change, plus the whole file on `main`. (b) Wait for the focus in the two tests (test side). The test then reads "focus ends on the button" rather than "focus is on the button once the control has closed", and the product keeps a frame where focus is on the page. The same proof problem as (a). (c) Fix nothing and close lg-107 as not reproducing on `main`, with the cause recorded here. The race stays and is hidden by TanStack Query's timer order. The builder recommends (a). Fold-in: none; the change this branch would carry touches nothing else already specified.
+- 2026-11-15 — **Owner's answer to the open decision above**, relayed by the orchestrator on 2026-11-15 and recorded by the builder.
+  - **Question:** fix the race in the product, fix it in the test, or close without a fix?
+  - **Options:** (1) the product fix, making `Refile`'s focus restore a `useLayoutEffect`, with the Done when's window reworded; (2) the test fix, waiting for focus in the two tests; (3) close with the cause recorded and no fix.
+  - **Chosen: (1).** The builder and the orchestrator had both recommended it, and nothing was overridden.
+  - **With it, the owner accepted a reworded proof.** That is the amendment under `## Done when`: an interleaved window on `a100f429`, per test, comparing no change with the one-line change. It keeps the ticket's 40-to-100-pair window, its 3 reds against 0, `unproven` at 100 pairs with no further run, and red scored by the assertion's content. On the branch, the change is in `History.tsx`, the whole of `history.test.tsx` passes as a single file, and the focus assertions stay exactly as written. `npm run check` exits 0, and the ledger suite is left to CI. The three Done when lines this replaces are marked superseded and left in place.
+- 2026-11-15 — **The fix, on the branch (`9c4f2c28`).** `Refile`'s focus restore in `tools/ledger/web/src/history/History.tsx` is now a `useLayoutEffect`. Its body, its condition and its dependencies are unchanged. A comment says why. `useLayoutEffect` joins the `react` import. `history.test.tsx` is untouched: `git diff --stat 4e040577 HEAD` lists only `History.tsx` and this ticket, and lines 588, 596, 755 and 764 still read `expect(document.activeElement).toBe(button);`. On the branch, `npx vitest run tools/ledger/web/test/history.test.tsx` gave `Tests 32 passed (32)`. `npx oxlint tools/ledger/web` exited 0, and `npm run check` exited 0 at `9c4f2c28`. The timeline probe from the Build 2 entry, run 5 times on the branch (15 cases), had focus on the button at the assertion in 15 of 15. The `focus()` ran from `flushLayoutEffects` ← `commitRoot`, inside the commit that removes the control. The ledger project's suite is left to CI on #808.
+- 2026-11-15 — **The amended Done when's windows, both met.** Each ran in one tree at `a100f429`, farmed with `bash .claude/scripts/worktree-farm.sh` and built with `npm run build` (exit 0), then removed. Before each run the tree's `History.tsx` was set to arm A (the file at `a100f429`, compared with `cmp`) or arm B (that file with the effect as `useLayoutEffect`, made by script; `diff` shows only the import line and line 601). Every arm A run had 0 `useLayoutEffect` in the file at its start and every arm B run 2. Each run was the `## Reproduction` loop command under `timeout 120`, one at a time, alternating A, B, A, B. Red is scored as the amendment says. No run failed any other way. Load is the 1-minute average from `/proc/loadavg` at each run's start, and the vitest count is `ps -eo args | grep -c '[v]itest'` at the same moment.
+
+  | Test  | Pairs | Arm A red | Arm B red | 1-min load   | vitest processes | Mean run |
+  | ----- | ----- | --------- | --------- | ------------ | ---------------- | -------- |
+  | lg-95 | 40    | 5         | 0         | 6.02 – 12.88 | 1 – 20           | 2.5 s    |
+  | lg-99 | 60    | 3         | 0         | 3.57 – 6.02  | 0 – 14           | 2.1 s    |
+
+  The lg-95 window stopped at 40 pairs with arm A at 5 reds. Each red was `history.test.tsx:588:34`, the save path, with `Tests 1 failed | 28 skipped (29)`. The lg-99 window had 1 arm A red at 40 pairs, so it was extended by 20, and it had 3 at 60. All three failed at `history.test.tsx:747:36` on the `focused` arm, with `Tests 1 failed | 1 passed | 27 skipped (29)`.
+
+  The lg-95 window, pair by pair:
+
+  | Pair | A (no change)  | B (`useLayoutEffect`) | Load at A | Load at B | vitest at A / B |
+  | ---- | -------------- | --------------------- | --------- | --------- | --------------- |
+  | 1    | green          | green                 | 7.48      | 7.48      | 12 / 12         |
+  | 2    | green          | green                 | 7.36      | 7.36      | 12 / 11         |
+  | 3    | green          | green                 | 7.09      | 7.09      | 12 / 12         |
+  | 4    | green          | green                 | 7.01      | 7.01      | 12 / 12         |
+  | 5    | green          | green                 | 7.00      | 6.84      | 11 / 11         |
+  | 6    | green          | green                 | 6.84      | 7.02      | 12 / 12         |
+  | 7    | green          | green                 | 7.02      | 6.86      | 12 / 11         |
+  | 8    | green          | green                 | 8.15      | 8.15      | 12 / 12         |
+  | 9    | green          | green                 | 7.66      | 7.66      | 12 / 12         |
+  | 10   | **red** (:588) | green                 | 7.52      | 7.52      | 18 / 20         |
+  | 11   | **red** (:588) | green                 | 7.88      | 9.41      | 19 / 16         |
+  | 12   | green          | green                 | 10.50     | 10.50     | 16 / 16         |
+  | 13   | green          | green                 | 10.22     | 12.12     | 12 / 20         |
+  | 14   | **red** (:588) | green                 | 12.12     | 12.03     | 12 / 16         |
+  | 15   | green          | green                 | 12.11     | 12.34     | 12 / 6          |
+  | 16   | green          | green                 | 12.88     | 12.88     | 20 / 10         |
+  | 17   | green          | green                 | 12.25     | 12.25     | 7 / 8           |
+  | 18   | green          | green                 | 11.59     | 11.59     | 13 / 13         |
+  | 19   | green          | green                 | 11.30     | 11.30     | 11 / 11         |
+  | 20   | green          | green                 | 10.87     | 10.87     | 13 / 8          |
+  | 21   | **red** (:588) | green                 | 10.24     | 10.24     | 9 / 9           |
+  | 22   | green          | green                 | 9.74      | 9.74      | 5 / 9           |
+  | 23   | green          | green                 | 9.36      | 9.36      | 8 / 9           |
+  | 24   | green          | green                 | 8.93      | 8.93      | 9 / 4           |
+  | 25   | green          | green                 | 8.78      | 8.78      | 4 / 1           |
+  | 26   | green          | green                 | 8.39      | 8.39      | 4 / 3           |
+  | 27   | green          | green                 | 7.96      | 7.96      | 8 / 8           |
+  | 28   | green          | green                 | 7.73      | 7.73      | 4 / 8           |
+  | 29   | green          | green                 | 7.59      | 7.59      | 5 / 8           |
+  | 30   | green          | green                 | 7.38      | 7.38      | 5 / 8           |
+  | 31   | green          | green                 | 7.35      | 7.35      | 8 / 8           |
+  | 32   | green          | green                 | 7.08      | 7.08      | 11 / 13         |
+  | 33   | green          | green                 | 6.83      | 6.83      | 11 / 13         |
+  | 34   | green          | green                 | 6.61      | 6.61      | 8 / 9           |
+  | 35   | green          | green                 | 6.88      | 6.88      | 13 / 13         |
+  | 36   | **red** (:588) | green                 | 6.73      | 6.73      | 13 / 13         |
+  | 37   | green          | green                 | 6.59      | 6.59      | 13 / 13         |
+  | 38   | green          | green                 | 6.30      | 6.30      | 13 / 13         |
+  | 39   | green          | green                 | 6.20      | 6.20      | 13 / 10         |
+  | 40   | green          | green                 | 6.02      | 6.02      | 13 / 13         |
+
+  The lg-99 window, pair by pair:
+
+  | Pair | A (no change)  | B (`useLayoutEffect`) | Load at A | Load at B | vitest at A / B |
+  | ---- | -------------- | --------------------- | --------- | --------- | --------------- |
+  | 1    | green          | green                 | 6.02      | 5.70      | 13 / 13         |
+  | 2    | green          | green                 | 5.70      | 5.88      | 13 / 13         |
+  | 3    | green          | green                 | 5.88      | 5.73      | 13 / 9          |
+  | 4    | green          | green                 | 5.73      | 5.59      | 9 / 9           |
+  | 5    | green          | green                 | 5.59      | 5.30      | 9 / 9           |
+  | 6    | green          | green                 | 5.30      | 5.30      | 6 / 9           |
+  | 7    | green          | green                 | 5.12      | 5.12      | 9 / 9           |
+  | 8    | green          | green                 | 4.95      | 4.95      | 9 / 9           |
+  | 9    | green          | green                 | 4.95      | 4.95      | 4 / 7           |
+  | 10   | green          | green                 | 4.64      | 4.64      | 8 / 7           |
+  | 11   | green          | green                 | 4.51      | 4.51      | 12 / 9          |
+  | 12   | green          | green                 | 4.39      | 4.39      | 9 / 8           |
+  | 13   | green          | green                 | 4.39      | 4.19      | 9 / 9           |
+  | 14   | green          | green                 | 4.19      | 4.02      | 8 / 9           |
+  | 15   | green          | green                 | 4.02      | 3.78      | 9 / 9           |
+  | 16   | green          | green                 | 3.78      | 3.71      | 9 / 10          |
+  | 17   | green          | green                 | 3.71      | 3.90      | 13 / 12         |
+  | 18   | green          | green                 | 3.90      | 3.99      | 13 / 9          |
+  | 19   | green          | green                 | 3.99      | 3.99      | 9 / 9           |
+  | 20   | green          | green                 | 3.91      | 3.91      | 5 / 8           |
+  | 21   | green          | green                 | 3.91      | 3.91      | 9 / 9           |
+  | 22   | green          | green                 | 5.84      | 5.84      | 5 / 9           |
+  | 23   | green          | green                 | 5.62      | 5.62      | 12 / 10         |
+  | 24   | green          | green                 | 5.57      | 5.57      | 10 / 2          |
+  | 25   | green          | green                 | 5.36      | 5.36      | 5 / 5           |
+  | 26   | green          | green                 | 5.09      | 5.09      | 4 / 5           |
+  | 27   | green          | green                 | 4.92      | 4.92      | 4 / 8           |
+  | 28   | green          | green                 | 4.92      | 4.77      | 8 / 3           |
+  | 29   | green          | green                 | 4.77      | 4.79      | 7 / 7           |
+  | 30   | green          | green                 | 4.79      | 4.72      | 5 / 8           |
+  | 31   | green          | green                 | 4.72      | 4.75      | 7 / 5           |
+  | 32   | green          | green                 | 4.75      | 4.93      | 4 / 10          |
+  | 33   | green          | green                 | 4.93      | 5.17      | 4 / 6           |
+  | 34   | **red** (:747) | green                 | 5.17      | 5.24      | 1 / 4           |
+  | 35   | green          | green                 | 5.24      | 5.22      | 1 / 4           |
+  | 36   | green          | green                 | 5.22      | 4.88      | 0 / 0           |
+  | 37   | green          | green                 | 4.88      | 4.88      | 3 / 3           |
+  | 38   | green          | green                 | 4.65      | 4.65      | 4 / 4           |
+  | 39   | green          | green                 | 4.44      | 4.44      | 4 / 4           |
+  | 40   | green          | green                 | 4.40      | 4.40      | 4 / 4           |
+  | 41   | green          | green                 | 4.29      | 4.29      | 0 / 4           |
+  | 42   | green          | green                 | 4.29      | 4.03      | 4 / 4           |
+  | 43   | **red** (:747) | green                 | 4.03      | 3.94      | 0 / 0           |
+  | 44   | green          | green                 | 3.94      | 3.87      | 0 / 3           |
+  | 45   | **red** (:747) | green                 | 3.87      | 3.80      | 4 / 3           |
+  | 46   | green          | green                 | 3.80      | 3.73      | 4 / 3           |
+  | 47   | green          | green                 | 3.73      | 4.48      | 4 / 0           |
+  | 48   | green          | green                 | 4.48      | 4.48      | 0 / 0           |
+  | 49   | green          | green                 | 4.20      | 4.20      | 0 / 0           |
+  | 50   | green          | green                 | 3.94      | 3.94      | 0 / 0           |
+  | 51   | green          | green                 | 3.94      | 3.71      | 0 / 0           |
+  | 52   | green          | green                 | 3.71      | 3.57      | 0 / 0           |
+  | 53   | green          | green                 | 3.57      | 4.72      | 14 / 7          |
+  | 54   | green          | green                 | 4.72      | 4.83      | 4 / 4           |
+  | 55   | green          | green                 | 4.83      | 5.00      | 4 / 8           |
+  | 56   | green          | green                 | 5.00      | 5.00      | 5 / 4           |
+  | 57   | green          | green                 | 4.92      | 4.92      | 4 / 4           |
+  | 58   | green          | green                 | 4.85      | 4.85      | 4 / 3           |
+  | 59   | green          | green                 | 4.78      | 4.78      | 4 / 0           |
+  | 60   | green          | green                 | 4.56      | 4.56      | 0 / 0           |
+
+- 2026-11-15 — Fixed at landing by owner choice: gate 1, F1 — "By the content rule a failure of the cancel-path assertion is red; by the list it is not named." The amended Done when's red definition now says the cancel-path assertion counts as red too, at line 580 at `a100f429`. Proof: the removed fragment "580 is its cancel path" counts 1 in `git diff 657c6195 HEAD -- tools/ledger/docs/work/lg-107-flaky-history-focus-test.md`, filtered to removed lines.
