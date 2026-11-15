@@ -1135,8 +1135,8 @@ describe("the log (lg-66's rule, for a CSV)", () => {
     const refused = await confirmFile(gapped, bytesOf("csv-balance"), uploaded("csv-balance"));
     expect(errorOf(refused).code).toBe("CSV_NOT_AFTER_TAIL");
     const logged = LOGGED.slice(first);
-    // A line for each of the five requests, so the search below read something.
-    expect(logged.length).toBeGreaterThanOrEqual(5);
+    // A line for each of the four requests, so the search below read something.
+    expect(logged.length).toBeGreaterThanOrEqual(4);
     const secrets = [
       API_KEY,
       "EPICERIE",

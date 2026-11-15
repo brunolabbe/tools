@@ -365,3 +365,44 @@ before round 1's changes.**
   while sending `lg7`) are fixed with the high, without a question.
 - Provenance: the owner, 2026-11-15; the orchestrator relayed it in the round-1
   message, and the builder records it as relayed, not verified against the owner.
+
+**2026-11-15, round 1 (builder, Sonnet 5.5), gate 1's findings on `c13b7559`,
+fixed in `d4448884`.**
+
+- High, fixed (owner's option 1). Each log test now also makes its refusals
+  against its own apps and checks them. csv-import: the same file confirmed a
+  second time (overlap), and a confirm onto a stored tail it does not follow
+  (gap), in a second app started after the first is shut down; both are
+  `CSV_NOT_AFTER_TAIL`, and the test requires exactly two `request rejected`
+  lines carrying that code. workbook-describe: `PK\u0003\u0004` plus text,
+  refused by Describe and by Confirm as `WORKBOOK_NOT_XLSX`, and exactly two
+  such lines. The line-count floor is now 4 in both files, one line per request made
+  (describe, confirm and two refusals). The titles
+  are unchanged, so Done when 2's patterns match.
+- Med, fixed. The CSV secrets gain
+  `bytesOf("csv-balance").toString("base64").slice(0, 40)`.
+- Low, fixed. The workbook test's base64 secret names `lg7`, the file it sends.
+- The gate's plants, run at `d4448884` with the gate's own `mutate3.mjs` and
+  `mutate2.mjs`, each restored with `git checkout HEAD -- <path>` and the tree
+  clean after (`-t`, one file, each reading `1 failed | N skipped`):
+  - `request rejected` carrying `message` and `details`: csv-import red,
+    `expected [ …(2) ] to deeply equal []`, the two lines `CSV_NOT_AFTER_TAIL`
+    with `2024-01-02 \"DEPOT PAIE\" 1823.45 $` in `message`; workbook-describe
+    red, `expected [ …(2) ] to deeply equal []`.
+  - `describe-body` (the whole body logged before the describe line): both red,
+    `expected [ Array(1) ] to deeply equal []`.
+  - `confirm-body`: both red, the same message.
+  - Unplanted: `1 passed | 62 skipped (63)` and `1 passed | 47 skipped (48)`.
+- Done when 1 to 20 seeds, each file alone: csv-import `63 passed (63)` for
+  all twenty and unshuffled, workbook-describe `48 passed (48)` for all twenty
+  and unshuffled. Done when 2, 8: exit 0 for the four `-t` commands, with
+  `1 passed` and the rest skipped. Done when 5: grep exit 1, no output. Done
+  when 6: `git diff --name-only origin/main...HEAD` lists the two specs and this
+  ticket. `npm run check` exit 0.
+- Not changed, on the owner's instruction: Done when 3 still names
+  `toBeGreaterThan(20)`; the property it states holds (`>= 4`
+  over the slice, never over an empty array).
+- Proposed, for the owner, not edited: `.claude/rules/testing.md`'s parenthesis
+  naming `csv-import.test.ts` and `workbook-describe.test.ts` as
+  shuffle-order dependent. The owner has said a separate `docs(repo)` pull
+  request drops it after #805 merges.
