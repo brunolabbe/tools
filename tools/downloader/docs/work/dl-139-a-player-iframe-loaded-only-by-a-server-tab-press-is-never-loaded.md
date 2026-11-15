@@ -393,3 +393,31 @@ Traps:
     is pressed once…` red, 1 failed of 13 run; each restored from `d7dc35f9`
     (clean `git status`). The gate-1 `provoke-probe.mts` rerun differs from gate
     2's reading only in its millisecond columns.
+- 2026-11-15 — Fixed at landing by owner choice: gate 3, F1 — "Still open: a held
+  `<label for>` whose control a form owns" (the owner's answer is under _Gate
+  round 3_ in the Decision; option (a), no re-gate). `MARK_SERVER_TAB_SCRIPT`
+  now also rejects a candidate that holds a `label` whose `control.form` is set,
+  the loop gate 3 measured; the doc comment's form bullet names held labels, and
+  the Round 2 entry above no longer says the code makes the headline true for
+  shapes it did not cover. Fixture `player-tabs-unsafe-control.html` gained
+  `li-label`, `role-label` and `li-label-attr` (gate 3's `q01`, `q02`, `q03`),
+  and a `test.each` at the end of the press-targets spec runs them.
+  - Red without the loop, green with it: `npx vitest run <spec> -t "label"`
+    with the loop absent and the new rows and fixture in the tree → 3 failed, 2
+    passed, 30 skipped (35), each new row with `/beacon/pressed-<ctl>` requested; the whole spec at `dcbead2d` → 35 of 35,
+    run once after `run3.sh` restored every tree.
+  - Gate 3's `run3.sh <tree> <out> dcbead2d` and `tabs-probe3.mts` against
+    `dcbead2d`: `q01`, `q02` and `q03` not pressed, each ended on its landing
+    page; `q05` (a held `label for` a plain `type=button`) and `p05` (a `label`
+    wrapping a radio) pressed; p01, p06 and h04–h06 still not pressed; 12 of 12
+    as expected, and gate 2's `tabs-probe.mts` 19 of 20, `h09` the gate's own
+    expected difference. `run3.sh`'s held-form plant, the clause removed → 3
+    failed, 1 passed, 31 skipped (35); controls (precondition, press and
+    once-per-probe flag removed) each red, restored clean. Its own remedy trial,
+    which adds the loop over the committed one, ended in a Node exception that
+    `tail -3` cut off; moot, the loop being committed.
+  - The doc comment and the Round 2 sentence:
+    `git diff 30dddf53 HEAD -- <ticket> | grep -c '^-.*which the code makes true'`
+    → `1`, and
+    `git diff 30dddf53 HEAD -- tools/downloader/resolvers/src/browser/provoke.ts | grep -c '^-.*holds no form and no button'`
+    → `1`.
