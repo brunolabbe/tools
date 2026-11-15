@@ -339,3 +339,29 @@ requests against its own app and reads only the lines that app logged.
   says plain `--sequence.shuffle` fails these two files; after this change it
   no longer does, but that page is the owner's, so the line is proposed in the
   report and not edited here.
+
+**2026-11-15, the owner's answers on gate 1's findings at `c13b7559`, recorded
+before round 1's changes.**
+
+- Question (gate 1, high): the log tests no longer read a refused request's
+  line (`request rejected`), so the CSV half lost a guard against a real leak.
+  The gate's plant, `message` and `details` added to that line in
+  `registerErrorHandling`, turned the base csv-import log test red on
+  `CSV_NOT_AFTER_TAIL` lines carrying a CSV row's text, and left the head test
+  green. Options: (1) each log test also makes, against its own app, the
+  refused requests whose lines it used to read; (2) accept the narrower test,
+  reword both titles and file the refused-line coverage, which would also
+  change Done when 2's `-t` patterns.
+- Choice: (1). The recommended option (the gate's and the builder's). The
+  titles stay, so Done when 2's `-t` patterns keep matching.
+- Also decided: `.claude/rules/testing.md`'s parenthesis naming
+  `csv-import.test.ts` and `workbook-describe.test.ts` as shuffle-order
+  dependent will be dropped by a separate `docs(repo)` pull request after #805
+  merges, on the owner's instruction. Nothing under `.claude/` changes on this
+  branch (Build 4, Done when 6).
+- Not in this round, by the owner's instruction: Done when 3 still names
+  `toBeGreaterThan(20)`; it is not reworded.
+- The med (CSV secrets lack a base64 entry) and the low (workbook names `lg37`
+  while sending `lg7`) are fixed with the high, without a question.
+- Provenance: the owner, 2026-11-15; the orchestrator relayed it in the round-1
+  message, and the builder records it as relayed, not verified against the owner.
