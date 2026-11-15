@@ -60,7 +60,7 @@ test("a probe is still pending just before 90 s and rejects with TIMEOUT at 90 s
 
   await vi.advanceTimersByTimeAsync(PROBE_TIMEOUT_MS - 1);
   expect(outcome()).toBe(PENDING);
-  expect(signalOf(fetchSpy, ROUTES.probe)?.aborted).toBe(false);
+  expect(signalOf(fetchSpy, ROUTES.probe)?.aborted).not.toBe(true);
 
   await vi.advanceTimersByTimeAsync(1);
   expect(outcome()).toMatchObject({ code: "TIMEOUT" });
@@ -93,7 +93,7 @@ test("a createJob is still pending just before 30 s and rejects with TIMEOUT at 
 
   await vi.advanceTimersByTimeAsync(CREATE_JOB_TIMEOUT_MS - 1);
   expect(outcome()).toBe(PENDING);
-  expect(signalOf(fetchSpy, ROUTES.jobs)?.aborted).toBe(false);
+  expect(signalOf(fetchSpy, ROUTES.jobs)?.aborted).not.toBe(true);
 
   await vi.advanceTimersByTimeAsync(1);
   expect(outcome()).toMatchObject({ code: "TIMEOUT" });

@@ -298,13 +298,13 @@ test("a Download whose job POST never settles is released at 30 s, and the Downl
   // again, and the job count has fallen by one, which is read through the page
   // as the waiting Download going out.
   await advance(1_001);
-  expect(within(first).getByRole("alert")).toBeDefined();
   // The failure panel carries a Dismiss of its own beside the box's, so each
   // name is read as every button that bears it.
   for (const name of ["Download", "Analyse again", "Dismiss"]) {
     const buttons = within(first).getAllByRole("button", { name });
     expect(buttons.map((button) => button.hasAttribute("disabled"))).not.toContain(true);
   }
+  expect(within(first).getByRole("alert")).toBeDefined();
   expect(server.jobs).toHaveLength(3);
   expect(server.jobs[2]?.url).toBe("https://videos.example.com/watch/third");
   expect(lineIn(third)).not.toBe(JOB_WAITING);
