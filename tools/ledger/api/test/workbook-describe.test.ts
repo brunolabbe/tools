@@ -816,6 +816,10 @@ describe("the log (Done when 8)", () => {
     const secrets = [
       API_KEY,
       fileOf("lg7").toString("base64").slice(0, 40),
+      // The refused upload, as a body carries it and as text: a refusal line is
+      // where it would show, and it is not in the lg7 secrets above.
+      notOne.toString("base64"),
+      "this is not a workbook",
       "classeur",
       "releve",
       ".xlsx",
