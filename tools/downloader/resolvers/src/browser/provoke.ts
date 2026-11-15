@@ -1750,8 +1750,9 @@ const SERVER_TAB_MAX_LABEL = 24;
  *   link is written) and its target is this window; a `role=link` without an
  *   `href` never is;
  * - a form submits, so the control is not inside a form or a label, not owned by
- *   one through its `form` attribute, and holds no form and no button, input,
- *   select or textarea that a form owns.
+ *   one through its `form` attribute, and holds no form, no button, input,
+ *   select or textarea that a form owns, and no label whose control (inside the
+ *   candidate or beside it) a form owns.
  *
  * **What this cannot see** is a handler that does it by script (`location.href`,
  * `window.open`): the departure guard is what ends a probe after the first, and
@@ -1798,6 +1799,10 @@ const MARK_SERVER_TAB_SCRIPT = `(() => {
     if (el.querySelector('form')) return false;
     var inside = el.querySelectorAll('button, input, select, textarea');
     for (var f = 0; f < inside.length; f++) if (inside[f].form) return false;
+    // A label it holds points at a control that may sit outside it, and a click on
+    // the label activates that control: a submit button a form owns submits.
+    var lbls = el.querySelectorAll('label');
+    for (var g = 0; g < lbls.length; g++) if (lbls[g].control && lbls[g].control.form) return false;
     // A click on a wrapper lands on the link it wraps, and one on a control inside
     // a link bubbles to the link: so the control, what it holds and what holds it.
     var around = el.closest(LINKS);

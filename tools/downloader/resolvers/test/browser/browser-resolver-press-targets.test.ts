@@ -388,4 +388,22 @@ describe("the server-tab press and what it must not set off (dl-139 gate round 1
     expectCode(error, "NO_MEDIA_FOUND");
     expect(server.requests.filter((pathname) => pathname.startsWith("/beacon/"))).toEqual([]);
   });
+
+  // Gate 3's remainder of the same mechanism, from the other side: a label inside
+  // the candidate points at a control outside it, and a click on the label
+  // activates that control, so the form the control belongs to submits.
+  test.each([
+    ["a list item holding a Server 2 label for a form's submit button", "li-label"],
+    ["a role=tab wrapper of a Player 01 label for a form's submit button", "role-label"],
+    [
+      "a list item holding a Server 2 label for an input a form owns through its form attribute",
+      "li-label-attr",
+    ],
+  ])("does not press %s", { timeout: TEST_TIMEOUT_MS }, async (_name, ctl) => {
+    server.requests.length = 0;
+    const error = await probeError(`/player-tabs-unsafe-control.html?ctl=${ctl}`, resolverWith());
+
+    expectCode(error, "NO_MEDIA_FOUND");
+    expect(server.requests.filter((pathname) => pathname.startsWith("/beacon/"))).toEqual([]);
+  });
 });

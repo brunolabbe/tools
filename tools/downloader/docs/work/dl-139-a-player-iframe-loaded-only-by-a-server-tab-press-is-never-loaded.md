@@ -364,7 +364,9 @@ Traps:
   rewritten to say what is checked (a link's address and target, a form around,
   owning or inside the control) and that a handler that leaves by script is not
   seen. Its first sentence now reads "a control whose _markup says_ a click would
-  carry the page off", which the code makes true; the old one, "a control that a
+  carry the page off", which the code made true for the shapes round 2 named and,
+  gate 3 found, not for a held `<label for>` whose control a form owns (the
+  landing fix below closes that); the old one, "a control that a
   click would carry off the page", was false for a script handler and said so two
   sentences later.
   - Fixture `player-tabs-unsafe-control.html` gained `li-form`, `role-form` and

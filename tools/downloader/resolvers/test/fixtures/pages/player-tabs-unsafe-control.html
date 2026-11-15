@@ -21,7 +21,10 @@
          target-new     a "Server 2" link to "#" that opens a new window
          li-form        a list item whose text is "Server 2", holding a form's submit button
          role-form      a role="button" wrapper of the same form
-         li-form-attr   a list item holding a "Server 2" button owned by a form outside it -->
+         li-form-attr   a list item holding a "Server 2" button owned by a form outside it
+         li-label       a list item holding a label "Server 2" for a submit button of a form beside it
+         role-label     a role="tab" wrapper of a label "Player 01" for the same button
+         li-label-attr  a list item holding a label "Server 2" for an input owned by a form outside it -->
     <div id="slot"></div>
     <div class="player-wrap">
       <iframe
@@ -68,6 +71,18 @@
           '<form id="f" action="' +
           left +
           '"><input type="hidden" name="q" value="1" /></form><ul style="margin:0;padding:0"><li id="t" style="display:inline-block"><button form="f">Server 2</button></li></ul>',
+        "li-label":
+          '<ul style="margin:0;padding:0"><li id="t" style="display:inline-block"><label for="s">Server 2</label></li></ul><form action="' +
+          left +
+          '"><button id="s">Go</button></form>',
+        "role-label":
+          '<div id="t" role="tab" aria-selected="true" style="display:inline-block"><label for="s">Player 01</label></div><form action="' +
+          left +
+          '"><button id="s">Go</button></form>',
+        "li-label-attr":
+          '<form id="f" action="' +
+          left +
+          '"><input type="hidden" name="q" value="1" /></form><ul style="margin:0;padding:0"><li id="t" style="display:inline-block"><label for="s">Server 2</label></li></ul><input type="submit" id="s" form="f" value="Go" />',
       };
       document.getElementById("slot").innerHTML = markup[ctl] || "";
       document.addEventListener(
