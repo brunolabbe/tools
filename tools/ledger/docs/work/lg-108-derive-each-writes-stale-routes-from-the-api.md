@@ -490,8 +490,7 @@ screen case still proves were open here until the owner answered them on
   | closePeriod                                                         | adminHouseholds, people, periods, periodOpen, stats mortgage-own, spending, settlements                                         | buckets, inbox, autoFiled, rows, periodLines, mortgage, spendingCategoryMap, stats mortgage-payments, salaries, contributions, buffer, fixed-items                   |
   | addLine, correctLine, retireLine, fileReceipt                       | periodOpen, periodLines, stats spending                                                                                         | the rest of `BOOKS`                                                                                                                                                  |
   | addRecurring, changeRecurring                                       | recurring, periodOpen, stats fixed-items                                                                                        | the rest of `BOOKS`                                                                                                                                                  |
-  | createRule, editRule                                                | rules, inbox, rows                                                                                                              | —                                                                                                                                                                    |
-  | retireRule                                                          | rules, inbox                                                                                                                    | rows                                                                                                                                                                 |
+  | createRule, editRule, retireRule                                    | rules, inbox, rows                                                                                                              | —                                                                                                                                                                    |
   | enterSalaries                                                       | salaries, stats salaries                                                                                                        | ratios and the rest of `BOOKS`                                                                                                                                       |
   | confirmRatio                                                        | ratios, periodOpen, stats salaries                                                                                              | salaries and the rest of `BOOKS`                                                                                                                                     |
   | addSpendingCategory, renameSpendingCategory, retireSpendingCategory | spendingCategories, stats spending                                                                                              | spendingCategoryMap, rows, inbox, autoFiled, periodLines                                                                                                             |
@@ -554,6 +553,7 @@ screen case still proves were open here until the owner answered them on
 
   `npx tsc --build` → 0 `error TS`; `npx oxlint tools/ledger/api tools/ledger/web`
   exit 0. The ledger suite is left to CI on the draft.
+
 - 2026-11-15 — **Owner answers after the build** (owner, 2026-11-15; recorded by the
   round-1 fixer, Sonnet 5.5). Two decisions, each with the options put to the owner
   and the choice.
@@ -571,3 +571,24 @@ screen case still proves were open here until the owner answered them on
      the committed case files `fileReceipt` to a line, so an omission of
      `receiptMatches` on a filing onto a row is not caught, and no screen holds that
      answer stale.
+- 2026-11-15 — **Round 1, gate 1's F1** (fixer, Sonnet 5.5; gate 1 at `79f1fdbd`).
+  `retireRule`'s seed now creates a rule from `MORTGAGE_RULE`, the one `createRule`'s
+  seed uses, and retires that, so the retirement changes `rows` (commit `77b67ed8`).
+  The per-write table above is corrected in place: `retireRule` joins `createRule`
+  and `editRule` on one row, changed `rules, inbox, rows`, marked and unchanged none;
+  the two-seed paragraph under it is the build's own account and stands, with
+  `retireRule` the third seed widened. Before and after the seed, the printed
+  `changed` lines of all 34 writes are identical except `retireRule`'s (a `diff` of
+  the two verbose runs prints that one line: `changed 2 [/api/rules /api/inbox];
+  marked and unchanged 1 [/api/rows]` → `changed 3 [/api/rules /api/inbox
+  /api/rows]; marked and unchanged 0 []`).
+  Plant before: `retireRule: entry(() => retireRule, [ROUTES.rules, ROUTES.inbox])`
+  in `web/src/writes.ts` → `Tests 34 passed (34)`. After, on the committed seed:
+  `Tests 1 failed | 33 passed (34)`, `retireRule marks every route its write changes
+  (lg-108)`, `+ "retireRule changed /api/rows, which WRITES does not mark"`, summary
+  `1 changed routes not marked.` Restored with `git checkout 77b67ed8 -- tools/ledger/web/src/writes.ts`,
+  `git status --short` empty. Head: `npx vitest run
+  tools/ledger/api/test/writes-derived.test.ts --reporter=verbose` → `Tests 34 passed
+  (34)`, `lg-108: 34 of 34 writes compared; 0 changed routes not marked.`;
+  `npx vitest run tools/ledger/web/test/writes.test.tsx` → `Tests 36 passed (36)`.
+  Not changed: gate 1's low F2 (`writes.ts` header), outside Done when 11.
