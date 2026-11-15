@@ -3,7 +3,7 @@ id: dl-137
 tool: downloader
 title: An unbroken page title or error message widens the page past the screen
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: [dl-133]
 difficulty: standard
@@ -39,7 +39,9 @@ the page unguarded.
 - **The probe panel's heading**, `h2.card__title` in
   `web/src/components/ProbePanel.tsx`, shows `probe.title`: the page's own
   `<title>`, which the resolver passes through and a site chooses.
-- **The job card's heading**, `h3.job__title` in `web/src/components/JobCard.tsx`:
+- **The job card's heading** (on `main` at `a100f429` `h3.job__title`; since dl-133 the
+  same `h2.card__title` the analysis uses, drawn by `BoxHead`), in
+  `web/src/components/JobCard.tsx`:
   `const heading = title ?? job.variant?.label ?? job.sourceUrl;`. The title is
   the one the visitor saw at Download, kept beside the job list under
   `downloader:titles:v1` (`web/src/lib/job-store.ts`, `loadTitles`/`saveTitles`).
@@ -163,9 +165,11 @@ unchanged on dl-133's head, which was read, not run.
    Beside the width reading, each case asserts that the string is **whole and
    wrapped, not cut**: the element's text equals the string, and its box is
    taller than one line (its height exceeds 1.5 times its computed
-   `font-size`, read with `getComputedStyle` as a pixel value; `line-height`
-   reads `normal` on these elements and is not a number) with its right edge
-   inside `innerWidth`. A heading clipped to a letter would pass the width
+   `line-height`, read with `getComputedStyle` as a pixel value: the shared
+   base sets `1.55`, so it computes to a pixel value on these elements, and
+   the brief's `font-size` bound and its claim that `line-height` reads
+   `normal` were wrong, see the 2026-11-15 Log entry) with its right edge
+   inside `innerWidth` and the text not running past the element's own box. A heading clipped to a letter would pass the width
    reading alone. **Open the screenshots**.
 
    `h2.card__title` is not unique on the page the cases reach: the "Analyse a
@@ -199,6 +203,42 @@ owner: widen dl-137.** The options were: widen this ticket to
 Done when now also cover `.notice__message` with the same declaration, checked
 by the same shape of layout case. The widened Build and Done when are written
 in round 1; the Why records F4's reproduction.
+
+**Question 4, gate 1's F1 on the built head (an unbroken subtitle language in the
+"Embed subtitles" label) — answered 2026-11-15 by the owner: fold it in, over
+the gate's recommendation to file.** The options were (1) file a ticket, the
+gate's recommendation; (2) fold it into dl-137 as one CSS rule and one layout
+case, then a narrow gate 2; (3) record only. The owner chose (2) and so
+overrode the gate's recommendation. The gate's finding: a 200-character
+unbroken `language` in `probe.subtitles` reaches the label
+`Embed subtitles (…)` in `ProbePanel.tsx` (`.options__row label`,
+`display: inline-flex`, no `overflow-wrap`) and reads `scrollWidth` 1875 at 360
+px and 2028 at 1280 px, the same on the base and on the head 8f64987c; a remote
+manifest controls the value (`resolvers/src/manifest/hls.ts` copies the
+`LANGUAGE` attribute as it is). **Scope: this ticket now also covers that one
+label, with one rule and one case appended to `e2e/layout.spec.ts`.** The
+`Done when` lines above are unchanged and still describe the four elements.
+Also answered the same day: F2 and F3 of the same gate (a code comment and two
+Log descriptions that misstate what the screenshots show) are fixed in this
+round.
+
+**Question 5, the builder's open decision on the subtitle label's checkbox —
+answered 2026-11-15 by the owner: A, leave it centred.** When a long language
+list wraps, the checkbox stays vertically centred on the whole wrapped block
+(`align-items: center` on `.options__row label`), not on its first line. The
+options were (A) leave it centred, the builder's recommendation, as built; (B)
+`align-items: baseline`, which puts the box on the first line and shifts the
+other option labels by a pixel or two, at the cost of a fixer round and a narrow
+gate 3. The owner chose A. No recommendation was overridden.
+
+**Question 6, gate 2's N1 (low) — answered 2026-11-15 by the owner: (1), record
+only.** The subtitle case's "taller than one and a half lines" clause also
+passes without the fix, because the unfixed label already breaks once at the
+space before the bracket; the case still goes red without the fix through its
+width and right-edge checks. The options were (1) record only, the
+orchestrator's recommendation; (2) tighten the assertion, with a narrow
+re-gate. The owner chose (1). The finding stays in gate 2's record as written,
+unfixed. No recommendation was overridden.
 
 The question as it stood when filed, and the options with their costs as the
 filing put them (the costs are corrected in round 1, F1 and
@@ -289,6 +329,51 @@ this ticket `dropped` with the reason. If C, `depends_on` stays empty.
    the failing and passing output in the Log.
 6. `npm run check` and `npm test -- --project downloader` pass.
 
+## Review
+
+**Gate: PASS** — 2026-11-15 · `4e040577..8f64987c` · Opus 5.5, depth full
+
+| Done when                                                                                                              | Proof                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1. `overflow-wrap: anywhere` on `.card__title` and `.notice__message`, on no wrapper                                   | **verified** — the diff of `web/src/styles.css` adds exactly those two declarations and nothing else; the built CSS counts 6 `overflow-wrap:anywhere` on the head, 4 on the base stylesheet                                                                                                                                                                                                                  |
+| 2. Four elements fit at 360 and 1280 with a 200-character unbroken string, each its own case                           | `e2e/layout.spec.ts` › "an unbroken page title in the analysis box's heading wraps (dl-137)", "an unbroken page title in a running job's heading wraps (dl-137)", "a restored job's address as its heading wraps (dl-137)", "a restored job's unbroken error message wraps (dl-137)": `fitsBothWidths`' `scrollWidth <= innerWidth` ✓ — CI `e2e (direct)` (downloader) success at `8f64987c`; local 14 of 14 |
+| 3. Text equals the string, taller than one line, right edge inside `innerWidth`; Log describes four opened screenshots | the same four cases, `wrapsWhole`: `toHaveText`, height > 1.5 × computed `line-height` (26.04 px), `right <= innerWidth`, `scrollWidth - clientWidth <= 0` ✓ (CI as above). Screenshot clause **verified** by reading the Log, with two descriptions wrong (low below)                                                                                                                                       |
+| 4. Spaced-title case green before and after; the file's other cases green                                              | **verified** — "a title with spaces still wraps at them (dl-137)" and the nine older cases pass on the base stylesheet and on the head (10 of 14 and 14 of 14)                                                                                                                                                                                                                                               |
+| 5. The four unbroken cases fail on the base at both widths, pass after                                                 | **verified** — base stylesheet in the head tree: `4 failed, 10 passed`, each at both widths, readings 1846/1998, 1846/1998, 2091/2243, 2505/2658 px, equal to the Log's; head `14 passed`                                                                                                                                                                                                                    |
+| 6. `npm run check` and `npm test -- --project downloader` pass                                                         | **verified** — check exit 0; 2622 passed, 2 skipped of 2624 (127 of 128 files, 1 skipped)                                                                                                                                                                                                                                                                                                                    |
+
+- **Positive controls:** `overflow-wrap` removed from `.notice__message` alone turns only the error-message case red, at both widths, on the width, height and overflow assertions, and the three title cases stay green. Removed from `.card__title` alone, it turns the three title cases red the same way and leaves the message case green. `right edge inside the window` failed in neither control: the overflow assertion carries that part of the clause.
+- **low** · F1 · no `Done when` line depends on it · on `main` already, not caused by this branch: a subtitle track's language widens the page. A 200-character unbroken `language` in `probe.subtitles` reaches the "Embed subtitles (…)" label in `ProbePanel.tsx` (`.options__row label`, `display: inline-flex`, no `overflow-wrap`). It reads `scrollWidth` 1875 at 360 px and 2028 at 1280 px, the same on the base and on the head. A remote manifest controls the value: `resolvers/src/manifest/hls.ts` copies the subtitle rendition's `LANGUAGE` attribute as it is. It is outside the four elements the owner chose (open decision in the report).
+- **low** · F2 · `nfr:maintainability` · the running-job case's comment says the job is "still downloading while it is measured". The head's screenshot `Unbroken title, running job-1280.png` shows `Re-analysing` (`probing`), 0 B. That is false in the safe direction, because every active status draws the same `BoxHead` heading.
+- **low** · F3 · the Log's screenshot descriptions are partly wrong: the running job's title sits **above** the `Re-analysing` pill, not under it. The restored job's address takes seven lines at 360 px, not six. Both are false in the safe direction, because the assertions do not rest on them.
+- **dropped** · rendition label, video codec, audio codec and language cells at 200 characters: the page stays at 360 and 1280 px. `.tablewrap`'s `overflow-x: auto` holds the table, at a `scrollWidth` of up to 2271 px, inside its own scroller. That is the table's design, not a page scroll.
+- **dropped** · `wrapsWhole`'s right-edge assertion never goes red, even on the base. Not a defect: the Log says so itself, and the overflow assertion catches a cut string.
+- **findings** · the hunt returned 5; 3 carried, 2 dropped.
+- NFR: security n/a (CSS and a test) · performance n/a · reliability ✓ (no base/head change in 242 element boxes over 16 state-widths of ordinary text) · maintainability — F2.
+
+### Gate 2
+
+**Gate: PASS** — 2026-11-15 · `8f64987c..bf990293` (the round: `7c0f6048`, `139c7ed5`; `bf990293` merges `main` at `e7d791d6`, three unrelated ticket files) · Opus 5.5, depth narrow
+
+| Done when                                                                            | Proof                                                                                                                                                                                                                      |
+| ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. `overflow-wrap: anywhere` on `.card__title` and `.notice__message`, on no wrapper | **verified** — both declarations unchanged since gate 1; the round adds a third on `.options__row label`, which wraps no page. The built CSS counts 7 `overflow-wrap:anywhere` at `bf990293`, 6 on `8f64987c`'s stylesheet |
+| 2. Four elements fit at 360 and 1280, each its own case                              | `e2e/layout.spec.ts` › the four dl-137 cases named in gate 1, `fitsBothWidths` ✓ — CI `e2e (direct)` (downloader) success at `bf990293`; local 15 of 15                                                                    |
+| 3. Whole, taller than one line, right edge inside; Log describes the screenshots     | the same four cases, `wrapsWhole` ✓ (CI as above). Screenshot clause **verified**: every line count the Log now states measured as box height over computed `line-height` and as distinct line boxes, all equal (F3)       |
+| 4. Spaced-title case green; the file's other cases green                             | **verified** — `layout.spec.ts` at `bf990293`: `15 passed`, "a title with spaces still wraps at them (dl-137)" among them                                                                                                  |
+| 5. Four unbroken cases red on the base, green after                                  | **verified** — gate 1's run at `8f64987c`; the round changes neither those four cases' assertions nor the two rules (the diff touches one comment in the running-job case), so it was not re-run                           |
+| 6. `npm run check` and `npm test -- --project downloader` pass                       | **verified** — check exit 0; 2622 passed, 2 skipped of 2624 (127 of 128 files, 1 skipped)                                                                                                                                  |
+
+- **F1 fixed.** Gate 1's own probe at `bf990293`: the subtitle-language reading is 360 at 360 px and 1280 at 1280 px, where gate 1 read 1875 and 2028. The new case "an unbroken subtitle language in the Embed subtitles label wraps (dl-137)" is red at both widths with the declaration planted out, and red on `8f64987c`'s stylesheet (1875 and 2028 px; right edge 1859.8 and 2012.6). It is green at the head. Recorded as the owner's question 4 with the options and the override, matching the dispatch.
+- **F2 fixed.** The comment now says "still active" and `probing`, and gives the reason (`BoxHead`).
+- **F3 fixed.** Measured at `bf990293`: title 11/3, running job 11/3, address 7/3, message 10/3, spaced title 14/3, subtitle label 9/4 (360/1280). Every one equals the Log, the message's 10 (the builder's own correction) included. The two subtitle screenshots match their description, the checkbox centred on the block included.
+- **Reach of the new rule:** no box moved. 176 boxes over 14 state-widths of ordinary text in every state with an `.options__row`: no subtitles (disabled), empty list, two languages, twelve languages (which wrap at spaces at 360 px), Audio only with and without subtitles, and the live row. Gate 1's 242 boxes over 16 state-widths, `8f64987c` against `bf990293`, differ only in a fixture port number in the text.
+- **low** · N1 · `nfr:maintainability` · no `Done when` line depends on it · the new case's "taller than one and a half lines" clause holds on the unfixed stylesheet. "Embed subtitles" and "(SSS…" break at the space before the bracket, so the label is 2 lines (44.66 px against 33.48) while the page is 1875 px wide. The case goes red only through `fitsBothWidths` and the right-edge clause, and the overflow clause does not fire either. The case still proves the fix, so a reader who trusts the height clause as evidence of wrapping is the only one misled.
+- **dropped** · the Log says "the brief allowed saying so in place of moving" the checkbox. The ticket's brief says nothing about the checkbox, so this presumably means the builder's dispatch, which a gate is not given. Unmeasured, not a defect I can establish.
+- **findings** · the round's attacks returned 2; 1 carried, 1 dropped.
+- NFR: security n/a (one CSS declaration and a test) · performance n/a · reliability ✓ (no box moved, above) · maintainability — N1.
+- CI at `bf990293`: 11 of 11 green, `test (windows-latest, informational)` included. Nothing pending.
+
 ## Log
 
 - **2026-11-10, filed** from dl-133's gate 1, F4 (Sonnet 5.5, dl-133's head
@@ -367,3 +452,98 @@ this ticket `dropped` with the reason. If C, `depends_on` stays empty.
 - 2026-11-10 — Gate 1's and gate 2's full reports are on the pull request thread,
   #784; status unchanged. This pull request only files the ticket, so the thread
   is the record and the ticket carries no `## Review` section.
+- **2026-11-15, built** (Sonnet 5.5, base `4e040577`, branch
+  `downloader/dl-137-overflow-wrap`). dl-133 had merged (#781, `43026e11`), so
+  Build 1 held. Two declarations: `overflow-wrap: anywhere` on `.card__title`
+  and on `.notice__message` in `web/src/styles.css`, nothing on any wrapper.
+  The boxes already shrink: `.job__titles` has `min-width: 0` and
+  `.card__headline` too, and the notice is a block, so no `min-width` was
+  added; the layout reading below is the proof.
+  - **Five cases appended to `e2e/layout.spec.ts`**, four unbroken and the
+    spaced one (Build 3 and 4), each read at 360 and 1280 px through
+    `fitsBothWidths` plus a `wrapsWhole` helper (text equals the string,
+    box taller than one and a half lines, right edge in the window, text not
+    running past its box).
+  - **Red before, green after**, `E2E_PORT=8237 npm run e2e:downloader --
+    tools/downloader/e2e/layout.spec.ts`. Before the fix: `4 failed, 10
+    passed`; the four unbroken cases failed at both widths on the width
+    reading (`Unbroken title, analysis is 1846 px wide in a 360 px window`,
+    `1998` at 1280; running job 1846 / 1998; restored job address 2091 /
+    2243; restored job message 2505 / 2658) and on `taller than one and a
+    half lines` and `the text runs past its box` at both widths. After:
+    `14 passed (32.7s)`; the spaced case is green on both sides.
+  - **What the brief had wrong.** (1) Build 3 said `line-height` reads
+    `normal` and to measure height against 1.5 times the font size. It
+    computes to `26.04px` (the base's `1.55` on a `16.8px` font), so one line
+    is taller than 1.5 times the font size (25.2 px) and that bound passed on
+    the unfixed page; the helper measures against the computed `line-height`
+    instead. (2) A right edge inside `innerWidth` passes on the unfixed page
+    too: the box stays the column's width and the text spills out of it
+    (`scrollWidth 2063` against `clientWidth 305` in a debug read), so the
+    helper also asserts `scrollWidth <= clientWidth`. Both were found by the
+    first run, where the cases failed on the width reading alone and the
+    wrapped-not-cut assertions passed before the fix. (3) The Why's
+    "job card's heading `h3.job__title`" is `h2.card__title` on `main` now;
+    the bullet says so. The rest of the Why is the filing's record of
+    `a100f429` and was left as it was.
+  - **Screenshots opened** (`e2e/.artifacts/layout/`, ignored by git, uploaded by CI):
+    `Unbroken title, analysis-360.png` shows the 200 "T" wrapped into eleven
+    lines beside the preview, the page not scrolled; `Unbroken title, running
+    job-1280.png` shows it on three lines above the Re-analysing pill, whole;
+    `Unbroken address, restored job-360.png` shows the address on seven lines
+    above the Failed pill; `Unbroken message, restored job-360.png` shows the
+    message on ten lines inside the notice, the title and code still on
+    their own row.
+  - **Fold-in:** none. Nothing small and already specified came free; dl-135's
+    `.card__title` font-size edit is its own and was left alone.
+- **2026-11-15, round 1** after gate 1 (Opus 5.5, depth full, PASS at `8f64987c`,
+  CI 11 of 11 green). The owner's answers are under _Decision_, question 4, and
+  record that the owner **widened this ticket to the "Embed subtitles" label,
+  overriding the gate's recommendation to file**; the `Done when` lines do not
+  change.
+  - **F1 fixed (folded in).** A 200-character unbroken `language` in
+    `probe.subtitles` (the gate's route rewrite, in the new case `an unbroken
+    subtitle language in the Embed subtitles label wraps (dl-137)`, appended at
+    the end of `e2e/layout.spec.ts`). Red on `8f64987c`'s stylesheet, which this
+    branch still had, `E2E_PORT=8237 npm run e2e:downloader --
+    tools/downloader/e2e/layout.spec.ts`: `1 failed, 14 passed`, with `Unbroken
+    subtitle language is 1875 px wide in a 360 px window` and `2028 px wide in a
+    1280 px window` (the gate's figures to the pixel) and `right edge inside the
+    window` at both widths. Fix: `overflow-wrap: anywhere` on `.options__row
+    label`, the gate's "likely direction", **measured and not assumed**: the
+    anonymous flex item that holds the label's text takes its minimum size from
+    the label's own `overflow-wrap`, so the one declaration on the label is
+    enough, with no `min-width: 0` and nothing on the row. Green: `15 passed
+    (31.1s)`. The rule is on the shared selector, so it also covers "Audio only"
+    and every other label in an `.options__row`; nothing else in the stylesheet
+    changed. Note the case reads the row's wrapped-not-cut figures as well: the
+    label is 9 lines tall at 360 px and 4 at 1280 px.
+  - **Screenshots opened:** `Unbroken subtitle language-360.png` shows "Embed
+    subtitles" and the whole language on nine lines inside the Output box, the
+    page not scrolled; `-1280.png` shows four lines, "(SSS…" starting on the
+    second line because the text wraps before the bracket. **Where the checkbox
+    goes:** it stays beside the label's text but is **vertically centred on the
+    whole block, not on its first line** (`align-items: center` on the label, left
+    as it is so the single-line labels keep their look and dl-135 rebases over a
+    two-line diff). The brief allowed saying so in place of moving it. It is a
+    choice for the owner if the first line is wanted: `align-items: baseline` on
+    that selector, which would also move "Audio only" and the rest by a pixel or
+    two.
+  - **F2 fixed.** The running-job case's comment says the job is "still active"
+    and that it reads `Re-analysing` (`probing`, 0 B) in the screenshot, with
+    the reason that does not matter: every active status draws the same
+    `BoxHead`.
+  - **F3 fixed.** The first build's screenshot entry is corrected in place: the
+    running job's title sits **above** the `Re-analysing` pill, not under it;
+    the restored job's address takes **seven** lines at 360 px, not six. I also
+    measured the other two counts with a temporary `console.log` of box height
+    over line height, removed before the commit: the 200 "T" is 11 lines at 360
+    px and 3 at 1280 px (as written), and the 200-character message is **10**
+    lines at 360 px, not eleven, so that is corrected too. Counts: title 11/3,
+    running job 11/3, address 7/3, message 10/3, spaced title 14/3, subtitle
+    label 9/4.
+  - **Fold-in:** none beyond the owner's own. `main` had moved to `e7d791d6`
+    during the build and is merged into the branch in this round, before the push.
+- **2026-11-15, landing** (Sonnet 5.5 fixer). The owner's two answers after gate
+  2 are under _Decision_, questions 5 and 6: the checkbox stays centred (A), and
+  gate 2's N1 is recorded only, unfixed. Nothing else changed at the landing.
