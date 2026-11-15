@@ -123,3 +123,74 @@ derivation); each superseded line is kept, struck.
 - 2026-11-11 — Filed at the owner's choice, after #777's only red check
   turned out to be the fourth occurrence. A re-run of that job was started at
   e44644ad.
+- 2026-11-15 — Built under the owner's answers above, on base 4e040577. **No
+  code changed: the static look found nothing holding sockets past its test.**
+
+  **Done when 1, the history.** From the orchestrator's intake measurement, not
+  re-run here: 0 `ERR_NO_BUFFER_SPACE` in 8 nightlies 2026-11-08..15 (the red
+  Windows legs on 11-11 and 11-14 were dl-98's parallel-ranges-limits and
+  lg-98's stats-rows); 4 known occurrences (the table above) in about 675
+  completed `ci.yml` runs 2026-10-18..11-15 (555 `pull_request`, 98 `push`, 22
+  `schedule`), not all of which run a Windows test leg. All 4 occurrences ran
+  on heads without dl-134's `closeAllConnections()` in `fixture-server.ts`
+  (`git merge-base --is-ancestor 3b61895c e44644ad` → exit 1; 3b61895c merged
+  2026-11-10 21:06 -0500, after e44644ad). That is a coincidence of dates, not
+  a cause: the call runs in `afterAll`, and every failure was a `page.goto` in
+  the middle of a file.
+
+  **Done when 2, what was checked in `tools/downloader/resolvers/test/browser/`:**
+
+  - _Fixture servers closed._ `helpers/fixture-server.ts` closes both origins
+    with `closeAllConnections()` then `close()`; so do
+    `helpers/chunk-server.ts` and `helpers/progressive-server.ts`. Every
+    starter is paired: the six `browser-resolver-*` files through
+    `startBrowserHarness`/`closeBrowserHarness` in `beforeAll`/`afterAll`;
+    `provoke`, `consent-scope` and `chunk-streams` directly in the same hooks;
+    `browser-resolver-capture`'s progressive server in its describe's hooks.
+  - _Browsers and contexts closed._ `BrowserPool.close()` closes the shared
+    browser and a dedicated one is closed in `withBrowser`'s `finally`
+    (`src/browser/pool.ts`). `BrowserResolver.#probe` opens one context per
+    probe and closes it in `finally` under a timeout
+    (`src/resolvers/browser.ts`). Every hand-made context in `provoke.test.ts`
+    (13) and `consent-scope.test.ts` (1) is closed in a `finally`. `pool.test.ts`
+    closes its pool in `afterEach`; `pool-stages.test.ts` mocks Playwright and
+    opens nothing.
+  - _A server per case where per file would do._ Only in
+    `manifest-fetch.test.ts` (21 `serve` calls) and `size-probe.test.ts` (8).
+    Each serves a handler specific to its case, is closed in `afterEach` with
+    `closeAllConnections()`, and is reached by Node's client, never by
+    Chromium's `page.goto`, which is what failed. Every Playwright file already
+    shares one server per file.
+  - _Keep-alive never released._ The Node client in
+    `src/browser/manifest-fetch.ts` tracks every socket, request and response
+    it opens and destroys them all in `run`'s `finally`; the tunnel `CONNECT`
+    uses `agent: false`. Chromium's connections belong to the probe's context,
+    which is closed per probe.
+  - _A measurement on Linux._ Loopback sockets sampled every 0.5 s with `ss`
+    while `npx vitest run tools/downloader/resolvers/test/browser` ran (20 of
+    20 files, 759 of 759 tests, 48.2 s, exit 0): ESTABLISHED read 6 before,
+    peaked at 42, and was 6 again 2 s after the run, the same six as before;
+    TIME_WAIT rose from 13 to 399, which is about 390 loopback connections
+    closed in 48 s. Nothing stays open past its file. Against Windows' default
+    dynamic range of 16,384 ports that churn is about 2.4 % even if every
+    connection sat in TIME_WAIT at once. The Windows leg runs every project at
+    the same time, which this run does not, so it rules out this directory
+    holding sockets and says nothing about the runner as a whole.
+
+  Nothing was worth changing, so there is no fix to show released. A
+  `page.goto` retry and a Windows worker cut stay out under answer 3.
+
+  **Done when 3.** `npm run check` exit 0, and `npm test -- --project
+  downloader` exit 0: 127 files passed and 1 skipped of 128, 2,622 tests passed
+  and 2 skipped of 2,624, 54.3 s, at 4e040577 plus this ticket's edits. No
+  code changed, so there is no `workflow_dispatch` run.
+
+  **What the brief had wrong.** `maxWorkers: 4` under CI does reach the browser
+  files, but through `splitProject` in `vitest.isolation.ts`, where the
+  isolated half that `tools/downloader/vitest.config.ts`'s `stayIsolated` puts
+  this directory in inherits it, not through `vitest.config.ts` as the Why
+  says. Whether the shared and isolated halves run at the same time was not
+  measured. The 2026-10-18 case "the dl-100 cross-site frame press" is not a
+  test name. `browser-resolver-press-targets.test.ts` still has two cross-site
+  frame Play-press tests after dl-134's three-row cut, so which one failed
+  cannot be told now. Fold-in: none. Nothing already specified became free.
