@@ -1627,7 +1627,9 @@ const BOX_MIN_HEIGHT = 120;
  * (dl-81). The candidates are the ones `SCROLL_SCRIPT` scrolls to, minus
  * `<video>` and **minus `<iframe>`** (and `<frame>`, `<object>`, `<embed>`),
  * and the choice is the same rule
- * (`CHOOSE_VIDEO_INDEX_FN`). A frame is never clicked blind: its content is
+ * (`CHOOSE_VIDEO_INDEX_FN`). A frame in the light DOM or in an open shadow
+ * root is never clicked blind (one in a closed shadow root is out of reach of
+ * every check here): its content is
  * another document the checks below cannot see into, and a click there pressed
  * an advertiser's link, or a full-viewport interstitial (the gate's
  * reproductions, owner's decision 1, 2026-10-07).
@@ -1686,7 +1688,7 @@ const MARK_PLAYER_BOX_SCRIPT = `(() => {
   };
   if (!within(hit, el) && !within(el, hit)) return false;
   // The last four hold another document the checks above cannot see into, so a box
-  // whose centre is covered by one is refused too, however deep in shadow roots (dl-142).
+  // whose centre is covered by one is refused too, however deep in open shadow roots (dl-142).
   var unsafe =
     'a[href], [role="link"], form, input, select, textarea, label, iframe, frame, object, embed';
   for (var node = hit; node; node = up(node)) {

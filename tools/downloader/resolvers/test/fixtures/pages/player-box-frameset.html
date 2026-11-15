@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A frameset whose player-classed frame is the only player-ish box</title>
+  </head>
+  <!-- dl-142 gate 2, N1: a `<frame>` loads a document only inside a frameset, so
+       this is the one page that reaches the `frame` in the box click's filter and
+       in its `unsafe` list. The frame is `class="player"`, 70% of the viewport
+       wide, and its document records any click on it. -->
+  <frameset cols="70%,30%">
+    <frame class="player" src="/player-box-frame-inner.html" />
+    <frame src="/player-box-frame-inner.html?side" />
+  </frameset>
+</html>

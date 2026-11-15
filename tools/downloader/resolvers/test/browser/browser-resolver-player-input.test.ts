@@ -377,8 +377,8 @@ describe("the box click and a frame (dl-142)", () => {
 
   // Gate 1's first low: an `<object>` or `<embed>` that holds an HTML document is
   // another document too, as the box and as what covers a wrapper's centre. (A
-  // `<frame>` is in the same list; a page cannot carry one beside its player
-  // without being a frameset, so no fixture reaches it.)
+  // `<frame>` is in the same list and has its own test at the end of this describe:
+  // it loads a document only inside a frameset, so the frameset is its fixture.)
   test.each([
     ["an object that is itself the box", "/player-box-plugin-frame.html?tag=object"],
     ["an embed that is itself the box", "/player-box-plugin-frame.html?tag=embed"],
@@ -409,6 +409,22 @@ describe("the box click and a frame (dl-142)", () => {
 
       expectCode(error, "NO_MEDIA_FOUND");
       expect(server.requests).toContain("/beacon/div-clicked");
+      expect(server.requests).not.toContain("/beacon/inner-click");
+    },
+  );
+
+  // Gate 2's N1: `frame` is in the candidate filter and in `unsafe`, and only a
+  // frameset gives a `<frame>` a document, so this page is the one that reaches it.
+  test(
+    "a player-classed frame in a frameset is never clicked into, and the probe ends NO_MEDIA_FOUND",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      server.requests.length = 0;
+      const error = await probeError("/player-box-frameset.html", resolverWith());
+
+      expectCode(error, "NO_MEDIA_FOUND");
+      // The frame's document was loaded, so an absent beacon is not an absent frame.
+      expect(server.requests).toContain("/player-box-frame-inner.html");
       expect(server.requests).not.toContain("/beacon/inner-click");
     },
   );
