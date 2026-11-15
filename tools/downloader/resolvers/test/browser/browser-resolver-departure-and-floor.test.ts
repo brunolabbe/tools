@@ -657,6 +657,42 @@ describe("what a page asked for before it moved itself is judged by document (dl
   );
 });
 
+describe("a page's pre-hop requests are judged by the top frame's document generation (dl-144, gate 2)", () => {
+  test(
+    "a reload at the same address, then a rewrite in the reloaded document, keeps its stream",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const hls = recordingHlsParser();
+      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...STREAM_WAITS });
+      const result = await probe("/guard-reload-then-replace.html", resolver);
+      expect(result.variants[0]?.url).toBe(server.url("/media/hls/master.m3u8"));
+    },
+  );
+
+  test(
+    "a player frame of the page that was left is left with it",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      // Production floor, as for the late mirror above: the mirror asks ~5 s in.
+      const hls = recordingHlsParser();
+      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+      const result = await probe("/guard-late-embed-left-frame.html", resolver);
+      expect(result.variants[0]?.url).toBe(server.secondaryUrl("/media/hls/master.m3u8"));
+    },
+  );
+
+  test(
+    "a live frame at the address the top frame left is not left behind",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const hls = recordingHlsParser();
+      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...STREAM_WAITS });
+      const result = await probe("/guard-late-embed-live-frame.html", resolver);
+      expect(result.variants[0]?.url).toBe(server.url("/media/hls/master.m3u8"));
+    },
+  );
+});
+
 /** Elapsed milliseconds since the call, off a clock that follows no one's `date`. */
 function startStopwatch(): () => number {
   const startedAt = performance.now();

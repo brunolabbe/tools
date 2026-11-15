@@ -33,4 +33,10 @@ export interface NetworkHit {
   confirmed: boolean;
   /** URL of the frame that issued the request; differs from the page for embeds. */
   frameUrl?: string;
+  /**
+   * The top frame's document generation when this hit was first recorded
+   * (dl-144): 0 for the document the probe landed on, one more for each document
+   * the page then moved itself to before its first press.
+   */
+  generation?: number;
 }

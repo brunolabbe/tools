@@ -63,6 +63,8 @@ every top-frame navigation still counts, whether or not a click caused it.
 
 Gate round 1 — answered 2026-11-15 by the owner: fix both meds and the low in this round.
 
+Gate round 2 — answered 2026-11-15 by the owner: fix F2 (a), (b) and (c) now, by document generation; file the clock-step finding as its own ticket.
+
 ## Build
 
 1. **Fixture first, red on `main`.** A page on the fixture origin whose script,
@@ -209,17 +211,53 @@ Gate round 1 — answered 2026-11-15 by the owner: fix both meds and the low in 
     reported embed is clear of it (first press ~1 s after its hop, two live runs).
     `watchForDeparture`'s comment now says so; the Decision above is the owner's
     wording and is left as answered.
-  - **A flake seen, not explained.** dl-105's "a wall clock stepped back before
-    the wait does not read as a floor that returned early" failed intermittently
-    while this round was built (`expected 1410 / 1607 to be greater than or equal
-    to 3000`: the wait ended at its quiet gate, as if a playable hit were
-    captured): two full-suite runs and 3 of ~10 file runs. Nothing in this round
-    touches a page with no hits (`exclude` is unset-equivalent there). I could
-    not reproduce it with a debug dump of the hits, alone (0 of 12), nor at
-    0359e152's sources (0 of ~16, including 6 interleaved pairs where the new
-    sources failed 1 of 6). The last two full-suite runs at the final head were
-    clean (2670 passed, 2 skipped). Treat it as an open question for whoever
-    next sees it, not as cleared.
+  - **dl-105's intermittent failure (corrected in round 2, gate 2's N1).** The
+    failure `expected 1410 / 1607 to be greater than or equal to 3000` is the
+    sandbox's wall clock, not this branch: it steps forward 2.5 s for 50-100 ms and
+    back 4.8 s every 30 s of monotonic time, `waitForQuiet` reads `Date.now`, and a
+    tick inside the forward window ends the empty floor early. Gate 2 planted that
+    step and failed both this branch's sources and 0359e152's. This note's earlier
+    "1 of 6 interleaved" count was confounded: runs of about 7 s phase-lock onto
+    the 30 s step, so one arm met it and the other did not. The floor's exposure to
+    a forward step is `main`'s and is not fixed here; the orchestrator files it.
+
+- 2026-11-15 — round 2 (gate 2, CONCERNS; owner: fix F2 (a), (b), (c) now, by
+  document generation). Merged `origin/main` first (dl-142, b795fa13): clean.
+  - **Generation.** The collector stamps every new hit with the top frame's
+    document generation (`HitCollector.stampWith`; 0 until the guard exists, so
+    the landing document, whatever it did in the settle window, is generation 0).
+    The guard bumps it on each cross-document top-frame commit before the first
+    press, and `exclude` drops every hit of an older generation: the left page's
+    child frames go with it (b), and a frame of the current generation is never
+    dropped whatever its address (c). The URL-keyed `left` set and its URL
+    comparison are gone; `isLeftBehind`'s old doc comment ("by document, not by
+    URL") was false and is replaced.
+  - **(a) The flag.** `documentRequested` is now read and cleared on every
+    top-frame commit, before the same-address return; a reload (a document
+    request that commits at the address it left) bumps the generation, so a
+    `replaceState` after it no longer reads as a new document.
+  - **Tests**, appended at the end of the departure file, each red at d971f140:
+    "a reload at the same address, then a rewrite in the reloaded document, keeps
+    its stream" (`NO_MEDIA_FOUND`, 10.8 s); "a player frame of the page that was
+    left is left with it" (resolved the left page's master, not the mirror's);
+    "a live frame at the address the top frame left is not left behind"
+    (`NO_MEDIA_FOUND`, 10.8 s). Mutations, each run over the dl-144 tests:
+    clearing the flag only after the same-address return turns the reload test
+    red alone; no bump on a cross-document commit turns the three
+    pre-hop tests red (hop, late mirror, left frame); judging the current
+    generation left behind too turns seven red, the live-frame test among them.
+  - **A request that races a commit (decided).** The stamp is read when the
+    collector first sees the request. Playwright emits `framenavigated` at the
+    commit, before the new document's own subresource requests, so the new page's
+    first request is stamped new and kept. A request the old document had still in
+    flight at the commit is also stamped new and survives. Both errors keep a hit
+    and never drop one: the result can read one stream too many, never one too
+    few, which is the safe side for a probe that must not lose the wanted stream.
+  - **Not covered.** A top-frame navigation request that never commits (a 204, a
+    download) leaves the flag set until the next commit, so a `replaceState` after
+    it would read as a new document: the gate named it, by reading only; the
+    reading errs towards dropping a left-document hit, which a hop would have
+    dropped anyway.
 
 ## Review
 

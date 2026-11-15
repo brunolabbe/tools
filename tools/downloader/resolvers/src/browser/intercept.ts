@@ -90,6 +90,8 @@ export class HitCollector {
   #seq = 0;
   /** Hits the caller has ruled out of the result (dl-144); see `exclude`. */
   #excluded: ((hit: NetworkHit) => boolean) | undefined;
+  /** Reads the top frame's document generation for each new hit (dl-144); see `stampWith`. */
+  #generation: (() => number) | undefined;
   #lastActivityAt = Date.now();
   #attached = false;
 
@@ -135,6 +137,19 @@ export class HitCollector {
    */
   exclude(predicate: (hit: NetworkHit) => boolean): void {
     this.#excluded = predicate;
+  }
+
+  /**
+   * Stamps every hit recorded from now on with `generation()` (0 before this is
+   * called: the document the probe landed on, whatever it did in the settle
+   * window), read when the hit
+   * is first recorded, which is its request (or its response, if that came
+   * first) and not when a body read finishes. A request that races a commit is
+   * therefore stamped with whichever generation the guard had counted when the
+   * collector saw it: see `watchForDeparture` for why that errs towards keeping.
+   */
+  stampWith(generation: () => number): void {
+    this.#generation = generation;
   }
 
   /**
@@ -250,6 +265,7 @@ export class HitCollector {
       kind,
       headers: { ...headers },
       seq: patch.seq ?? this.#seq++,
+      generation: this.#generation?.() ?? 0,
       confirmed: patch.confirmed ?? false,
       ...(patch.contentType === undefined ? {} : { contentType: patch.contentType }),
       ...(patch.contentLength === undefined ? {} : { contentLength: patch.contentLength }),

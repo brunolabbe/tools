@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Guard: a hop away from a page with a player frame</title>
+  </head>
+  <body>
+    <h1>Guard: a hop away from a page with a player frame</h1>
+    <!-- The first document's player frame fetches a manifest, then the top frame hops; the mirror asks for its own 5 s after its load (dl-144, gate 2). The left page's frame is part of the left page. -->
+    <script>
+      (function () {
+        if (location.origin === "{{PRIMARY}}") {
+          var frame = document.createElement("iframe");
+          frame.width = 640;
+          frame.height = 360;
+          frame.src = "/guard-late-embed-player-frame.html";
+          document.body.appendChild(frame);
+          window.addEventListener("load", function () {
+          setTimeout(function () {
+            location.replace("{{SECONDARY}}" + location.pathname);
+          }, 1000);
+        });
+          return;
+        }
+        setTimeout(function () {
+          fetch("/media/hls/master.m3u8")
+          .then(function (r) {
+            return r.text();
+          })
+          .then(function () {
+            return fetch("/media/hls/v720.m3u8");
+          })
+          .then(function (r) {
+            return r.text();
+          })
+          .catch(function () {});
+        }, 5000);
+      })();
+    </script>
+  </body>
+</html>

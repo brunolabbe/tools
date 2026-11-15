@@ -405,10 +405,12 @@ export class BrowserResolver implements Resolver {
     // dl-144: what the page asked for before it moved itself belongs to the page
     // it left, as what follows a departure does (dl-55). Ruled out of the
     // collector as a whole, so ranking, the press gates and the empty floor all
-    // read the same set. By the frame URL the collector recorded with each hit,
-    // not at the hop: reading the hits at the hop races the new document's own
-    // first request.
-    collector.exclude((hit) => guard.isLeftBehind(hit.frameUrl));
+    // read the same set. By the top frame's document generation the collector
+    // stamped on each hit when it saw the request, not by the frame's address
+    // and not at the hop: an address is shared by documents and frames, and
+    // reading the hits at the hop races the new document's own first request.
+    collector.stampWith(() => guard.generation());
+    collector.exclude((hit) => guard.isLeftBehind(hit.generation));
     let lastStep: "provoke-playback" | "network-quiet" = "provoke-playback";
 
     this.#stage(options, "provoke-playback");
@@ -827,12 +829,18 @@ interface NavigationGuard {
   /** The page the guard measures from: the one read after `load`, moved by a pre-press self-redirect (dl-144). */
   landingUrl(): string;
   /**
-   * Whether a hit recorded under this frame URL came from a document the page
-   * moved itself off before the first press (dl-144). By document, not by URL: a
-   * same-document rewrite leaves nothing behind, and the document now showing is
-   * never left behind, even when an earlier one had the same address.
+   * Which top-frame document is showing: 0 for the one the probe landed on, one
+   * more for each document the page moved itself to before the first press
+   * (dl-144). A same-document navigation does not count.
    */
-  isLeftBehind(frameUrl: string | undefined): boolean;
+  generation(): number;
+  /**
+   * Whether a hit stamped with this generation belongs to a top-frame document
+   * the page moved itself off before the first press: every older generation,
+   * its child frames included, and never one of the document now showing, at
+   * whatever address (dl-144). A hit with no generation is kept.
+   */
+  isLeftBehind(generation: number | undefined): boolean;
   /** The tier has made its first press on the page: from here every top-frame navigation counts. */
   pressed(): void;
   /** The URL the top frame first left the landing URL for, once seen. */
@@ -869,10 +877,17 @@ interface NavigationGuard {
  */
 function watchForDeparture(page: Page, initialLandingUrl: string): NavigationGuard {
   let landingUrl = initialLandingUrl;
-  const left = new Set<string>();
-  // A document request on the top frame since the last `framenavigated`. A
-  // same-document navigation (`pushState`, `replaceState`, a hash change) sends
-  // none, which is how the two are told apart (dl-144).
+  // The top frame's document generation (dl-144). It moves on a cross-document
+  // commit, and a same-document navigation (`pushState`, `replaceState`, a hash
+  // change) sends no document request, which is how the two are told apart. A
+  // hit is stamped by the collector when it sees the request, so a request that
+  // races a commit lands on one side or the other of the bump: Playwright emits
+  // `framenavigated` at the commit, before the new document's own subresource
+  // requests, so the new page's first request is stamped new; a request the old
+  // document still had in flight when the commit landed is also stamped new, and
+  // survives. Both errors keep a hit, never drop one, which is the safe side:
+  // the result reads a stream too many, not one too few.
+  let generationNow = 0;
   let documentRequested = false;
   const onRequest = (request: Request): void => {
     if (request.isNavigationRequest() && request.frame() === page.mainFrame()) {
@@ -884,10 +899,17 @@ function watchForDeparture(page: Page, initialLandingUrl: string): NavigationGua
   const onNavigated = (frame: Frame): void => {
     if (frame !== page.mainFrame() || departedTo !== undefined) return;
     const url = frame.url();
-    if (sameDocument(url, landingUrl)) return;
+    // Read and cleared on every top-frame commit, before the same-address return
+    // below: a reload commits at the address it left, and its request must not
+    // wait to be mistaken for the next navigation's (gate 2).
+    const newDocument = documentRequested;
+    documentRequested = false;
+    if (sameDocument(url, landingUrl)) {
+      if (newDocument && !hasPressed) generationNow += 1;
+      return;
+    }
     if (!hasPressed) {
-      if (documentRequested) left.add(landingUrl);
-      documentRequested = false;
+      if (newDocument) generationNow += 1;
       landingUrl = url;
       return;
     }
@@ -897,8 +919,8 @@ function watchForDeparture(page: Page, initialLandingUrl: string): NavigationGua
   page.on("framenavigated", onNavigated);
   return {
     landingUrl: () => landingUrl,
-    isLeftBehind: (frameUrl) =>
-      frameUrl !== undefined && frameUrl !== landingUrl && left.has(frameUrl),
+    generation: () => generationNow,
+    isLeftBehind: (generation) => generation !== undefined && generation < generationNow,
     pressed: () => {
       hasPressed = true;
     },
