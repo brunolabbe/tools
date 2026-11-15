@@ -344,8 +344,14 @@ const CASES: { [K in WriteName]: (context: Context) => Promise<ArgsOf<K>> } = {
     return [rule.id, { ...TRANSFER_RULE, amountCents: null, spendingCategoryId: category.id }];
   },
   retireRule: async (context) => {
-    const { rule } = await books(context);
-    return [rule.id];
+    // The rule retired is one that files an unfiled row (createRule's), so the
+    // retirement changes `rows`; the paste's own rule files none of the three.
+    const { category } = await books(context);
+    const made = await seed(context, "createRule", {
+      ...MORTGAGE_RULE,
+      spendingCategoryId: category.id,
+    });
+    return [made.id];
   },
   enterSalaries: async (context) => {
     await books(context);
