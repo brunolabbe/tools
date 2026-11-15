@@ -13,9 +13,10 @@ difficulty: standard
 
 ## Why
 
-Three spec files under `scripts/test/` make a directory with `fs.mkdtempSync` for
-each case and never remove it. One run of the three, into an empty private
-`TMPDIR`, leaves 166 directories there:
+Four spec files under `scripts/test/` make a directory with `fs.mkdtempSync` for
+each case and never remove it. One run of the first three, into an empty private
+`TMPDIR`, leaves 166 directories there, and the fourth (`status-gate-record.test.ts`,
+found by gate 1) leaves 17 more:
 
 ```
 TMPDIR=<empty private dir> npx vitest run scripts/test/status.test.ts scripts/test/next-id.test.ts scripts/test/hooks.test.ts
@@ -29,21 +30,22 @@ stripped:
 
 | Prefix                                                                   | Entries | Made by                                                                                                                                                                                       |
 | ------------------------------------------------------------------------ | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `status`                                                                 | 133     | `repoWith` in `status.test.ts` (99 call sites, some in loops)                                                                                                                                 |
+| `status`                                                                 | 133     | `repoWith` in `status.test.ts` (98 calls, some in loops)                                                                                                                                      |
 | `next-id-edit`                                                           | 24      | `copyOfMergedRemote` in `next-id.test.ts`                                                                                                                                                     |
 | `next-id-shallow`, `-remote`, `-path`, `-partial`, `-outside`, `-orphan` | 1 each  | six cases in `next-id.test.ts`                                                                                                                                                                |
 | `main-writes`                                                            | 3       | `checkoutOn` in `hooks.test.ts`                                                                                                                                                               |
 | `node-compile-cache`                                                     | 1       | Node's own module compile cache, under `os.tmpdir()`; no test or config in the repo names it (`grep -rn "compile-cache\|COMPILE_CACHE" scripts vitest.config.ts package.json` prints nothing) |
 
-`next-id-template` is not in the list: `mergedRemoteTemplate` already removes its
+`status-gate` is the fourth file's, 17 entries from its own `repoWith`, and is not
+in the table because the first reading ran three files. `next-id-template` is not in the list: `mergedRemoteTemplate` already removes its
 directories in an `afterAll`. That is the one fixture in these files that cleaned
 up, and it is what the others should have copied.
 
 It was found out of its range by repo-144's gate 1 (133/31/3 per file), which
 dropped it; the owner chose on 2026-11-15 to fix it as its own ticket.
 
-The cost is a temp directory that grows by 166 entries per run of three files
-(more, with the rest of `scripts/test`): disk on a long-lived machine, and a
+The cost is a temp directory that grows by 183 entries per run of the four files
+(and `npm test -- --project repo` leaves the fourth's 17 on its own): disk on a long-lived machine, and a
 count that `.claude/rules/testing.md` already warns about — a test that lists the
 temp directory reads every earlier run's leftovers.
 
@@ -55,19 +57,24 @@ temp directory reads every earlier run's leftovers.
    `fs.rmSync(dir, { recursive: true, force: true, maxRetries: 3 })` — and
    `tempDirs()` is that plus an `afterEach(cleanup)`, called once at the top of a
    spec. Removal is per case, so a failing case's directory goes too.
-2. **The three specs go through it.** `status.test.ts`'s `repoWith`,
+2. **The four specs go through it.** `status.test.ts`'s `repoWith`,
    `hooks.test.ts`'s `checkoutOn`, and `next-id.test.ts`'s seven direct
    `mkdtempSync` calls (`partial`, `path`, `shallow`, `outside`, `remote`,
-   `orphan`, `edit`) use `temp.make(prefix)`. Declare `tempDirs()` before any
+   `orphan`, `edit`) and `status-gate-record.test.ts`'s `repoWith` use
+   `temp.make(prefix)`. Declare `tempDirs()` before any
    other hook in the file: repo-144 found a file-level `afterAll` declared after
    another skips the earlier ones when it fails.
 3. **Leave `mergedRemoteTemplate` alone.** Its directory outlives the case that
    asked for it by design and has its own `afterAll`; `afterEach` would delete it
    under the next case.
-4. **A guard that cannot be red while the fix is absent**, `scripts/test/temp-dirs.test.ts`:
+4. **A guard that must be red while the fix is absent**, `scripts/test/temp-dirs.test.ts`:
    `make` then `cleanup` leaves nothing and tolerates a directory already gone;
-   and a scan that holds the three specs at their `mkdtemp` count (0, 1, 0 — the
-   one is the template) and requires each to call `tempDirs()`.
+   `cleanup` attempts every removal when one throws and throws the failures
+   together; `tempDirs()` registers its `afterEach` (a case that makes a directory,
+   then one that finds it gone, in a `describe` with shuffling off); and a scan
+   that holds the four specs at their count of `mkdtemp*(` calls and `tmpdir`
+   mentions (0, 2 — the template's one call and its `os.tmpdir()` —, 0, 0), with a
+   planted control for each spelling, and requires each to call `tempDirs()`.
 5. Touch nothing else: `scripts/test/preflight.test.ts` and
    `.claude/rules/testing.md` are repo-144's.
 
@@ -77,15 +84,19 @@ temp directory reads every earlier run's leftovers.
    empty private directory, leaves no entry the tests made: the only entry is
    Node's `node-compile-cache`.
 2. Each file on its own does the same: `status.test.ts` leaves 0 of the 133
-   entries it left, `next-id.test.ts` 0 of 30, `hooks.test.ts` 0 of 3.
+   entries it left, `next-id.test.ts` 0 of 30, `hooks.test.ts` 0 of 3,
+   `status-gate-record.test.ts` 0 of 17, and the four together leave 0 of 183.
 3. With the cleanup disabled (the body of `cleanup` emptied), the same command
-   leaves 166 again — the count is what shows a planted leak — and
+   leaves 183 again — the count is what shows a planted leak — and
    `scripts/test/temp-dirs.test.ts` goes red on its removal case.
-4. With one call site turned back into a bare `fs.mkdtempSync`, the scan in
+4. With one call site turned back into a bare `fs.mkdtempSync`, a
+   `mkdtempDisposableSync`, or a `mkdirSync` under `os.tmpdir()`, the scan in
    `temp-dirs.test.ts` goes red naming the file.
-5. Each of the three files, and `temp-dirs.test.ts`, passes in file order and with
-   `--sequence.shuffle.files`; `npm test -- --project repo` and `npm run check`
-   pass.
+5. With the `afterEach` line deleted from `tempDirs()`, `temp-dirs.test.ts` goes
+   red; with one `rmSync` throwing, `cleanup` still removes the others.
+6. Each of the four files, and `temp-dirs.test.ts`, passes in file order, with
+   `--sequence.shuffle.files` and with plain `--sequence.shuffle`;
+   `npm test -- --project repo` and `npm run check` pass.
 
 ## Log
 
@@ -116,3 +127,23 @@ temp directory reads every earlier run's leftovers.
   other `scripts/test` specs were not surveyed for the same leak, so none is claimed
   clean. `mergedRemoteTemplate` keeps its own `afterAll`; `tempDirs()`'s `afterEach`
   is a different hook kind, so repo-144's skipped-`afterAll` trap does not apply.
+- 2026-11-15 — Owner's answers after gate 1 (CONCERNS at `d7a1f0d8`), relayed by the
+  coordinator and recorded before the work they change.
+  - **The fourth spec.** `scripts/test/status-gate-record.test.ts` leaves 17
+    `status-gate-` directories and the scan read only three files. Options: (a)
+    convert it to `temp.make("status-gate-")` and add it to the scan with count 0,
+    (b) make the scan read every `scripts/test/*.test.ts` with an allowlist, (c)
+    file it separately. **The owner chose (a), 2026-11-15.** Superseded by it, and
+    left here: Why's "Three spec files", Build 2's "The three specs go through it",
+    Done when 1 and 2 as filed ("the reproduction above … leaves no entry the tests
+    made"; "`status.test.ts` leaves 0 of the 133 …, `hooks.test.ts` 0 of 3"), now
+    covering four files.
+  - **The rest.** Options: a round fixing every finding then a second gate, fix only
+    the fully stated findings at landing, or record all. **The owner chose the round,
+    2026-11-15**, a departure from the severity floor's default of no round below
+    it. The findings are M2 (nothing tests that `tempDirs()` registers its
+    `afterEach`), L1 (`cleanup` empties its list before the loop, so one throwing
+    `rmSync` skips the rest), L2 (the scan misses `mkdtempDisposableSync` and
+    `mkdirSync` under `os.tmpdir()`), L3 ("99 call sites" is 98) and L4 (Build 4's
+    "cannot be red while the fix is absent" is inverted). Done when 3 to 6 and Build
+    4 above are reworded for them.
