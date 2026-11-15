@@ -170,7 +170,7 @@ function makeHandler(
         return;
       }
 
-      // dl-143: a script that answers after 3 s, so a page that adds it holds its
+      // dl-143: a script that answers after 2.5 s, so a page that adds it holds its
       // `load` event, and `readyState` at `loading`, that long.
       if (pathname === "/slow-asset.js") {
         setTimeout(() => {
@@ -179,7 +179,7 @@ function makeHandler(
             "cache-control": "no-store",
           });
           response.end("");
-        }, 3000);
+        }, 2500);
         return;
       }
 

@@ -455,14 +455,14 @@ describe("a player iframe that a delay-JS plugin fills after the first interacti
           try {
             const page = await context.newPage();
             await page.goto(server.url(pathname), { waitUntil: "domcontentloaded" });
-            const startedAt = Date.now();
+            const startedAt = performance.now();
             await provokePlayback(page, {
               deadline: Date.now() + 30_000,
               signal: new AbortController().signal,
               confirmAge: false,
               passPauseMs: 0,
             });
-            return Date.now() - startedAt;
+            return performance.now() - startedAt;
           } finally {
             await context.close();
           }
@@ -561,7 +561,7 @@ describe("a document still loading when the wait for the player iframe begins (d
     { timeout: TEST_TIMEOUT_MS },
     async () => {
       server.requests.length = 0;
-      // The iframe is added only once `load` fires, 3 s in, and the tier stops
+      // The iframe is added only once `load` fires, 2.5 s in, and the tier stops
       // waiting for `load` after 1.5 s.
       const result = await probe(
         "/player-delayed-single.html?slow",
@@ -574,6 +574,89 @@ describe("a document still loading when the wait for the player iframe begins (d
       );
 
       expect(result.variants[0]?.url).toBe(server.secondaryUrl("/media/related/master.m3u8"));
+    },
+  );
+});
+
+describe("what a probe pays on a page with no blank player iframe (dl-143 gate round 1)", () => {
+  /**
+   * `provokePlayback` on a fixture page, `waitMs` after `domcontentloaded` (which
+   * stands in for the tier's `load` budget and settle), timed on the monotonic
+   * clock: the wall clock can step mid-run, and a step inside the timed span made
+   * the older timing test fail 1 run in 10.
+   */
+  async function provokeMs(
+    pathname: string,
+    options: { waitMs: number; passPauseMs?: number; hang?: string },
+  ): Promise<number> {
+    return await pool.withBrowser({ signal: new AbortController().signal }, async (browser) => {
+      const context = await browser.newContext();
+      try {
+        if (options.hang !== undefined) {
+          await context.route(options.hang, () => new Promise<void>(() => undefined));
+        }
+        const page = await context.newPage();
+        await page.goto(server.url(pathname), { waitUntil: "domcontentloaded" });
+        await page.waitForTimeout(options.waitMs);
+        const startedAt = performance.now();
+        await provokePlayback(page, {
+          deadline: Date.now() + 30_000,
+          signal: new AbortController().signal,
+          confirmAge: false,
+          passPauseMs: options.passPauseMs ?? 0,
+        });
+        return performance.now() - startedAt;
+      } finally {
+        await context.close();
+      }
+    });
+  }
+
+  test(
+    "a page with no iframe at all whose load a slow subresource holds back pays the loading retry, not the wait",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const ms = await provokeMs("/player-hung-subresource.html", {
+        waitMs: 2000,
+        hang: "**/hang-asset.png",
+      });
+
+      // The bound is the 1 s retry on top of an ordinary pass (about 0.2 s); the
+      // whole wait is 6 s.
+      expect(ms).toBeLessThan(BLANK_PLAYER_FILL_WAIT_MS / 2);
+    },
+  );
+
+  test(
+    "a page with no iframe that rewrites its own hash is not a replaced document",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const ms = await provokeMs("/player-hash-churn.html", { waitMs: 500 });
+
+      expect(ms).toBeLessThan(BLANK_PLAYER_FILL_WAIT_MS / 2);
+    },
+  );
+
+  test(
+    "a script-written about:blank ad slot under a body whose class says player is not a blank player iframe",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const ms = await provokeMs("/player-adslot-body-class.html", { waitMs: 500 });
+
+      expect(ms).toBeLessThan(BLANK_PLAYER_FILL_WAIT_MS / 2);
+    },
+  );
+
+  test(
+    "an iframe that the delayed script adds while the probe waits is visited in the same pass, not only in the next",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      server.requests.length = 0;
+      // The added iframe is gone 3.5 s after it appears, and the second pass is
+      // 3 s after the first, so only a frame list read after the wait reaches it.
+      await provokeMs("/player-delayed-late-frame.html", { waitMs: 500, passPauseMs: 3000 });
+
+      expect(server.requests).toContain("/media/related/master.m3u8");
     },
   );
 });

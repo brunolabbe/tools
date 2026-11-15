@@ -15,7 +15,7 @@
  * with no DOM lib. Values interpolated into a script are JSON-encoded.
  */
 
-import type { ElementHandle, Frame, Locator, Page } from "playwright";
+import type { ElementHandle, Frame, Locator, Page, Request } from "playwright";
 import { budget, remaining, sleep, throwIfAborted } from "./abort.ts";
 import { AGE_MARKERS } from "./classify.ts";
 import type { HitCollector } from "./intercept.ts";
@@ -1763,7 +1763,13 @@ const BLANK_PLAYER_IFRAMES_FN = `function () {
     if (frame.hasAttribute('srcdoc')) return false;
     var src = (frame.getAttribute('src') || '').trim().toLowerCase();
     if (src !== '' && src !== 'about:blank') return false;
-    if (frame.closest && frame.closest('[class*="player"], [id*="player"]')) return true;
+    // The iframe or an ancestor below <body>: a <body class="single-player-page">
+    // is the page's own class, not a player's, and would make every script-written
+    // about:blank ad slot on it a blank player iframe (dl-143, gate 1).
+    for (var node = frame; node && node !== document.body && node !== document.documentElement; node = node.parentElement) {
+      var tokens = (node.getAttribute('class') || '') + ' ' + (node.getAttribute('id') || '');
+      if (/player/i.test(tokens)) return true;
+    }
     return /player|video/i.test(frame.getAttribute('title') || '');
   });
 }`;
@@ -1918,9 +1924,13 @@ const UNMARK_BLANK_PLAYER_SCRIPT = `(() => {
  * to set the iframe's `src`, and the embed hops to a mirror about 0.4 s after
  * that, so a fill and a final document land 3.2-4.2 s in, and the stability
  * window comes after. 3 s, the first guess, ended the wait before the fill in
- * 2 of 5 runs. Spent once per probe, split in two by the server-tab press, and
- * only on a page that has a blank player iframe; a page whose iframe fills ends
- * it early, and one whose iframe never fills pays it whole.
+ * 2 of 5 runs. Spent once per probe, split in two by the server-tab press. A
+ * page whose iframe fills ends it early, and one whose iframe never fills pays it
+ * whole. **A page with no blank player iframe pays none of it once its document
+ * is complete**; one still loading pays at most `BLANK_PLAYER_LOADING_RETRY_MS`
+ * for the document to finish, and the whole wait only if a cross-document
+ * navigation (a reload) was seen since provocation began, since the new document
+ * may still be building the iframe.
  */
 export const BLANK_PLAYER_FILL_WAIT_MS = 6000;
 /**
@@ -1931,6 +1941,8 @@ export const BLANK_PLAYER_FILL_WAIT_MS = 6000;
  */
 export const BLANK_PLAYER_RELEASE_WAIT_MS = 1000;
 /** A filled frame is loaded when its final document has been `complete` and unchanged this long. */
+/** How long a still-loading document with no blank player iframe is retried when no replacement was counted (dl-143). */
+const BLANK_PLAYER_LOADING_RETRY_MS = 1000;
 const BLANK_PLAYER_STABLE_MS = 800;
 const BLANK_PLAYER_POLL_MS = 100;
 
@@ -1943,7 +1955,7 @@ interface BlankPlayerWait {
   /** The hovers made so far, over both calls (dl-143). */
   hovers: number;
   spentMs: number;
-  /** Main-frame navigations since provocation began (dl-143): a document replaced before the wait started counts. */
+  /** Cross-document main-frame navigations since provocation began (dl-143): a document replaced before the wait started counts. */
   navigations: () => number;
 }
 
@@ -1997,7 +2009,7 @@ async function waitForBlankPlayerFill(
   options: { capMs: number; deadline: number; signal: AbortSignal; last: boolean },
 ): Promise<void> {
   if (state.done) return;
-  const startedAt = Date.now();
+  const startedAt = performance.now();
   const allowedMs = Math.max(
     0,
     Math.min(
@@ -2018,7 +2030,7 @@ async function waitForBlankPlayerFill(
     // first-visit reload) detaches the marked iframe under the poll, and the round
     // after it marks the new document's. A failure to read is never the end of the
     // wait, only the end of the budget or the page is (dl-143).
-    while (!state.done && Date.now() - startedAt < allowedMs) {
+    while (!state.done && performance.now() - startedAt < allowedMs) {
       throwIfAborted(options.signal);
       let handle: ElementHandle | undefined;
       try {
@@ -2028,7 +2040,12 @@ async function waitForBlankPlayerFill(
             // that replaced one, or one still loading (a reload that landed before
             // provocation began, on a slow connection), it may only not have
             // parsed or laid it out yet.
-            const loading = (await frame.evaluate<string>("document.readyState")) !== "complete";
+            // A document still loading is retried for a short cap only, unless a
+            // replacement was counted: a page with no player at all whose `load` a
+            // slow ad holds back must not pay the whole wait (dl-143, gate 1).
+            const loading =
+              performance.now() - startedAt < BLANK_PLAYER_LOADING_RETRY_MS - state.spentMs &&
+              (await frame.evaluate<string>("document.readyState")) !== "complete";
             if (!replaced && !loading) {
               state.done = true;
               break;
@@ -2039,7 +2056,7 @@ async function waitForBlankPlayerFill(
           state.marked = true;
         }
         handle = await frame.locator(`[${FILL_MARK}]`).first().elementHandle({ timeout: 500 });
-        while (Date.now() - startedAt < allowedMs) {
+        while (performance.now() - startedAt < allowedMs) {
           throwIfAborted(options.signal);
           // Throws when the document is gone: the round is over, the wait is not.
           const src = await handle.evaluate((el) => (el.getAttribute("src") ?? "").trim());
@@ -2047,9 +2064,9 @@ async function waitForBlankPlayerFill(
           try {
             if (
               (src === "" || src.toLowerCase() === "about:blank") &&
-              Date.now() - hoveredAt >= BLANK_PLAYER_HOVER_EVERY_MS
+              performance.now() - hoveredAt >= BLANK_PLAYER_HOVER_EVERY_MS
             ) {
-              hoveredAt = Date.now();
+              hoveredAt = performance.now();
               await hoverPlayer(frame, handle, state.hovers++ % 2 === 0);
             }
             const child =
@@ -2064,13 +2081,13 @@ async function waitForBlankPlayerFill(
             // The embed is mid-navigation: not yet a document to read.
           }
           if (sample !== "" && sample === seen) {
-            if (Date.now() - stableSince >= BLANK_PLAYER_STABLE_MS) {
+            if (performance.now() - stableSince >= BLANK_PLAYER_STABLE_MS) {
               state.done = true;
               break;
             }
           } else {
             seen = sample;
-            stableSince = Date.now();
+            stableSince = performance.now();
           }
           await sleep(BLANK_PLAYER_POLL_MS, options.signal);
         }
@@ -2090,7 +2107,7 @@ async function waitForBlankPlayerFill(
       }
     }
   } finally {
-    state.spentMs += Date.now() - startedAt;
+    state.spentMs += performance.now() - startedAt;
     if (state.done || options.last) {
       if (state.marked) {
         try {
@@ -2314,11 +2331,14 @@ export async function provokePlayback(
   const pageOrigin = originOf(page.url());
   const hasPlayable = options.hasPlayable ?? (() => false);
   const serverTab = { attempted: false };
+  // Cross-document navigations of the main frame only: a navigation request is
+  // what a reload, a redirect or a link makes, and a `pushState` or a hash change
+  // makes none (dl-143, gate 1).
   let navigations = 0;
-  const onNavigated = (frame: Frame): void => {
-    if (frame === page.mainFrame()) navigations++;
+  const onRequest = (request: Request): void => {
+    if (request.isNavigationRequest() && request.frame() === page.mainFrame()) navigations++;
   };
-  page.on("framenavigated", onNavigated);
+  page.on("request", onRequest);
   const blankPlayer: BlankPlayerWait = {
     done: false,
     marked: false,
@@ -2370,7 +2390,7 @@ export async function provokePlayback(
       }
     }
   } finally {
-    page.off("framenavigated", onNavigated);
+    page.off("request", onRequest);
   }
 }
 

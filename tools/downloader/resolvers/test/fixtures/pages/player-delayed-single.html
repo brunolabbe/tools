@@ -35,7 +35,7 @@
         var frame = document.getElementById("player-0");
         var embed = "{{SECONDARY}}/player-delayed-embed-hop.html";
         if (frame) frame.setAttribute("data-enc", btoa(embed + "?player=0"));
-        // With `?slow` the page holds its `load` event for 3 s on a script that
+        // With `?slow` the page holds its `load` event for 2.5 s on a script that
         // answers late, and puts its player iframe in only once `load` has fired:
         // a probe that looks while the document is still loading finds no iframe,
         // which is a page that is not ready, not a page without one.

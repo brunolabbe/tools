@@ -330,8 +330,10 @@ navigations counted; F2 fixed in this round; F6 and F3 fixed alongside.
     did not see it, and the document was still loading when the wait looked.
     The mark script found no visible blank iframe and the wait ended. A no-match
     in a document whose `readyState` is not `complete` is now retried, bounded
-    like the rest; a complete document with none still ends it at once, so a page
-    with no blank iframe pays nothing. I did not observe this directly (no
+    like the rest; a complete document with none still ends it at once. **This
+    sentence said "so a page with no blank iframe pays nothing", which was false
+    for a still-loading page (up to the whole 6 s); gate 1 measured it, and the
+    gate round below corrects it.** I did not observe this directly (no
     instrumentation in the run); it is the reading that fits the log and the
     fixture reproduces the shape. Fixture `?slow`: the page holds its `load`
     event 3 s on a script from a new fixture-server route `/slow-asset.js`, and
@@ -344,6 +346,62 @@ navigations counted; F2 fixed in this round; F6 and F3 fixed alongside.
     landed 0.5 s after: 1.9/4.4 with the load at 4.9). The earlier round-4 build
     (counter only): 5 of 6, its miss the slow-document one above.
   - `npm run check` exit 0; `npm test -- --project downloader` 2672 passed, 2
+    skipped. e2e and container gates not run.
+
+- 2026-11-15 — Gate round 1 (FAIL at 4fe63aeb; the owner's answers are under the
+  Decision). Merged `origin/main` (dl-142 as b795fa13) first; the 7 older dl-143
+  tests and the new ones pass on the merged tree.
+  - **F1 (high), remedy (a).** A still-loading document with no blank player
+    iframe is retried for `BLANK_PLAYER_LOADING_RETRY_MS` (1000) only, unless a
+    replacement was counted, and only **cross-document** main-frame navigations
+    are counted: the counter listens to main-frame navigation `request`s, which a
+    reload, a redirect or a link makes and `pushState`/`replaceState` do not.
+    Tests: a page with no iframe whose `load` a hung image holds
+    (`player-hung-subresource`, `provokePlayback` 2 s after `domcontentloaded`)
+    was red at 6120 ms against a `< 3000` bound, now under it; a page rewriting
+    its hash every 50 ms after its dialog's Close press (`player-hash-churn`) was
+    red at 6270 ms, now green. Mutations: counting `framenavigated` again reds the
+    hash test (6830 ms); an uncapped loading retry reds the hung test (8319 ms); no
+    loading retry reds `?slow` (4446 ms). `?slow` was retimed: the server's
+    `/slow-asset.js` answers after 2.5 s, not 3, so the document is still loading
+    when the wait looks but done inside the 1 s cap. The
+    `BLANK_PLAYER_FILL_WAIT_MS` docstring now says what is true: no wait on a
+    complete document with no blank iframe, at most the 1 s retry on a loading
+    one, the whole wait only after a counted reload.
+  - **F2 (med).** `BLANK_PLAYER_IFRAMES_FN` stops its ancestor walk before
+    `<body>`: the iframe and its ancestors below `body` are tested for a
+    player-ish class or id, so `body.single-player-page` no longer makes a
+    script-written ad slot a blank player iframe. Test `player-adslot-body-class`
+    was red at 8478 ms against `< 3000`; the mutation (walking through `body`
+    again) is red at 6195 ms. dl-139's tests, unedited, pass, and its press reads
+    the same predicate, so the change reaches it. The live post is unaffected
+    (6 of 6 below).
+  - **F3 (low).** Test "an iframe that the delayed script adds while the probe
+    waits is visited in the same pass, not only in the next"
+    (`player-delayed-late-frame`: the delayed script fills the blank iframe with
+    an inert page and adds a second iframe with the clickable embed, removed 3.5 s
+    later; the second pass is 3 s after the first). The mutation, one frame list
+    per pass, reds it (`expected [ ... ] to include '/media/related/master.m3u8'`).
+  - **F6 (med).** The "pays no wait" timing test read `Date.now()`. A wall-clock
+    step inside the timed span of the plain run inflates it and shortens the
+    difference: the failing 3751 is 6251 minus 2500, the sandbox's 2.5 s forward
+    step (measured by dl-144's gate 2) to the millisecond, so that is the cause
+    by arithmetic, not by a captured step. The test, and the wait's own elapsed
+    times, now read `performance.now()`; `remaining(deadline)` still reads
+    `Date.now`, as everywhere in the tier. 20 runs of the test after the change:
+    20 of 20 green (before: 1 in 10 red).
+  - **F4 and F5 (lows) are recorded and not fixed.** F4: the hover is not a
+    press for dl-144, and that branch follows a top-frame navigation before the
+    first press as the page's own, so a navigation that a page's `mouseover`
+    handler sets off moves the landing URL rather than reading as a departure; no
+    live call site. F5: an abort thrown in the wait is swallowed by
+    `provokePlayback`'s per-frame `catch` (older than this branch), so the rest of
+    pass 0's frames are visited before the pass pause rethrows.
+  - Live, the final build, 6 of 6 (OK 19.2, 21.0, 19.3, 17.8, 20.2, 19.0 s).
+    Second main load / provoke-playback start, seconds: 3.3/4.1, 4.0/4.4,
+    3.3/3.9, 3.5/4.0, 3.3/4.0, 3.3/4.1. None had the reload after provocation
+    began.
+  - `npm run check` exit 0; `npm test -- --project downloader` 2699 passed, 2
     skipped. e2e and container gates not run.
 
 ## Review
