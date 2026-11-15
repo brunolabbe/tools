@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Server tabs whose press leaves the player iframe blank</title>
+  </head>
+  <body style="margin: 0">
+    <!-- dl-139, gate round 1: two tabs, and a press that loads nothing. Each
+         tab's handler only records `/beacon/tab-<n>`; the iframe stays at
+         about:blank for the whole probe. Probe pass 2 therefore finds the same
+         precondition pass 1 did, and only the once-per-probe flag keeps the
+         active tab from being pressed again (or the next one from being tried). -->
+    <div class="player-tabs">
+      <button class="player-btn active" data-player="1">Player 01</button>
+      <button class="player-btn" data-player="2">Player 02</button>
+    </div>
+    <div class="player-wrap">
+      <iframe
+        id="player-1"
+        class="player-frame"
+        src="about:blank"
+        width="640"
+        height="360"
+        style="border: 0"
+        title="Video player 1"
+      ></iframe>
+    </div>
+    <script>
+      var buttons = document.querySelectorAll(".player-btn");
+      for (var i = 0; i < buttons.length; i++) {
+        buttons[i].addEventListener("click", function (event) {
+          fetch("/beacon/tab-" + event.currentTarget.getAttribute("data-player")).catch(
+            function () {},
+          );
+        });
+      }
+    </script>
+  </body>
+</html>

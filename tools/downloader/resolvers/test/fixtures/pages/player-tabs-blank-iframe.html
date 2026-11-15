@@ -62,6 +62,21 @@
               document.getElementById("wrap-" + n).style.display = n === id ? "" : "none";
             });
             var frame = document.getElementById("player-" + id);
+            // js/xss-through-dom, excused under docs/adr/005 by category, in
+            // tools/downloader/resolvers/test/fixtures/pages/player-tabs-blank-iframe.html,
+            // 2026-11-15, by the owner (dl-139, gate round 1): this is a test
+            // fixture, served only by the test's own server, and it copies a DOM
+            // attribute into an iframe's src on purpose, because that is the page
+            // dl-139 reproduces: the live page keeps each player's address in a
+            // data attribute and sets it only on a tab press. It never ships, and
+            // no visitor reaches it. Field five has no production design behind it
+            // to regress: what goes red if the fixture stops doing it is "presses
+            // the active tab, and the embed it loads is clicked in its own frame
+            // and yields the stream" in browser-resolver-press-targets.test.ts,
+            // since the iframe then stays blank and the probe ends NO_MEDIA_FOUND.
+            // The assignment is on one line because the suppression covers exactly
+            // the line after the comment.
+            // codeql[js/xss-through-dom]
             frame.src = atob(frame.getAttribute("data-enc"));
           });
         }

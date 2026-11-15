@@ -1722,7 +1722,7 @@ const TAB_MARK = "data-downloader-server-tab";
  */
 const SERVER_TAB_WORD = "player|server|source|mirror|host";
 const SERVER_TAB_ORDINAL =
-  "\\d{1,2}|one|two|three|four|five|six|first|second|third|fourth|fifth|sixth";
+  "\\d{1,2}(?:st|nd|rd|th)?|one|two|three|four|five|six|first|second|third|fourth|fifth|sixth";
 export const SERVER_TAB_LABEL = new RegExp(
   `^(?:${SERVER_TAB_WORD})s?\\s*[#:.-]?\\s*(?:${SERVER_TAB_ORDINAL})\\b`,
   "i",
@@ -1742,9 +1742,16 @@ const SERVER_TAB_MAX_LABEL = 24;
  * **A control is a tab when** it is a button, link, `role=button`, `role=tab` or
  * list item, visible, outside any form or label, and either carries a
  * `data-player`, `data-server` or `data-source` attribute or its label is
- * `SERVER_TAB_LABEL`. **A link that would leave the page is not a tab**: its
- * address must be the page's own, or a fragment of it, or a `javascript:` URL,
- * which is how a tab built from a link is written. A new-tab link never is.
+ * `SERVER_TAB_LABEL`. **A control that a click would carry off the page is not a
+ * tab, whatever it says**, and a click lands on what is under it, so the test is
+ * on the control, on every link it holds and on the link that holds it: a link
+ * is a tab's way in only when its address is the page's own, a fragment of it, or
+ * a `javascript:` URL (how a tab built from a link is written), and its target
+ * is this window; a `role=link` without an `href` never is. A control in a form,
+ * or owned by one through its `form` attribute, is left alone too, since a press
+ * submits it. **What this cannot see** is a handler that does it by script
+ * (`location.href`, `window.open`): the departure guard is what ends a probe
+ * after the first, and nothing here stops the second.
  *
  * The one marked is the one the page shows as active (a class, or an `aria-`
  * state), otherwise the first in document order.
@@ -1760,21 +1767,34 @@ const MARK_SERVER_TAB_SCRIPT = `(() => {
   });
   if ((${CHOOSE_VIDEO_INDEX_FN})(blank) === -1) return false;
   var here = location.href.split('#')[0];
+  // A link that would take the page somewhere, or open a window: an address
+  // that is not this page's own (a fragment of it and a javascript: URL are),
+  // a target other than this window, or a role=link, whose address is unknown.
+  var leaves = function (link) {
+    if (link.getAttribute('role') === 'link' && !link.hasAttribute('href')) return true;
+    var target = (link.getAttribute('target') || '').toLowerCase();
+    if (target !== '' && target !== '_self' && target !== '_top' && target !== '_parent') return true;
+    try {
+      var to = new URL(link.href, location.href);
+      return to.protocol !== 'javascript:' && to.href.split('#')[0] !== here;
+    } catch (e) {
+      return true;
+    }
+  };
+  var LINKS = 'a[href], [role="link"]';
   var tabs = (${ALL_MEDIA_FN})('button, a, [role="button"], [role="tab"], li').filter(function (el) {
     var rect = el.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0) return false;
     var style = getComputedStyle(el);
     if (style.visibility === 'hidden' || style.display === 'none') return false;
-    if (el.closest('form, label')) return false;
-    if (el.tagName === 'A' && el.hasAttribute('href')) {
-      if (el.getAttribute('target') === '_blank') return false;
-      try {
-        var to = new URL(el.href, location.href);
-        if (to.protocol !== 'javascript:' && to.href.split('#')[0] !== here) return false;
-      } catch (e) {
-        return false;
-      }
-    }
+    // Inside a form or label, or owned by a form through its form attribute.
+    if (el.closest('form, label') || el.form) return false;
+    // A click on a wrapper lands on the link it wraps, and one on a control inside
+    // a link bubbles to the link: so the control, what it holds and what holds it.
+    var around = el.closest(LINKS);
+    if (around && leaves(around)) return false;
+    var held = el.querySelectorAll(LINKS);
+    for (var k = 0; k < held.length; k++) if (leaves(held[k])) return false;
     if (el.hasAttribute('data-player') || el.hasAttribute('data-server') || el.hasAttribute('data-source')) return true;
     var text = (el.getAttribute('aria-label') || el.textContent || '').replace(/\\s+/g, ' ').trim();
     return text.length <= ${SERVER_TAB_MAX_LABEL} && label.test(text);

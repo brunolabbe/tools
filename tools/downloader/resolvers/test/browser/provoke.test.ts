@@ -21,6 +21,7 @@ import {
   readMetadata,
   readSignals,
   SCROLL_SCRIPT,
+  SERVER_TAB_LABEL,
 } from "../../src/browser/provoke.ts";
 import { startFixtureServer } from "./helpers/fixture-server.ts";
 import type { FixtureServer } from "./helpers/fixture-server.ts";
@@ -759,5 +760,38 @@ describe("cappedTimeout (dl-118)", () => {
     { name: "Infinity", cap: Number.POSITIVE_INFINITY, expected: 2000 },
   ])("a cap of $name leaves a 2000 ms wait at $expected ms", ({ cap, expected }) => {
     expect(cappedTimeout(2000, cap)).toBe(expected);
+  });
+});
+
+describe("SERVER_TAB_LABEL (dl-139)", () => {
+  // A word for where the player comes from, then a number or an ordinal, as the
+  // ticket words it: a numeral ("1st") is an ordinal as much as "first" is.
+  test.each([
+    "Player 01",
+    "Server 2",
+    "Mirror #3",
+    "Source 1",
+    "Host 2",
+    "Server two",
+    "Source Second",
+    "Player 1st",
+    "Server 2nd",
+    "Mirror 3rd",
+    "Host 4th",
+  ])("%s is a server tab", (label) => {
+    expect(SERVER_TAB_LABEL.test(label)).toBe(true);
+  });
+
+  test.each([
+    "Host 2024 awards",
+    "Source code 1",
+    "Server status 2",
+    "2 Players",
+    "Report server 3",
+    "Mirrors",
+    "Player 1stage",
+    "Subscribe",
+  ])("%s is not", (label) => {
+    expect(SERVER_TAB_LABEL.test(label)).toBe(false);
   });
 });

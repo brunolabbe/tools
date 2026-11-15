@@ -233,19 +233,81 @@ Traps:
     naming `iframe` in its selector: an `<iframe>` whose class or id contains
     "player" (the page's `class="player-frame"`) matches
     `[class*="player"], [id*="player"]` and is a candidate, so the box click can
-    land on a player iframe's centre. Not measured, and left alone as the Trap
-    asks; the embed fixture's small video is what keeps the test from depending
+    land on a player iframe's centre. I did not measure it; gate 1 did (attack 4,
+    `/inner-click` on `<iframe class="player-frame">`), and the owner chose to
+    file it (gate round 1, question 3). Left alone here, as the Trap asks; the embed fixture's small video is what keeps the test from depending
     on it. Second, the brief's "after `SCROLL_SCRIPT` and before
     `clickPlayerBox`" is two different functions: the press is in `provokeFrame`
     after the scroll, and `clickPlayerBox` is in `provokeInput` after pass 0, so
     "before" holds by construction.
   - **A link is a tab only if it stays on the page** (its address is the page's
     own, a fragment of it, or `javascript:`), and a `target=_blank` link never
-    is. The brief names only the "nav link labelled Server 2" risk and the two
-    guards; this is a third one, cheap and covered by the third test.
+    is. **This was true of the `<a>` itself and false of what wraps it; gate 1
+    measured the difference and round 1 below corrects it.** The brief names only
+    the "nav link labelled Server 2" risk and the two guards; this is a third
+    one.
   - Runs at `9a689b3f`: `npx vitest run
     tools/downloader/resolvers/test/browser/browser-resolver-press-targets.test.ts`
     → 22 of 22 passed (the file's 19 existing tests and the 3 new), 49.5 s;
     `npm run check` exit 0. The rest of the browser tier is CI's to read on the
     draft.
   - Fold-in: none made. No other small, already-specified piece became free.
+- 2026-11-15 — Gate round 1 (Opus 5.5, depth full, `f4483f8e`: CONCERNS; SSRF
+  refuted). The owner's answers are under _Gate round 1_ in the Decision. Each
+  test was written and run red against `f4483f8e`'s `provoke.ts` first, then the
+  fix.
+  - **Wrapped links (med).** `MARK_SERVER_TAB_SCRIPT` tested the leaving-link
+    rule on the `<a>` only, so `<li><a href="/elsewhere">Server 2</a></li>`, a
+    `role=button` wrapper and `<li data-player><a>Next video</a></li>` were
+    chosen and the click landed on the link. It now rejects a control that is
+    inside a leaving link, holds one, or is one (`el.closest` and
+    `querySelectorAll` of `a[href], [role="link"]`). A `role=link` with no `href`
+    counts as leaving. The doc comment on the script said "A link that would
+    leave the page is not a tab" while the wrapper case proved it false; it now
+    says what is checked and what is not. A hit-test of the click point, as
+    `MARK_PLAYER_BOX_SCRIPT` does, was not added: a covered tab already fails its
+    unforced click, and the rule above is what the gate's three shapes needed.
+    A tab list written as `<li><a href="?server=2">` is thereby never pressed;
+    that is the brief's rule (a link that leaves the page is not a tab), kept.
+  - **`<button form="f">` outside its form (low).** `el.form` is now part of the
+    form test, beside `closest('form, label')`.
+  - **A press that opens a second page (low).** Chosen remedy: a link whose
+    `target` is not this window (anything but empty, `_self`, `_top`, `_parent`)
+    is a leaving link, which closes `target="_new"` and every named window.
+    **Not fixed: a button whose handler calls `window.open`.** Nothing in the
+    page's markup says so, and the only guard is to close pages the press opened,
+    which changes what the whole browser tier does about popups (the play presses
+    carry the same mechanism and capture listens on the whole context) — a
+    decision about the tier, not about this press. Open decision in the round's
+    report, not made here.
+  - **Numeric ordinals (low).** `SERVER_TAB_LABEL` now takes `1st`, `2nd`,
+    `3rd`, `4th` after the digits; "Player 1stage" and "Host 2024 awards" still
+    do not match (`provoke.test.ts`, "SERVER_TAB_LABEL (dl-139)").
+  - **The once-per-probe flag (med).** New fixture `player-tabs-stays-blank.html`:
+    two tabs, a press that loads nothing. Test "a tab that leaves the player
+    iframe blank is pressed once in the whole probe…" counts `/beacon/tab-1`
+    exactly once and `/beacon/tab-2` zero times. With
+    `!options.serverTab.attempted` removed it is red (gate's `control-flag.sh`:
+    `× a tab that leaves the player iframe blank is pressed once…`, 1 failed,
+    9 passed of the dl-139 describes). The first test's comment, which read as if
+    it proved the flag, now says it does not.
+  - **CodeQL (med).** The alert is `js/xss-through-dom` ("DOM text reinterpreted
+    as HTML", High), on `frame.src = atob(frame.getAttribute("data-enc"))` in
+    `player-tabs-blank-iframe.html`. The rule id is not on the check's page; it is
+    the id of that query name (codeql.github.com/codeql-query-help/javascript/js-xss-through-dom).
+    Excused in the fixture's inline script under adr/005, five fields, on the line
+    above, as a test double; field five is the tab test, measured by changing the
+    fixture's `frame.src =` to `frame.title =`: that test goes red
+    (`No downloadable video stream was found`). Whether the check clears is
+    CI's, and on a pull request it clears only through `security.yml`'s dismissal
+    after the merge to `main` (adr/005, "Register and mechanism"): the `CodeQL`
+    check on the draft is expected to stay red until then.
+  - Runs at the round's head: the press-targets spec 29 of 29, `provoke.test.ts`
+    `-t SERVER_TAB_LABEL` 19 of 19; the gate's `controls.sh` (precondition removed
+    and press removed both red, whole spec 29 of 29) and `control-flag.sh`; the
+    gate's `provoke-probe.mts` and `provoke-probe2.mts` re-run against the head
+    differ from the gate's readings in exactly six pages: b3, b4, b5, b6 and c2
+    are no longer pressed (b3–b5 ended on `/elsewhere-b3`, `/elsewhere-b4`,
+    `/next-video-b5`; b6 held 2 pages; c2 ended on `/submitted-c2?`) and
+    `Player 1st` (label-6) is. b2, the `window.open` button, still opens a second
+    page.

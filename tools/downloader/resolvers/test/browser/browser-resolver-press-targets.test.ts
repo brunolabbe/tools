@@ -291,7 +291,9 @@ describe("a player iframe that stays blank until a server tab is pressed (dl-139
 
       expect(result.variants[0]?.url).toBe(server.secondaryUrl("/media/related/master.m3u8"));
       expect(server.requests).toContain("/beacon/server-tab-4");
-      // One press is the decision: not the second tab.
+      // Only the active tab; this page loads its iframe on the first press, so
+      // it cannot show that the press happens once over both passes. The
+      // stays-blank test at the end of this file does.
       expect(server.requests).not.toContain("/beacon/server-tab-6");
     },
   );
@@ -319,6 +321,56 @@ describe("a player iframe that stays blank until a server tab is pressed (dl-139
       expectCode(error, "NO_MEDIA_FOUND");
       expect(server.requests).not.toContain("/beacon/server-2-leaves");
       expect(server.requests).not.toContain("/beacon/share");
+    },
+  );
+});
+
+describe("the server-tab press and what it must not set off (dl-139 gate round 1)", () => {
+  function resolverWith(): BrowserResolver {
+    return new BrowserResolver({
+      pool,
+      hlsParser: recordingHlsParser().parser,
+      ...BASE_WAITS,
+      emptyMinWaitMs: NO_EMPTY_FLOOR_MS,
+    });
+  }
+
+  // Each control reads like a server tab and, pressed, takes the page somewhere:
+  // through a link it wraps or sits in, a form it belongs to, or a new window.
+  // The fixture records `pressed-<ctl>` when anything is clicked and `left-<ctl>`
+  // at the link's or form's own target, so either one reds the row.
+  test.each([
+    ["a list item whose text is Server 2, wrapping a link", "li-text"],
+    ["a role=button wrapper of a Server 2 link", "role-button"],
+    ["a list item with data-player around a Next video link", "li-data"],
+    ["a Server 2 button inside a link", "link-around"],
+    ["a Server 2 button owned by a form it is not inside", "form-outside"],
+    ["a Server 2 link that opens a new window", "target-new"],
+  ])("does not press %s", { timeout: TEST_TIMEOUT_MS }, async (_name, ctl) => {
+    server.requests.length = 0;
+    const error = await probeError(`/player-tabs-unsafe-control.html?ctl=${ctl}`, resolverWith());
+
+    expectCode(error, "NO_MEDIA_FOUND");
+    expect(server.requests.filter((pathname) => pathname.startsWith("/beacon/"))).toEqual([]);
+    // `target=_new` would have opened the page a second time.
+    expect(
+      server.requests.filter((pathname) => pathname === "/player-tabs-unsafe-control.html"),
+    ).toHaveLength(1);
+  });
+
+  test(
+    "a tab that leaves the player iframe blank is pressed once in the whole probe, over both passes, and the next tab is never tried",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      server.requests.length = 0;
+      // Nothing is captured and the iframe is still blank when the second pass
+      // starts, so only the once-per-probe flag stands between that pass and a
+      // second press of the same active tab.
+      const error = await probeError("/player-tabs-stays-blank.html", resolverWith());
+
+      expectCode(error, "NO_MEDIA_FOUND");
+      expect(server.requests.filter((pathname) => pathname === "/beacon/tab-1")).toHaveLength(1);
+      expect(server.requests).not.toContain("/beacon/tab-2");
     },
   );
 });
