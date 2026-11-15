@@ -153,6 +153,21 @@ the first.
    handles it in its own pull request; this branch does not touch
    `docs/adr/005`.
 
+### Gate round 3 — answered 2026-11-15 by the owner
+
+One question, put at the orchestrator's checkpoint 6 after gate 3 graded
+`30dddf53` and left one finding open. No recommendation was overridden.
+
+**Gate 3's F1 remainder**: a held `<label for>` whose control a form owns. The
+form rule looks for controls _inside_ the candidate; a label inside it points at
+a control outside it, and a click on the label activates that control, so the
+candidate is pressed and the form submits. Options: (a) fix it at the landing,
+no re-gate (gate 3's recommendation); (b) fix it with a fresh builder and a
+narrow gate 4; (c) reword the comment and record the gap; (d) record only.
+**Answer: (a), fix at the landing, no re-gate.** The owner was told the
+severity question too: gate 3 kept F1 at `med`, and reading it as `high` was the
+owner's call; the owner did not regrade.
+
 ## Build
 
 Written for option A, which the owner chose.
