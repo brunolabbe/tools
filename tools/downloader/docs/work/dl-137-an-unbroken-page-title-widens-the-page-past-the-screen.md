@@ -426,10 +426,58 @@ this ticket `dropped` with the reason. If C, `depends_on` stays empty.
   - **Screenshots opened** (`e2e/.artifacts/layout/`, ignored by git, uploaded by CI):
     `Unbroken title, analysis-360.png` shows the 200 "T" wrapped into eleven
     lines beside the preview, the page not scrolled; `Unbroken title, running
-    job-1280.png` shows it on three lines under the Re-analysing pill, whole;
-    `Unbroken address, restored job-360.png` shows the address on six lines
+    job-1280.png` shows it on three lines above the Re-analysing pill, whole;
+    `Unbroken address, restored job-360.png` shows the address on seven lines
     above the Failed pill; `Unbroken message, restored job-360.png` shows the
-    message on eleven lines inside the notice, the title and code still on
+    message on ten lines inside the notice, the title and code still on
     their own row.
   - **Fold-in:** none. Nothing small and already specified came free; dl-135's
     `.card__title` font-size edit is its own and was left alone.
+- **2026-11-15, round 1** after gate 1 (Opus 5.5, depth full, PASS at `8f64987c`,
+  CI 11 of 11 green). The owner's answers are under _Decision_, question 4, and
+  record that the owner **widened this ticket to the "Embed subtitles" label,
+  overriding the gate's recommendation to file**; the `Done when` lines do not
+  change.
+  - **F1 fixed (folded in).** A 200-character unbroken `language` in
+    `probe.subtitles` (the gate's route rewrite, in the new case `an unbroken
+    subtitle language in the Embed subtitles label wraps (dl-137)`, appended at
+    the end of `e2e/layout.spec.ts`). Red on `8f64987c`'s stylesheet, which this
+    branch still had, `E2E_PORT=8237 npm run e2e:downloader --
+    tools/downloader/e2e/layout.spec.ts`: `1 failed, 14 passed`, with `Unbroken
+    subtitle language is 1875 px wide in a 360 px window` and `2028 px wide in a
+    1280 px window` (the gate's figures to the pixel) and `right edge inside the
+    window` at both widths. Fix: `overflow-wrap: anywhere` on `.options__row
+    label`, the gate's "likely direction", **measured and not assumed**: the
+    anonymous flex item that holds the label's text takes its minimum size from
+    the label's own `overflow-wrap`, so the one declaration on the label is
+    enough, with no `min-width: 0` and nothing on the row. Green: `15 passed
+    (31.1s)`. The rule is on the shared selector, so it also covers "Audio only"
+    and every other label in an `.options__row`; nothing else in the stylesheet
+    changed. Note the case reads the row's wrapped-not-cut figures as well: the
+    label is 9 lines tall at 360 px and 4 at 1280 px.
+  - **Screenshots opened:** `Unbroken subtitle language-360.png` shows "Embed
+    subtitles" and the whole language on nine lines inside the Output box, the
+    page not scrolled; `-1280.png` shows four lines, "(SSS…" starting on the
+    second line because the text wraps before the bracket. **Where the checkbox
+    goes:** it stays beside the label's text but is **vertically centred on the
+    whole block, not on its first line** (`align-items: center` on the label, left
+    as it is so the single-line labels keep their look and dl-135 rebases over a
+    two-line diff). The brief allowed saying so in place of moving it. It is a
+    choice for the owner if the first line is wanted: `align-items: baseline` on
+    that selector, which would also move "Audio only" and the rest by a pixel or
+    two.
+  - **F2 fixed.** The running-job case's comment says the job is "still active"
+    and that it reads `Re-analysing` (`probing`, 0 B) in the screenshot, with
+    the reason that does not matter: every active status draws the same
+    `BoxHead`.
+  - **F3 fixed.** The first build's screenshot entry is corrected in place: the
+    running job's title sits **above** the `Re-analysing` pill, not under it;
+    the restored job's address takes **seven** lines at 360 px, not six. I also
+    measured the other two counts with a temporary `console.log` of box height
+    over line height, removed before the commit: the 200 "T" is 11 lines at 360
+    px and 3 at 1280 px (as written), and the 200-character message is **10**
+    lines at 360 px, not eleven, so that is corrected too. Counts: title 11/3,
+    running job 11/3, address 7/3, message 10/3, spaced title 14/3, subtitle
+    label 9/4.
+  - **Fold-in:** none beyond the owner's own. `main` had moved to `e7d791d6`
+    during the build and is merged into the branch in this round, before the push.

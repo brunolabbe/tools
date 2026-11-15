@@ -565,6 +565,9 @@ code {
   gap: 0.4rem;
   align-items: center;
   cursor: pointer;
+  /* The Embed subtitles label joins in a subtitle track's language, which a
+     remote manifest chooses (dl-137). */
+  overflow-wrap: anywhere;
 }
 
 /*
