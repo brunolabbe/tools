@@ -1108,8 +1108,10 @@ describe("the web's CSV fixture (Done when 11)", () => {
 });
 
 // Stands alone, in any order and under a filter: the test makes the requests
-// whose lines it reads, against an app of its own, and reads only what that app
-// logged (LOGGED is shared by every app of the file, so it is sliced).
+// whose lines it reads, against apps of its own, and reads only what those apps
+// logged (LOGGED is shared by every app of the file, so it is sliced). The
+// refusals are among them: a refused confirm is logged by the error handler,
+// and that line is where a refusal's message could leak a row's text.
 describe("the log (lg-66's rule, for a CSV)", () => {
   test("no line of any request above holds a CSV's content, a file name or the key", async () => {
     const first = LOGGED.length;
@@ -1118,8 +1120,23 @@ describe("the log (lg-66's rule, for a CSV)", () => {
     expect(described.statusCode, described.body).toBe(200);
     const confirmed = await confirmFile(started, bytesOf("csv-balance"), uploaded("csv-balance"));
     expect(confirmed.statusCode, confirmed.body).toBe(200);
+    // The same file again overlaps what is stored: refused.
+    const overlapped = await confirmFile(started, bytesOf("csv-balance"), uploaded("csv-balance"));
+    expect(errorOf(overlapped).code).toBe("CSV_NOT_AFTER_TAIL");
+    // And onto a tail it does not follow, in an app of its own: refused as a gap.
+    await started.app.shutdown();
+    const gapped = await start();
+    storeRow(gapped, {
+      date: "2023-12-29",
+      description: "VIREMENT",
+      amountCents: 10_000,
+      balanceCents: 99_999,
+    });
+    const refused = await confirmFile(gapped, bytesOf("csv-balance"), uploaded("csv-balance"));
+    expect(errorOf(refused).code).toBe("CSV_NOT_AFTER_TAIL");
     const logged = LOGGED.slice(first);
-    expect(logged.length).toBeGreaterThanOrEqual(2); // at least a line per request made above
+    // A line for each of the five requests, so the search below read something.
+    expect(logged.length).toBeGreaterThanOrEqual(5);
     const secrets = [
       API_KEY,
       "EPICERIE",
@@ -1130,9 +1147,16 @@ describe("the log (lg-66's rule, for a CSV)", () => {
       "zq7tok",
       "CAF",
       "TERRASSE",
+      // The upload itself, as the body carries it: no line holds the request's body.
+      bytesOf("csv-balance").toString("base64").slice(0, 40),
     ];
     expect(logged.filter((line) => secrets.some((secret) => line.includes(secret)))).toEqual([]);
     expect(logged.some((line) => line.includes("a workbook was described"))).toBe(true);
     expect(logged.some((line) => line.includes("a described CSV was stored"))).toBe(true);
+    expect(
+      logged.filter(
+        (line) => line.includes("request rejected") && line.includes("CSV_NOT_AFTER_TAIL"),
+      ),
+    ).toHaveLength(2);
   });
 });
