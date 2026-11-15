@@ -7383,3 +7383,45 @@ The Tickets line's builder bar: every builder was read against the $10 bar at it
 - Opus gates on standard tickets reached past their range and carried reproductions: the route's dead `close` listener, the stalled config read, and the blind iframe box click. All three became tickets with the gate's scripts as their reproduction (#809).
 - The owner-requested narrow gate 3 on dl-139 found a third variant of the same mechanism that two gates had already narrowed, and handed back a remedy measured on the probe.
 - Dry-running a gate's remedy before offering it (#810's `git grep`: 13 on main, 14 at dl-139) let the owner choose from a figure, not a direction.
+
+### Batch 2026-11-15 (tools-35, dl-140 dl-141 dl-142) — base 5f15e56f
+
+| PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| — | — | Sonnet 5.5 / high | a03c518034c52d47b | seam-mapper, dl-134 step 11, dl-135, dl-140, dl-141, dl-142 | 1m45s / 1m44s | 0 | $0.3479 |
+| #818 | open, ready, 12/12 at 330e6412 | Sonnet 5.5 / high | ade55f4656a3b7760 | builder-standard, dl-140 build + round 1 (text) | 14m42s / 32m26s | 0 | $2.1958 |
+| #818 | as above | Opus 5.5 / high | a2936ea7a6fbfa9e1 | ticket-reviewer-opus, dl-140 gate 1 | 15m21s / 15m11s | 0 | $4.0600 |
+| #818 | as above | Opus 5.5 / high | af03649fe364ed407 | ticket-reviewer-opus, dl-140 gate 2, narrow | 4m41s / 4m38s | 0 | $1.7002 |
+| #818 | as above | Sonnet 5.5 / high | ae419220cd401d4ad | fixer, dl-140 F1 remainder at landing + landing | 3m07s / 2m41s | 0 | $0.5514 |
+| #816 | open, ready, 12/12 at 70cb6f5a | Sonnet 5.5 / high | a33378492e7509dc0 | builder-standard, dl-141 build (option A) | 7m23s / 7m21s | 0 | $1.0514 |
+| #816 | as above | Opus 5.5 / high | a8331d2f9aa182706 | ticket-reviewer-opus, dl-141 gate 1 | 11m22s / 11m21s | 0 | $2.9347 |
+| #816 | as above | Sonnet 5.5 / high | a40ae052260a7a216 | fixer, dl-141 med + low at landing + landing | 3m16s / 3m06s | 0 | $0.5352 |
+| #817 | open, ready, 12/12 at b0c67b8f | Sonnet 5.5 / high | a5000b3221ba3c3ac | builder-standard, dl-142 build + Build 3 (owner stop) + round 1 | 22m29s / 39m02s | 0 | $1.9375 |
+| #817 | as above | Opus 5.5 / high | a0eee77f5fab32a6b | ticket-reviewer-opus, dl-142 gate 1 | 14m30s / 13m01s | 0 | $3.6746 |
+| #817 | as above | Opus 5.5 / high | a734c5f2785e61538 | ticket-reviewer-opus, dl-142 gate 2, narrow | 11m19s / 11m19s | 0 | $2.7122 |
+| #817 | as above | Sonnet 5.5 / high | a4f5c6db53d020bd8 | fixer, dl-142 F1 remainder + N1 at landing + landing | 8m56s / 8m39s | 0 | $1.0207 |
+| — | — | Opus 5.5 / high | orchestrator d9e99471 | orchestrator (floor) | 1h14m05s / 1h17m45s | 0 | $6.0721 |
+| | | | | **total** (rates read 2026-10-10), before the log fixer | 3h12m55s | 0 | **$28.7938** |
+
+**Tickets:** every builder was read against the $10 bar at its first report ($0.99–$1.69), and none was past it; each was resumed for one round (and dl-142's for one owner stop as well), finishing at $1.05–$2.20. No ticket waited for a slot.
+
+- dl-140 → #818: gate 1 FAIL (Opus): one high, text only. The Log's "an abort during the output vet frees the slot when the vet returns and ends `CANCELED`" was false, because the thumbnail image fetch runs on its own 4 s timeout and the probe ends `ok`. That sentence came from Build 3, which the owner's intake option had quoted, so the intake answer was re-asked with the measurement; the owner chose to correct the text only. Round 1 by the builder. Narrow gate 2 PASS (Opus), with F1 fixed in part: a low remainder, fixed at landing by owner choice. Landed `done`.
+- dl-141 → #816: the owner answered A at intake. Gate 1 CONCERNS (Opus): a med (no test caught the signal being dropped from the config fetch) and a low, both fixed at landing by owner choice. No round. Landed `done`.
+- dl-142 → #817: Build 3's owner stop → A, built by the builder on resume. Gate 1 FAIL (Opus): a high (an iframe in an open shadow root was still clicked into) plus three lows; the owner chose (a), drill open shadow roots. Round 1 by the builder. Narrow gate 2 PASS (Opus); F1's closed-root remainder (wording) and N1 (`frame` untested) were fixed at landing by owner choice. Landed `done`.
+
+**Defects in the skill:**
+
+1. `roles/builder.md`, "A ticket in `needs-decision` is yours to build only when your dispatch carries the owner's answer": it lists the answer, the date, the options and `status: ready` for the first commit, but not rewording the ticket's `## Decision — open` heading, which `scripts/status.mjs` rejects on a `ready` ticket. Reproduction (relayed from dl-141's builder, not re-run by the orchestrator): after the answer commit, `node scripts/preflight.mjs --only mergeTree,ciCommands,review,title --base origin/main --title "<title>"` → `FAIL node scripts/status.mjs --json … has a "## Decision — open" heading, but its status is "ready"` and `preflight failed: ciCommands (exit 32)`. It cost one extra commit (`2a80720d`).
+2. `roles/reviewer.md`, "When you are dispatched as gate 2, or later", read with `gate.md`, "Severity and the gate": neither says what severity the remainder of a "fixed in part" finding takes when it is much narrower than the original; "keeps its number and severity" covers only a finding that comes back unfixed. Reproduction: dl-140's gate 2 section (`grep -n 'fixed in part' <scratch>/dl-140/gate-2/gate-2@c1abda7d.md` → line 11, "F1 · **fixed in part** … What remains is graded **low**"). The gate put "does F1 keep its high (→ FAIL)?" to the orchestrator as an open decision, and it went to the owner. dl-142's gate 2 graded its F1 remainder the same way.
+3. `review-ticket/gate.md`, "Steps", step 4, the `verified` bullet, says the downloader project runs nine minutes. Reproduction: `grep -n 'nine minutes' .claude/skills/review-ticket/gate.md` → `130: … the downloader project runs nine minutes.`; dl-142 gate 1 `suite.log` → `Test Files 129 passed | 1 skipped (130)`, 90.26 s; dl-142 gate 2 → 84 s. (`common.md` already gives 84–104 s.)
+4. `gate.md`, "Steps": step 6 says silence is no answer to the NFR sweep, while step 3 defines a narrow gate as the named attacks and the acceptance table, and the section template keeps an NFR line, so a narrow gate has to guess. Reproduction (relayed from dl-140's gate 2, not re-run): its section's NFR line reads "not swept (narrow)".
+5. `records.md`, "Fixed at landing", against `roles/fixer.md`, "A mutation check runs on a committed tree": the first wants the Log entry in the fix's own commit, and the second wants the mutation run on a committed tree, so a code fix's red/green has no committed state to run on. Reproduction (relayed, not re-run): dl-141's lander ran the mutation on the uncommitted tree and restored `http.ts` by hand, and dl-142's lander made an interim commit `666937a1`, mutated, then reset it out of history (`git cat-file -t 666937a1` in that worktree → commit, not on the branch).
+6. `roles/fixer.md`, "Landing": there is no step for ordering the owner's-answer commit when the fix is already committed locally. Reproduction (relayed from dl-142's lander, not re-run): it used `git reset --soft HEAD~1` to put answer commit `352b56d3` before fix commit `deb39012`.
+7. `records.md`, "Fixed at landing", the wording-proof bullet: the grep fragment has to be taken from the diff's `-` line as it stands in source. A fragment copied from rendered prose whose source line has backticks returns 0. Reproduction (relayed from dl-142's lander, not re-run): the docstring line around `` `CHOOSE_VIDEO_INDEX_FN` ``.
+8. `roles/common.md`, "Point every run at the narrowest thing that can fail" (and `roles/reviewer.md`): there is no advice to time real-clock probes with `performance.now()`. `Date.now()` disagreed with it three times this batch. dl-140's builder read 4,134 ms against 1,534 ms. dl-141's gate read 12,714 ms by `Date.now` under a 15,000 ms timer that had fired, against 15,026–15,029 ms by `performance.now`. dl-142's gate 2 saw the dl-115 quiet-wait test fail in a project run, reading 3,363 ms by `Date.now` against 803 ms by `performance.now`; that file passed 19/19 alone and in CI. Reproduction: relayed from those three reports, not re-run.
+9. `roles/common.md`: no line says to end the turn and wait for a `run_in_background` script's own notification. Reproduction (relayed from dl-140's lander, not re-run): about 12 poll turns, each its own background call and notification.
+
+**Worked, and worth keeping:**
+
+- An intake answer whose option text quoted a brief sentence a gate then disproved was re-asked with the gate's measurement (dl-140 F1), not carried forward.
+- `git merge-tree --write-tree` of this batch's `provoke.ts` branch against a peer session's two branches on the same file (exit 0) settled the merge-order question in one command.
