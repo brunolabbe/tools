@@ -10,9 +10,9 @@
          `data-enc`, and nothing on the page runs until the window sees a first
          interaction; 1.2 s after that the player script sets the iframe's `src`.
          There is no tab. With `?plain` the iframe is a div instead, which is the
-         same page with no blank player iframe, and with `?never` the script
+         same page with no blank player iframe, and with `?hover` only a pointer over the window releases it, and with `?never` the script
          releases but never fills the iframe. -->
-    <div class="player-wrap" id="wrap">
+    <div class="player-wrap" id="wrap" style="padding-top: 200px">
       <iframe
         id="player-0"
         class="player-frame"
@@ -50,15 +50,31 @@
           "pointerup",
           "pointerdown",
         ];
+        // With `?hover` only a pointer hearing the window releases it: no wheel,
+        // click, key or touch, and the page is too short to scroll, so the
+        // probe's scroll moves nothing and sends nothing the page listens to.
+        if (query.indexOf("hover") !== -1) EVENTS = ["mouseover", "pointerup", "pointerdown"];
         var released = false;
         function release() {
           if (released) return;
           released = true;
           for (var k = 0; k < EVENTS.length; k++) window.removeEventListener(EVENTS[k], release);
-          setTimeout(playerScript, 1200);
+          setTimeout(playerScript, query.indexOf("hover") !== -1 ? 500 : 1200);
         }
-        for (var j = 0; j < EVENTS.length; j++) {
-          window.addEventListener(EVENTS[j], release, { passive: true });
+        function listen() {
+          for (var j = 0; j < EVENTS.length; j++) {
+            window.addEventListener(EVENTS[j], release, { passive: true });
+          }
+        }
+        // With `?hover` the listeners go on 300 ms after `load`, as the plugin's do
+        // (live, the mouseover the browser sends at load had already gone by), so
+        // the pointer that Playwright's context starts with does not release it.
+        if (query.indexOf("hover") !== -1) {
+          window.addEventListener("load", function () {
+            setTimeout(listen, 300);
+          });
+        } else {
+          listen();
         }
 
         function playerScript() {

@@ -15,7 +15,7 @@
  * with no DOM lib. Values interpolated into a script are JSON-encoded.
  */
 
-import type { Frame, Locator, Page } from "playwright";
+import type { ElementHandle, Frame, Locator, Page } from "playwright";
 import { budget, remaining, sleep, throwIfAborted } from "./abort.ts";
 import { AGE_MARKERS } from "./classify.ts";
 import type { HitCollector } from "./intercept.ts";
@@ -1892,13 +1892,16 @@ const UNMARK_BLANK_PLAYER_SCRIPT = `(() => {
 
 /**
  * How long a probe waits, in all, for a blank player iframe to get its address
- * and finish loading (dl-143). A page that runs its scripts only after a first
- * interaction (a "delay JS" plugin) fills the iframe 0.2-0.6 s after the scroll
- * that released it, and the embed behind it may hop to a mirror about 0.4 s
- * after that; 3 s covers both with room. Spent once per probe, split in two by
- * the server-tab press, and only on a page that has a blank player iframe.
+ * and finish loading (dl-143). Measured live on a page under a delay-JS plugin:
+ * the plugin hears the first hover 0.6-0.7 s in, its bundle then takes 2.2-2.9 s
+ * to set the iframe's `src`, and the embed hops to a mirror about 0.4 s after
+ * that, so a fill and a final document land 3.2-4.2 s in, and the stability
+ * window comes after. 3 s, the first guess, ended the wait before the fill in
+ * 2 of 5 runs. Spent once per probe, split in two by the server-tab press, and
+ * only on a page that has a blank player iframe; a page whose iframe fills ends
+ * it early, and one whose iframe never fills pays it whole.
  */
-export const BLANK_PLAYER_FILL_WAIT_MS = 3000;
+export const BLANK_PLAYER_FILL_WAIT_MS = 6000;
 /**
  * The part of that wait made before the server-tab press (dl-143): a plugin that
  * registers the tabs' handlers only after its release drops a press that comes
@@ -1916,7 +1919,43 @@ interface BlankPlayerWait {
   done: boolean;
   /** The iframe is marked in the page, so a second call finds it though it is no longer blank. */
   marked: boolean;
+  /** The hovers made so far, over both calls (dl-143). */
+  hovers: number;
   spentMs: number;
+}
+
+/** How often the pointer moves over a blank player iframe while it is waited for (dl-143). */
+const BLANK_PLAYER_HOVER_EVERY_MS = 500;
+
+/**
+ * Moves the pointer onto the blank player iframe, or just off it (dl-143), so
+ * that the page sees a `mouseover` each time. A delay-JS plugin runs its scripts
+ * on a first `mouseover`, `wheel`, key or touch, and a page whose player is in
+ * view is not moved by the scroll above, so nothing it hears has happened. The
+ * plugin also attaches its listeners a moment after `load`, and a move that comes
+ * before them is lost; hence a move every `BLANK_PLAYER_HOVER_EVERY_MS` while the
+ * iframe is blank, in and out, since a pointer already over the element fires
+ * nothing. `mouse.move` sends pointer and mouse movement only: no button, no key,
+ * so it is not a press and cannot submit, follow or play anything. It is an
+ * interaction made on the user's behalf all the same, and it is limited to a page
+ * that has a blank player iframe.
+ */
+async function hoverPlayer(frame: Frame, handle: ElementHandle, inside: boolean): Promise<void> {
+  try {
+    const box = await handle.boundingBox();
+    if (box === null) return;
+    const page = frame.page();
+    const height = page.viewportSize()?.height ?? 720;
+    const x = box.x + box.width / 2;
+    let y = box.y + box.height / 2;
+    if (!inside) {
+      if (box.y > 8) y = box.y - 4;
+      else if (box.y + box.height + 8 < height) y = box.y + box.height + 4;
+    }
+    await page.mouse.move(x, y, { steps: 3 });
+  } catch {
+    // Gone, or the page closed: no hover, the wait still runs.
+  }
 }
 
 /**
@@ -1955,12 +1994,20 @@ async function waitForBlankPlayerFill(
     );
     let seen = "";
     let stableSince = 0;
+    let hoveredAt = 0;
     try {
       while (Date.now() - startedAt < allowedMs) {
         throwIfAborted(options.signal);
         let sample = "";
         try {
           const src = await handle.evaluate((el) => (el.getAttribute("src") ?? "").trim());
+          if (
+            (src === "" || src.toLowerCase() === "about:blank") &&
+            Date.now() - hoveredAt >= BLANK_PLAYER_HOVER_EVERY_MS
+          ) {
+            hoveredAt = Date.now();
+            await hoverPlayer(frame, handle, state.hovers++ % 2 === 0);
+          }
           const child =
             src !== "" && src.toLowerCase() !== "about:blank" ? await handle.contentFrame() : null;
           if (child !== null && child.url() !== "about:blank") {
@@ -2213,7 +2260,7 @@ export async function provokePlayback(
   const pageOrigin = originOf(page.url());
   const hasPlayable = options.hasPlayable ?? (() => false);
   const serverTab = { attempted: false };
-  const blankPlayer: BlankPlayerWait = { done: false, marked: false, spentMs: 0 };
+  const blankPlayer: BlankPlayerWait = { done: false, marked: false, hovers: 0, spentMs: 0 };
   for (let pass = 0; pass < 2; pass++) {
     throwIfAborted(options.signal);
     if (remaining(options.deadline) < 2000) return;

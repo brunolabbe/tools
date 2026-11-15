@@ -480,3 +480,26 @@ describe("a player iframe that a delay-JS plugin fills after the first interacti
     },
   );
 });
+
+describe("a delay-JS plugin that only a pointer releases (dl-143 round 2)", () => {
+  test(
+    "a player iframe in view that only a mouseover releases resolves, because the probe hovers over it",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      server.requests.length = 0;
+      // The page is too short to scroll and listens to no wheel, click or key, so
+      // nothing the probe did before the hover would have released it.
+      const result = await probe(
+        "/player-delayed-single.html?hover",
+        new BrowserResolver({
+          pool,
+          hlsParser: recordingHlsParser().parser,
+          ...STREAM_WAITS,
+          emptyMinWaitMs: NO_EMPTY_FLOOR_MS,
+        }),
+      );
+
+      expect(result.variants[0]?.url).toBe(server.secondaryUrl("/media/related/master.m3u8"));
+    },
+  );
+});

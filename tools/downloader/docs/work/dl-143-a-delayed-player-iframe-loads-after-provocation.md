@@ -194,3 +194,57 @@ resolved in about 5 s, which is what isolates the delay as the cause.
     8.1 s (so the wait ran), settle-requests ended at 17.2 s. Not proved either
     way: this environment may not reach the embed host, and I could not tell.
     The owner's dev run is the real reading.
+- 2026-11-15 — Round 2 (owner's answer: add a hover, and chase the reload).
+  - **Correction to the entry above.** The live check there said the sandbox
+    "may not reach the embed host". It does reach it; the 60c42ca8 build failed
+    live for a different reason (below). That entry's "no more than" sentence
+    about dl-139's tab page is also muddled: it pays at most the 1 s before its
+    press, and nothing once the iframe fills.
+  - **Why 60c42ca8 failed live (3 of 3, then 2 of 5 after the hover alone).**
+    Two causes, both measured with the coordinator's traced script. (1) Nothing
+    released the plugin: the player sits below the top of the viewport, so
+    `SCROLL_SCRIPT` moves nothing and sends no event the plugin hears; its
+    "Start Load JS Delayed" came from a later click, about 3 s after "Start Lazy
+    Load". (2) Once released, the plugin's bundle took 2.2-2.9 s to set the
+    iframe's `src`, and the embed hopped 0.3-0.4 s after that, so the document
+    with the player was there 3.2-4.2 s after the wait began; the 3 s budget
+    ended first in 2 of 5 runs. `BLANK_PLAYER_FILL_WAIT_MS` is 6000 now.
+  - **The hover.** `hoverPlayer` moves the pointer (`page.mouse.move`, 3 steps)
+    onto the chosen blank player iframe, and, every 500 ms while it is still
+    blank, alternately just off it and back on. Off and on because a pointer
+    already over an element fires no `mouseover`, and because the plugin
+    attaches its listeners a moment after `load`: a first move that arrives
+    before them is lost (one live run: hover at about 4.1 s, release only at
+    7.5 s from a later click). Once per probe in the sense that it only runs
+    inside the wait, top frame only, and only for a blank player iframe. It is
+    **an interaction made on the user's behalf**; it is safe because it sends
+    `mousemove`/`mouseover` and nothing else: no button, no key, no touch, so it
+    cannot press, submit, follow or play, and it is not a `.click(`, so it is not
+    a press for dl-144's "first press" signal.
+  - **The reload.** Measured on the live post in 10 runs: the main frame
+    navigates twice to its own address (about 1.7 s and 3.1-4.1 s), and
+    provoke-playback started at 3.9-4.7 s, after the second in 9 runs and 0.2 s
+    after it in the other. No run lost its embed to a reload, and the misses
+    were the budget above, not the reload. So no `browser.ts` change was made.
+    The race is real but not demonstrated: if the second reload lands after
+    provocation starts, the hover and the wait are on a doomed document. The
+    narrow fix would be waiting out a same-URL main-frame reload before reading
+    the landing URL in `browser.ts` (where dl-144 also edits
+    `watchForDeparture`); it is not built, and no reload fixture was written.
+  - Fixture: `player-delayed-single.html?hover`, released only by a window
+    `mouseover`/`pointerup`/`pointerdown`, listeners attached 300 ms after
+    `load`, fill 500 ms after the release, a 200 px spacer so the harness's
+    initial pointer at (0, 0) is not already over the iframe. Test at the end of
+    `browser-resolver-press-targets.test.ts`: "a player iframe in view that only
+    a mouseover releases resolves, because the probe hovers over it".
+  - **Red on 60c42ca8's `provoke.ts`** (two runs): `AppError: No downloadable
+    video stream was found on that page.` (about 6.1 s); the same with the hover
+    block disabled (`if (false && ...)`) on the new code. Without the spacer the
+    fixture passed on the new code too: the pointer at (0, 0) was already over
+    the iframe and nothing fired; the live page has the same property the other
+    way round, hence the in-and-out moves.
+  - Live acceptance, the traced script against this build: 10 of 10 resolved
+    (an HLS stream, 17-21 s); the same script at the previous round's end, 2 of 5
+    with the hover and a 3 s budget.
+  - `npm run check` exit 0; `npm test -- --project downloader` 2669 passed, 2
+    skipped (129 files passed, 1 skipped). e2e and container gates not run.
