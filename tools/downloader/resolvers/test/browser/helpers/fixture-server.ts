@@ -23,6 +23,8 @@ const ENTER_REDIRECT_TARGETS: readonly string[] = [
 
 const CONTENT_TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
+  // dl-142: a page parsed as XML, where an element's `tagName` keeps its case.
+  ".xhtml": "application/xhtml+xml; charset=utf-8",
   ".json": "application/json; charset=utf-8",
   ".m3u8": "application/vnd.apple.mpegurl",
   ".mpd": "application/dash+xml",

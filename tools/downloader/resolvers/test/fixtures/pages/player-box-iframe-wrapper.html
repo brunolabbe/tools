@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A player-classed wrapper whose centre is over a frame, or beside it</title>
+  </head>
+  <body style="margin: 0">
+    <!-- dl-142: the wrapper is the largest player-ish box, and the frame inside it
+         records any click. `?over` makes the wrapper exactly the frame's size, so
+         the click point is over the frame; the default is a 1000 px wrapper around
+         a 300 px frame at its left, whose centre (500, 180) misses the frame.
+         Both are tested: the default is still pressed, and `?over` is refused
+         because the topmost element at the click point is the frame. -->
+    <div class="player-wrap" id="wrap">
+      <iframe
+        id="pf"
+        src="/player-box-frame-inner.html"
+        height="360"
+        style="border: 0; display: block"
+      ></iframe>
+    </div>
+    <script>
+      var over = location.search === "?over";
+      var wrap = document.getElementById("wrap");
+      wrap.style.height = "360px";
+      wrap.style.width = over ? "640px" : "1000px";
+      document.getElementById("pf").width = over ? "640" : "300";
+      // A click on the wrapper's own area (not on the frame) reaches this.
+      wrap.addEventListener("click", function () {
+        fetch("/beacon/wrapper-clicked").catch(function () {});
+      });
+    </script>
+  </body>
+</html>

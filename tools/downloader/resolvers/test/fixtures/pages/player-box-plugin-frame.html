@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>An object or embed that holds an HTML document, as the box or under its centre</title>
+  </head>
+  <body style="margin: 0">
+    <!-- dl-142 gate 1: `<object type="text/html">` and `<embed type="text/html">`
+         hold another document just as an `<iframe>` does, and a click on them
+         lands in it. `?tag=object` or `?tag=embed`; with `&wrap` the element sits
+         unclassed in a `.player-wrap` div whose centre it covers, otherwise the
+         element is itself `class="player"`. -->
+    <div id="mount"></div>
+    <script>
+      var params = new URLSearchParams(location.search);
+      var tag = params.get("tag") === "embed" ? "embed" : "object";
+      var el = document.createElement(tag);
+      el.setAttribute("type", "text/html");
+      el.setAttribute(tag === "embed" ? "src" : "data", "/player-box-frame-inner.html");
+      el.setAttribute("width", "640");
+      el.setAttribute("height", "360");
+      el.style.cssText = "display: block; border: 0";
+      var mount = document.getElementById("mount");
+      if (params.has("wrap")) {
+        var box = document.createElement("div");
+        box.className = "player-wrap";
+        box.style.cssText = "width: 640px; height: 360px";
+        box.appendChild(el);
+        mount.appendChild(box);
+      } else {
+        el.className = "player";
+        mount.appendChild(el);
+      }
+    </script>
+  </body>
+</html>

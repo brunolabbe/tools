@@ -3,7 +3,7 @@ id: dl-140
 tool: downloader
 title: A client that aborts `POST /api/probe` never frees its probe slot, because the close listener is registered too late
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -123,7 +123,11 @@ measures before it changes.
    before the vet, so an assertion about the global slot concerns an abort during
    the chain. Decide, and record,
    whether this ticket stops there (an abort during the chain frees the slot as
-   the chain unwinds, and one during the vet frees it when the vet returns) or
+   the chain unwinds, and ~~one during the vet frees it when the vet returns~~
+   **WITHDRAWN (corrected 2026-11-15, from gate 1's high): after the vet the
+   handler runs into `captureThumbnail`, whose image fetch takes its own 4 s
+   timeout and not the client's signal, so the slot is held until that ends and
+   the probe ends `ok`; see the Log's amendment**) or
    also takes a signal through the vet. Do not widen silently: if the vet needs a signature change in `ssrf.ts`,
    say so in the Log and leave it as a follow-up ticket.
 4. **Tests**, appended at the end of the probe route's spec: a client abort
@@ -157,6 +161,128 @@ Traps:
 - The Log states which event the remedy uses, the measurement that chose it, and
   what an abort during the output vet still does.
 
+## Review
+
+**Gate: FAIL** — 2026-11-15 · `5f15e56f..bc800d3a` · Opus 5.5, depth full
+
+| Done when                                                                                                                                      | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ---------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A real-port, real aborted `fetch` frees the per-client and the global slot (abort during the chain) within a stated bound, and fails on `main` | `api/test/routes.test.ts` › "a client that aborts POST /api/probe" › "during the chain frees both slots at once, not at the chain's deadline" ✓ — asserts `client 0, global 0` within `FREED_WITHIN_MS` (1,000 ms) against a 20 s chain deadline, and the signal's reason `CANCELED`. Red with `routes/probe.ts` at `5f15e56f` (3 failed of 48: this case, "so a client that aborted both its probes…" and "before the handler has a listener…"); green 10 of 10 at the head |
+| A normally completed request frees its slot as today and does not abort the controller                                                         | `api/test/routes.test.ts` › "a request that completes normally frees its slots and never aborts its signal" ✓ — asserts 200, both slots 0, and `signal.aborted === false` 100 ms after the response; the inverted-`writableFinished` control turns it red                                                                                                                                                                                                                    |
+| The Log states the event, the measurement that chose it, and what an abort during the output vet still does                                    | **not met** in its third clause (F1). The event (`reply.raw` `close` with `writableFinished` false) and the measurement (1,534 ms on the base, red/green) are stated and verified by reading; "frees it when the vet returns" and "an aborted probe now ends as `CANCELED`" are both false for an abort during the vet, measured                                                                                                                                             |
+
+- **high** · Done when 3 depends on it · **F1** — the Log's account of an abort
+  during the output vet is false in the unsafe direction, and so are the same
+  words in the line this branch adds to dl-138's Log ("one during the output vet
+  frees the per-client slot when the vet returns") and the title of
+  `routes.test.ts` › "during the output vet frees the global slot at once and the
+  client's when the vet returns". After the vet returns the handler runs on into
+  `captureThumbnail`, whose image fetch takes `AbortSignal.timeout(4 s)` and not
+  the client's signal. Measured on a real port: a probe naming a thumbnail whose
+  server answers after 2 s, client aborted during a held vet, vet released 100 ms
+  later — the per-client slot freed **2,013 ms after the vet returned**. And the
+  probe does not end `CANCELED`: it ends `ok` — an `ok` `probe_outcomes` row that
+  `report.ts` counts as an attempted success (`attempted 1, successes 1,
+  canceled 0`), a probe-cache write, `info probe complete`, and no `request
+  rejected` line (with and without a thumbnail). The Log's "An aborted probe now
+  ends as `CANCELED`" holds for an abort during the chain (9 of 9) and around the
+  listener's registration (260 of 260) and not for this one. The hold itself is
+  not the branch's: the base frees the same probe 2,010 ms after the vet; the
+  false text is. The sentence came from the brief's own
+  Build 3 ("one during the vet frees it when the vet returns"), which the owner's
+  intake option quotes: the remedy is text — the Log, the dl-138 line, the test
+  title, and Build 3's sentence (the ticket that asserted it) — and whether the
+  thumbnail fetch should take the client's signal is an open decision in the
+  full report, not a defect of this build.
+- **low** · `nfr:maintainability` · **F2** — the `routes/probe.ts` comment says
+  `writableFinished` "is false only when the reply was never fully written", and
+  the Log's _Not measured_ predicts a late abort aborts the finished controller.
+  Both false in the safe direction: a reply that was ended but cut mid-flush (a
+  real socket that read the headers of a 32 MiB body and stopped, then went away)
+  read `writableFinished` false 50 ms after its headers and **true at `close`** in
+  20 of 20, so the controller was not aborted, no `CANCELED` row, no extra
+  release. Node's getter counts the destroyed socket's empty buffer as flushed.
+- **low** · no live call site · **F3** — the Log's (b) and case 3's comment say a
+  handler that starts after the socket is gone reads `request.ip` as
+  `"unknown"`. That holds only with the probe rate limiter off, as the harness
+  sets it: with `rateLimitProbePerMinute` at its default of 10, the `onRequest`
+  hook's read caches Node's peername and the handler keys under `127.0.0.1`; with
+  `trustProxy` on, under the `X-Forwarded-For` address. Case 3 reads the key off
+  its spy, so it is right either way.
+- **dropped** · a response already flushing, or a keep-alive connection, aborting
+  the controller or writing `CANCELED`: 0 aborts, 0 `CANCELED` rows in 20 + 20 +
+  20 + 20 runs (fetch flush, raw-socket mid-body, 20 requests on 2 reused
+  connections then `closeAllConnections`, abort after the body was read). Not a
+  defect.
+- **dropped** · a slot released twice or below zero: acquires equalled releases
+  under the same key in every run of every case, global minimum 0; both gates'
+  releases are idempotent closures. Not a defect.
+- **dropped** · the shared `"unknown"` key letting one departed client hold
+  another's slot: the key line is unchanged by the branch, a live client's count
+  stayed 1 while a departed one acquired and released, and on the head a
+  departed-before-registration request releases at once (the base held it to the
+  chain's deadline). Pre-existing, shortened here; out of the reviewed range.
+- **findings** · the hunt returned 6; 3 carried, 3 dropped.
+- Positive controls, each red on a named test: listener moved back to
+  `request.raw` → "during the chain frees both slots…" and "so a client that
+  aborted both its probes…" (2 failed of 48); `reply.raw.closed` check deleted →
+  "before the handler has a listener still frees them once it starts" (1 of 48);
+  `writableFinished` inverted → those three and "a request that completes
+  normally…" (4 of 48).
+- CI at `bc800d3a`: every check green, `test (windows-latest, informational)`
+  included.
+- NFR: security n/a (no URL, header or credential path touched) · performance ✓
+  (one listener per request, as before) · reliability — F1 · maintainability —
+  F2, F3.
+
+### Gate 2
+
+**Gate: PASS** — 2026-11-15 · `bc800d3a..c1abda7d` · Opus 5.5, depth narrow
+
+| Done when                                                                                                                                      | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ---------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A real-port, real aborted `fetch` frees the per-client and the global slot (abort during the chain) within a stated bound, and fails on `main` | `api/test/routes.test.ts` › "a client that aborts POST /api/probe" › "during the chain frees both slots at once, not at the chain's deadline" ✓ — untouched by the round, whose `.ts` diff is comments and one test title; 48 of 48 at `c1abda7d`                                                                                                                                                                                                                            |
+| A normally completed request frees its slot as today and does not abort the controller                                                         | `api/test/routes.test.ts` › "a request that completes normally frees its slots and never aborts its signal" ✓ — untouched by the round; 48 of 48 at `c1abda7d`                                                                                                                                                                                                                                                                                                               |
+| The Log states the event, the measurement that chose it, and what an abort during the output vet still does                                    | **verified** by reading against gate 1's probe re-run at `c1abda7d`: an abort during a held vet with a thumbnail answering after 2 s freed the per-client slot 2,013 ms after the vet returned and ended `ok`; without a thumbnail it ended `ok`, cached, `info probe complete`, no `request rejected`, report `attempted 1, successes 1, canceled 0`. The Log's amendment and its _Also_ bullet state both, generally; F1's residual below is a scoping in two other places |
+
+- **F1** · **fixed in part** — every sentence gate 1 named is corrected and
+  true as measured (the Log's Done when 3 bullet and _Also_ bullet, the
+  amendment, Build 3's struck sentence, case 4's title and comment, the dl-138
+  line, the PR body). What remains is graded **low**, about a detail nothing
+  relies on: (a) the dl-138 line, the Log's Done when 3 bullet and the PR body
+  attach "ends `ok`" to a probe that names a thumbnail only, where a probe that
+  names none ends `ok` too (re-measured), so a reader of those three alone may
+  infer it ends `CANCELED` — false in the direction that understates what the
+  report counts, and the dl-140 Log's amendment and _Also_ bullet say it
+  generally; (b) the dl-138 line's "holds the per-client slot up to about 4 s
+  after the vet" omits the thumbnail URL's own `guard.assertAllowed` in
+  `captureThumbnail`, which runs before the 4 s `AbortSignal.timeout` and takes
+  neither a signal nor a timeout (read from `thumbnails.ts` and `ssrf.ts`, not
+  measured) — the same unsignalled DNS shape the text already states for the
+  output vet. Not a `high`: the owner's choice was taken on gate 1's full
+  report, which named the DNS vet, and Done when 3 is met by the dl-140 Log.
+- **F2** · **fixed** — the `routes/probe.ts` comment and the Log's _Not
+  measured_ now say a reply cut mid-flush reads `writableFinished` true at
+  `close`. Re-measured: 20 of 20 mid-body at 50 ms, every `close` `wf=true`,
+  0 aborts, 20 `ok` outcomes.
+- **F3** · **fixed** — the Log's (b) and case 3's comment now scope `"unknown"`
+  to the limiter off. Re-measured: key `unknown` with the harness default,
+  `127.0.0.1` with `rateLimitProbePerMinute: 10`, `203.0.113.7` with
+  `trustProxy` and `X-Forwarded-For`.
+- **dropped** · the owner's intake entry still quotes "one during the vet frees
+  it when the vet returns": it is the record of the option as offered, and the
+  amendment names that sentence false. Not a surviving claim.
+- **findings** · the round's lines returned 3 (F1's two residual clauses, one
+  bullet, and the intake quote); 2 carried as F1's residual, 1 dropped. No new
+  finding outside F1's mechanism; nothing here is a `high`.
+- The round changed no behaviour: `git diff bc800d3a c1abda7d -- '*.ts'` has one
+  non-comment line, the test title.
+- CI at `c1abda7d`: `check`, `CodeQL`, `codeql`, `docker`, `e2e (direct)`,
+  `e2e (sniffer)`, `dependency-review`, `changes` pass; `test (ubuntu-latest)`
+  and `test (windows-latest, informational)` pending when read. No row rests on
+  them; the lander reads them.
+- NFR: not swept (narrow); the round is text only.
+
 ## Log
 
 - 2026-11-15 — Filed from dl-138's first gate (Opus 5.5), on the owner's answer
@@ -189,3 +315,18 @@ Traps:
   Build 5 now name the Question 2 option by its words. Proof: `git diff d1ae1be7 HEAD -- tools/downloader/docs/work/dl-140-a-client-abort-of-the-probe-never-frees-its-slot.md | grep -c '^-.*corrects: option (c)'` → 1, and `... | grep -c '^-.*reading of option (c) and N6'` → 1.
 - 2026-11-15 — Gate 1's full report is on the pull request thread, #809; status
   unchanged.
+- 2026-11-15 — Owner's answer at intake, to Build 3's choice "whether this ticket stops there or also takes a signal through the vet". Options: stop at the chain (recommended: an abort during the chain frees the slot as the chain unwinds, one during the vet frees it when the vet returns, and a signature change in `ssrf.ts` is logged as a follow-up ticket); also take it through the vet (widen into `ssrf.ts`); the builder decides and records. Answer: stop at the chain. The brief's default and the recommendation, so nothing is overridden and Build 3 is unchanged. `status` stays `ready`.
+- 2026-11-15 — Built, on branch `downloader/dl-140-abort-frees-slot` from `5f15e56f`. Gate pending; `status` left as it was.
+  - **Reproduced first (Build 1), on the base.** A scratch spec (in the scratch directory, copied into `api/test/` for the run and removed) listens on port 0, sends a real `fetch` with an `AbortController`, aborts it once the per-client slot is held, and waits for both gates to read zero, with the resolver chain's deadline at 1,500 ms and a resolver that rejects `CANCELED` on its signal. Both slots were free **1,534 ms** after the POST was sent: the chain's own deadline, so the abort changed nothing. This is the ticket's second row; it holds on this tree.
+  - **The event (Build 2).** `reply.raw`'s `close`, with `reply.raw.writableFinished === false`, registered where the old listener was. The measurement that chose it is the same spec after the change, and the red/green below: the base left `{"client":1,"global":1}` after 1,000 ms; the change frees both. A normal request's `close` follows its `finish`, so `writableFinished` is true and the controller is not aborted (case 5, which reads the resolver's signal after the response). One addition the brief did not name: `if (reply.raw.closed) abortIfClientLeft()` after registering, because a client that leaves during the awaits before the listener (the SSRF vet's DNS lookup, the human check's siteverify) has already emitted its `close` and no further one is coming. Without that line case 3 fails (mutation below).
+  - **Tests**, appended at the end of `api/test/routes.test.ts` (the probe route's spec), real port and real `fetch` abort, `describe("a client that aborts POST /api/probe")`, five cases: (1) during the chain both slots free within 1,000 ms against a 20 s deadline, and the resolver's signal carries `CANCELED`; (2) two probes aborted, then a third is admitted rather than refused 429; (3) abort while the request URL's vet (`guard.assertAllowed`) is held, then the vet released: the handler takes its slot and gives it back at once; (4) abort while the output vet (`assertAllAllowed`) is held, for a probe that names no thumbnail: global 0 and client 1 until the vet returns, then both 0 (title corrected 2026-11-15, gate 1's F1: it said "frees ... when the vet returns", which holds only because this probe's capture is instant); (5) a request that completes normally, the signal never aborted.
+  - **Red on the base, green on the change.** `npx vitest run tools/downloader/api/test/routes.test.ts` with `routes/probe.ts` restored to `5f15e56f`: `Tests  3 failed | 45 passed (48)`: cases 1, 2 and 3, `timed out waiting for both slots to free after the abort; last value: {"client":1,"global":1}`, `...the per-client slots to free; last value: 2`, `...the slots to free; last value: {"client":1,"global":1}`. On the change: `Tests  48 passed (48)`. Cases 4 and 5 pass on both sides by design: 4 pins what the vet still does, 5 is the no-regression case. **Mutation:** with only the `closed` line removed, `Tests  1 failed | 47 passed (48)`, case 3 alone.
+  - **What an abort during the output vet still does (Done when 3).** Nothing until the vet returns: `assertAllAllowed` takes no signal, so the per-client slot stays held through it (`{client: 1, global: 0}` 100 ms after the abort, case 4). ~~and frees when it returns~~ **WITHDRAWN (corrected 2026-11-15, from gate 1's high; the amendment at the foot of this Log has the measurement):** a probe aborted during the vet ends `ok`, whether it names a thumbnail or not; case 4's names none, so its capture is instant and the slot frees when the vet returns, while a probe that names one runs on into `captureThumbnail` and holds the slot until that ends, about 4 s (the image fetch takes its own 4 s timeout and not the client's signal) plus that image URL's own `guard.assertAllowed` DNS check, which takes neither a signal nor a timeout (read from `thumbnails.ts` and `ssrf.ts`, not measured). The global slot is already free, since `release()` ran when the chain returned. **Owner's answer at intake: stop at the chain**, so `ssrf.ts` is untouched. Whether the vet needs a signal is a follow-up only if a vet is seen to run long; this ticket measured none, and a vet is a DNS lookup per URL, so it is **not filed**: no reproduction beyond case 4's held vet, which holds it by construction.
+  - **What the brief had wrong.** (a) The Why's "dl-138 is PR #799 and is not merged": it merged as `4d0ad61d`, so Build 5's line is in this branch, in dl-138's Log. (b) With the probe rate limiter off, as this harness has it, a handler that starts after the socket is gone reads `request.ip` as `"unknown"` (case 3 on the base: `tryAcquire` was called with `"unknown"`), so on the base such a request took its per-client slot under a key shared by every client in that state, and held it for the whole chain; the change frees it at once. **Corrected 2026-11-15 (gate 1, F3):** that holds only with the limiter off. At its default of 10 a minute the `onRequest` hook's read has cached Node's peername and the handler keys under the client's address (`127.0.0.1` here), and with `trustProxy` on under the `X-Forwarded-For` address. Case 3 reads the key off its spy, so it is right either way; what the finding says about a deployment with the limiter off is unmeasured. A test that reads `count(clientKey("127.0.0.1"))` there reads an empty key and passes on the base; case 3 reads the key the handler used. (c) The `Date.now()` clock read 4,134 ms for a span `performance.now()` read 1,534 ms in the same run of the scratch spec (the whole test file took 3.7 s); the spec and the routes cases use `performance.now()` for the bound, and the cause of the skew is not found.
+  - **Also, read from the code and not run.** **Scope corrected 2026-11-15 (gate 1, F1):** this holds for an abort during the chain (9 of 9, the gate's) and around the listener's registration (260 of 260), and not for one during the output vet, which ends `ok` (see the amendment at the foot of this Log). An aborted probe now ends as `CANCELED` (409, `request rejected` at info) and writes a `probe_outcomes` row with outcome `CANCELED`, which `report.ts` already excludes from its rates (dl-57, decision B); before, an abort wrote nothing until the handler unwound on its own.
+  - **Fold-in considered, not taken.** None: the other `close` handling, on the job and file routes, is outside this ticket's Build and unread.
+  - **Not measured.** The Windows leg, other Node 22 minors, and a request aborted after it has begun to answer. **Corrected 2026-11-15 (gate 1, F2):** this line predicted that a late abort aborts the finished controller, and it does not. The gate measured a reply that was ended but cut mid-flush (a real socket that read the headers of a 32 MiB body and stopped, then went away): `writableFinished` read false 50 ms after the headers and **true at `close`** in 20 of 20, so the controller was not aborted, no `CANCELED` row was written and nothing was released twice, because Node counts a destroyed socket's empty buffer as flushed. No case of this branch drives it; the figure is the gate's.
+- 2026-11-15 — Owner's answer, at the orchestrator's checkpoint after gate 1 failed `bc800d3a` on one high, **amending the intake answer above** (which stands: stop at the chain; `ssrf.ts` and `thumbnails.ts` untouched). The question was re-asked with the gate's measurement because the intake option had quoted Build 3's sentence "one during the vet frees it when the vet returns", which is false. Options: correct the text only (the gate's recommendation and the orchestrator's); correct the text and file a follow-up ticket for the thumbnail signal; fold the client's signal into the thumbnail image fetch in dl-140. Answer: **correct the text only**, no code change and no follow-up ticket. No recommendation was overridden. The known limit, stated so the next reader need not measure it: after the output vet returns, the handler runs on into `captureThumbnail`, whose image fetch is bounded by `AbortSignal.timeout(4 s)` and not by the client's signal, so an abort during the vet frees the per-client slot only when that capture ends (the gate measured 2,013 ms after the vet returned, against a thumbnail answering after 2 s, and 2,010 ms on the base), and the probe ends `ok`, not `CANCELED`: an `ok` `probe_outcomes` row, a probe-cache write and `probe complete` at info, with no `request rejected` line.
+- 2026-11-15 — Owner's answer, at the orchestrator's checkpoint after gate 2 passed `c1abda7d` with F1 fixed in part (a residual graded low, two clauses). Options: fix both clauses at landing (gate 2's recommendation and the orchestrator's); record the residual and land as is; treat F1 as still high and run round 3 and gate 3. Answer: **the lander fixes both**, text only, no source or test change. No recommendation was overridden.
+- 2026-11-15 — Fixed at landing by owner choice: gate 2, F1 clause (a) — "the dl-138 line, the Log's Done when 3 bullet and the PR body attach ends `ok` to a probe that names a thumbnail only, where a probe that names none ends `ok` too". The ends `ok` claim now stands apart from the thumbnail clause in the Done when 3 bullet and in dl-138's Build 5 line (any probe aborted during the vet ends `ok`), and the PR body says the same. Proof: `git diff c1abda7d HEAD -- tools/downloader/docs/work/dl-140-a-client-abort-of-the-probe-never-frees-its-slot.md | grep -c '^-.*so its capture is instant and the slot frees when the vet returns; a probe that names one'` → 1.
+- 2026-11-15 — Fixed at landing by owner choice: gate 2, F1 clause (b) — "the dl-138 line's holds the per-client slot up to about 4 s after the vet omits the thumbnail URL's own guard.assertAllowed in captureThumbnail". The figure is now about 4 s plus that image URL's DNS check, in both places, worded as read from `thumbnails.ts` and `ssrf.ts` and not measured. Proof: `git diff c1abda7d HEAD -- tools/downloader/docs/work/dl-138-client-request-timeouts.md | grep -c '^-.*holds the per-client slot up to about 4 s after the vet and ends'` → 1.
