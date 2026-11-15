@@ -222,6 +222,24 @@ Also answered the same day: F2 and F3 of the same gate (a code comment and two
 Log descriptions that misstate what the screenshots show) are fixed in this
 round.
 
+**Question 5, the builder's open decision on the subtitle label's checkbox —
+answered 2026-11-15 by the owner: A, leave it centred.** When a long language
+list wraps, the checkbox stays vertically centred on the whole wrapped block
+(`align-items: center` on `.options__row label`), not on its first line. The
+options were (A) leave it centred, the builder's recommendation, as built; (B)
+`align-items: baseline`, which puts the box on the first line and shifts the
+other option labels by a pixel or two, at the cost of a fixer round and a narrow
+gate 3. The owner chose A. No recommendation was overridden.
+
+**Question 6, gate 2's N1 (low) — answered 2026-11-15 by the owner: (1), record
+only.** The subtitle case's "taller than one and a half lines" clause also
+passes without the fix, because the unfixed label already breaks once at the
+space before the bracket; the case still goes red without the fix through its
+width and right-edge checks. The options were (1) record only, the
+orchestrator's recommendation; (2) tighten the assertion, with a narrow
+re-gate. The owner chose (1). The finding stays in gate 2's record as written,
+unfixed. No recommendation was overridden.
+
 The question as it stood when filed, and the options with their costs as the
 filing put them (the costs are corrected in round 1, F1 and
 F2):
@@ -481,3 +499,6 @@ this ticket `dropped` with the reason. If C, `depends_on` stays empty.
     label 9/4.
   - **Fold-in:** none beyond the owner's own. `main` had moved to `e7d791d6`
     during the build and is merged into the branch in this round, before the push.
+- **2026-11-15, landing** (Sonnet 5.5 fixer). The owner's two answers after gate
+  2 are under _Decision_, questions 5 and 6: the checkbox stays centred (A), and
+  gate 2's N1 is recorded only, unfixed. Nothing else changed at the landing.
