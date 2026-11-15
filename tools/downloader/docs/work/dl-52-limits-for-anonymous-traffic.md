@@ -59,7 +59,7 @@ and `FILE_RETENTION_HOURS` were in this table until dl-53 removed both.
 
 **Part 1, measured and answered 2026-10-05.** The owner took these on the host
 running the released `downloader-v0.8.0` (dl-53's streaming included), with the
-hls.js demo page (`https://hlsjs.video-dev.org/demo/`, Big Buck Bunny, 10:35, five
+hls.js demo page (Big Buck Bunny, 10:35, five
 renditions) as the stream:
 
 | Measurement                      | Value                                                                                       |

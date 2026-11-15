@@ -12,7 +12,7 @@ depends_on: []
 
 ## Why
 
-The owner reported that `https://www.youtube.com/watch?v=-PGMCBCTSfE` says "no
+The owner reported that a YouTube video page says "no
 video found" on downloader.oludoi.com. Three facts, each measured, explain it —
 and together they make false a claim the repo repeats in four places: that
 without yt-dlp "every request falls through to the browser sniffer and still
@@ -36,12 +36,12 @@ Measured 2026-09-22 by the orchestrator, against `main` at `20eb8ba`.
    YouTube URL reaches the sniffer.
 2. **The sniffer cannot resolve YouTube.** The API run locally from `20eb8ba`
    with `PORT=18080 ENABLE_YTDLP_RESOLVER=false`, then
-   `POST /api/probe {"url": "https://www.youtube.com/watch?v=-PGMCBCTSfE"}`,
+   `POST /api/probe {"url": "<the reported page>"}`,
    returned `422 NO_MEDIA_FOUND` in about 10 s. The attempts: `browser`
    `NO_MEDIA_FOUND` in 8900 ms, then `direct` `NO_MEDIA_FOUND` in 1017 ms.
 3. **The pinned version is broken too.** yt-dlp `2025.09.26`, the pin and the
    binary installed in the devcontainer, fails on that URL with
-   `ERROR: [youtube] -PGMCBCTSfE: The page needs to be reloaded.` The current
+   `ERROR: [youtube] <video id>: The page needs to be reloaded.` The current
    release, `2026.08.19`, succeeds: `yt-dlp -J` returned 54 formats, 43 of them
    video, up to 1080p. With `YTDLP_PATH` pointing at `2026.08.19`, the same
    local API resolved the probe via `resolver: "yt-dlp"` in 3.4 s.
