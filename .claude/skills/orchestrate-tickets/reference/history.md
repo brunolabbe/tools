@@ -7226,3 +7226,45 @@ Wall times of about 10–11 h on three agents and the orchestrator are a 5-hour 
 - Two gates stopped by the account's 5-hour limit (429) were resumed by `SendMessage` after the reset with their worktrees and scratch drafts intact, and finished in about 2 minutes active each instead of re-running.
 - A gate verdict conditional on a flaky CI leg was cleared with `gh run rerun <id> --failed` and read by attempt before the lander pushed, with no builder round.
 - Gate prompts that asked for a SheetJS-against-copy agreement table on built files (lg-104 gate 2: 12 files) and an independent derivation from API handlers (lg-98 gate 1) found both highs the builders' own tests passed.
+
+### Batch 2026-11-15 (tools-67, repo-144 repo-146, repo-147 filed and built) — base 4e040577
+
+| PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| — | — | Sonnet 5.5 / high | a89cd4afde127f500 | seam-mapper, two candidates (repo-144 146) | 3m11s / 3m09s | 0 | $0.2730 |
+| #803 | open, ready, all checks pass at d0a5ac85 incl. CodeQL and Windows | Sonnet 5.5 / high | a35cfe86555e9ba16 | builder-standard, repo-144 | 5m14s / 5m07s | 0 | $0.6034 |
+| #803 | as above | Opus 5.5 / high | a448a14e55fe8b094 | ticket-reviewer-opus, repo-144 gate 1 | 8m57s / 8m55s | 0 | $2.5495 |
+| #803 | as above | Sonnet 5.5 / high | adc2e197f638344fe | fixer, repo-144 three lows at landing (owner) + landing | 6m22s / 6m09s | 0 | $0.9813 |
+| #804 | open, ready, checks pass at 1d9f85fa incl. CodeQL (matrix skipped, md only) | Opus 5.5 / high | ab4aad96c9934e6bb | builder-hard, repo-146 static look | 7m03s / 6m58s | 0 | $1.8819 |
+| #804 | as above | Sonnet 5.5 / xhigh | a0109ae107fb9b4b6 | ticket-reviewer-sonnet, repo-146 gate 1 | 11m27s / 11m20s | 0 | $1.8870 |
+| #804 | as above | Sonnet 5.5 / high | aedcb16e2beb19a6a | fixer, repo-146 round 1 (F1–F5) + two owner answers | 3m22s / 3m22s | 0 | $0.5835 |
+| #804 | as above | Sonnet 5.5 / xhigh | a3f2cb739b3db2449 | ticket-reviewer-sonnet, repo-146 gate 2, narrow | 8m39s / 8m34s | 0 | $1.4771 |
+| #804 | as above | Sonnet 5.5 / high | a9e096256709e764e | fixer, repo-146 landing | 1m37s / 1m30s | 0 | $0.3089 |
+| #807 | open, ready; ubuntu, check pass at ae43f161, Windows and codeql pending at close read | Sonnet 5.5 / high | a2d160484348ef7ec | builder-standard, repo-147 filed + built, resumed for round 1 | 13m57s / 27m37s | 0 | $1.7287 |
+| #807 | as above | Opus 5.5 / high | a12950420ca5ea7e0 | ticket-reviewer-opus, repo-147 gate 1 (filing + build) | 9m22s / 9m06s | 0 | $2.3570 |
+| #807 | as above | Opus 5.5 / high | a78be078a1d8556f2 | ticket-reviewer-opus, repo-147 gate 2, narrow | 7m22s / 6m50s | 0 | $2.0840 |
+| #807 | as above | Sonnet 5.5 / high | a22b851996113d2bd | fixer, repo-147 two lows at landing (owner) + landing | 3m10s / 3m06s | 0 | $0.5026 |
+| — | — | Opus 5.5 / high | orchestrator 9f8f6c43 | orchestrator (floor) | 1h14m54s / 1h11m10s | 0 | $5.7517 |
+| | | | | **total** (rates read 2026-10-10), before the log fixer | 2h44m37s | 0 | **$22.9694** |
+
+**Tickets:**
+- repo-144 → #803: gate 1 PASS (Opus, 3 lows). The owner chose to fix all three at landing: the `.claude/rules/testing.md` ghshim clause was removed by the lander on the owner's explicit instruction, the hook declaration was moved (L1), and the citations were pinned to `a100f429` (L3). No round. builder-standard, not read against the $10 bar (not builder-hard).
+- repo-146 → #804: the owner chose no reproduction runs, overriding the orchestrator's 10/10, then asked "if it does not repeat, why fix it? … check if you see anything worth improving". The static look found nothing, so the change is docs-only. Gate 1 CONCERNS (Sonnet xhigh; F1 med, F2 med that Done when 2 depended on, 3 lows). F2 was the orchestrator's own dispatch defect: it put its reading ("no retry, no worker cut") under the owner's answers heading. Round 1 was done by a fresh fixer; gate 2 PASS (Sonnet, narrow). builder-hard $1.8819, read against the $10 bar: under it.
+- repo-147 → #807: the owner chose at checkpoint 2 to fix the out-of-range temp-dir litter that repo-144's gate 1 had dropped as a third ticket, filed and built on one branch, overriding the orchestrator's "file only". The builder's first hand-back was "Interim wait placeholder" and its report never arrived, breaking `roles/common.md` "Your report is delivered once"; the report was read from the branch instead. Gate 1 CONCERNS (Opus, 2 meds no Done when depended on, 4 lows). The owner chose a round for all of them (above the floor's default); the builder was resumed for it; gate 2 PASS (Opus, narrow); N1 and N3 fixed at landing by owner choice; L2's remainder and N2 recorded.
+- repo-126: not offered. The container still runs `/usr/bin/node` v22.23.4 (`node --version` at intake), and the ticket still reads `ready`.
+
+**Defects in the skill:**
+
+1. `roles/reviewer.md`, _What makes a gate worth its cost_, private-TMPDIR bullet (`mkdir -p /tmp/claude-1000/<ticket id>`) — one directory per ticket, shared by its builder, its gates and its lander, so a gate's leftover count includes earlier agents' entries. repo-144's gate 1 found another agent's `preflight-template-*` there, and repo-147's gates 1 and 2 needed the dispatch to override it. Reproduction (re-run): `git show origin/main:.claude/skills/orchestrate-tickets/roles/reviewer.md | grep -n "claude-1000/<ticket id>"` → `148:`.
+2. `review-ticket/gate.md`, opening paragraphs — covers a PR that only files a ticket, and a ticket filed beside other work, but not a branch that files and builds the same ticket (repo-147), which needs both the filing checks and a `## Review`. Relayed from repo-147 gate 1; not re-run.
+3. `review-ticket/gate.md`, "Trace every acceptance line to its proof" — no verdict fits a "the suite passes" line on a markdown-only branch whose unit matrix `ci.yml` skips. `verified` means re-run, and `proven` needs a test on the branch. repo-146's gates used `verified` and cited a nightly at a sha two `.md` files away. Relayed from repo-146 gate 1; not re-run.
+4. `review-ticket/gate.md`, "Severity and the gate" — no row for a statement that credits a decision to an owner who did not give it. repo-146's F2 was graded by the false-text rule. Relayed from repo-146 gate 1.
+5. `review-ticket/gate.md`, step 4, "A line that reads two ways …" — this sends a line that reads two ways only through a counting slip (repo-147 Done when 3, 166 against 183) to the open-decision case, where the rule "met in property … the wording is a low" fits better. Relayed from repo-147 gate 2.
+6. `review-ticket/gate.md`, the paragraph beginning "A later gate's section starts `### Gate 2`" — does not say whether a later gate repeats the acceptance table, or what a row says for a line the round did not touch. Relayed from repo-146 gate 2.
+7. `roles/common.md`, _Your worktree_, build-skip bullet ("imports are `node:` builtins and `vitest`") — repeated from earlier entries: it is silent on relative imports of other `scripts/` files. repo-144's gate 1, repo-147's gate 1 and repo-147's gate 2 each read it as allowing the skip. Reproduction: `git show origin/main:.claude/skills/orchestrate-tickets/roles/common.md | grep -n "builtins and"` → `42:`.
+8. `roles/fixer.md`, _Landing_, against `reference/records.md` _Fixed at landing_ ("in the fix's own commit") — a code fix's proof needs a committed tree, and the entry quotes output known only after the run. repo-144's lander committed the code first and the entry second, and neither page says whether that split is allowed, or how owner-answer commits order against Fixed-at-landing entries. Relayed from repo-144's lander.
+9. `roles/fixer.md`, _Set up_ step 2 (`npm run build` whatever the diff) — gives no recipe for a build longer than the call timeout, and `common.md`'s "Preflight runs longer" names only preflight, `--land` and suites. Relayed from repo-146's lander.
+
+**Worked, and worth keeping:**
+- The intake measurement (0 of 8 nightlies, about 675 runs against 4 occurrences) put repo-146's run count and its "why fix it" to the owner with numbers. It turned a hard ticket into a $1.88 static look, with no reproduction runs bought.
+- Gates handed the earlier gate's probe scripts (`remedy.mjs`, `leak-probe.test.ts`) let the lander apply a measured remedy, and let gate 2 re-check a claim without rebuilding the probe.
