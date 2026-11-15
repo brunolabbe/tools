@@ -25,7 +25,9 @@
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { ROUTES } from "@downloader/contract";
+import type { HttpClientOptions } from "../src/api/http.ts";
 import type { ApiClient } from "../src/api/types.ts";
+import { createTurnstileCheck } from "../src/lib/human-check.ts";
 import { JOB_WAITING, PROBE_WAITING } from "../src/lib/probe-stages.ts";
 import { NOW, job, probe } from "./fixtures.ts";
 
@@ -134,11 +136,11 @@ function modelServer(
   return { probes, jobs, heldProbes: () => probes.filter((post) => post.open).length };
 }
 
-async function mountApp(): Promise<ApiClient> {
+async function mountApp(options: HttpClientOptions = {}): Promise<ApiClient> {
   vi.resetModules();
   const { createHttpClient } = await import("../src/api/http.ts");
   const client: ApiClient = {
-    ...createHttpClient(),
+    ...createHttpClient(options),
     openJobEvents: vi.fn(() => ({ close: vi.fn() })),
     openProbeEvents: vi.fn(() => ({ close: vi.fn() })),
     openLink: vi.fn(),
@@ -311,4 +313,54 @@ test("a Download whose job POST never settles is released at 30 s, and the Downl
   expect(server.jobs[2]?.url).toBe("https://videos.example.com/watch/third");
   expect(lineIn(third)).not.toBe(JOB_WAITING);
   expect(client.openLink).not.toHaveBeenCalled();
+});
+
+// dl-141. Pinned here as in `human-check.test.ts`: the figure is part of what
+// the page does.
+const CONFIG_READ_TIMEOUT_MS = 15_000;
+
+test("on a deployment that wants the check, a stalled config read ends in the human-check message, not in Analysing (dl-141)", async () => {
+  // The server wants a token. Its config read never answers; a probe that
+  // arrives without a token is refused as `routes/probe.ts` refuses one.
+  const probeBodies: unknown[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((path: string, init?: RequestInit) => {
+      if (path === ROUTES.config) return new Promise<Response>(() => {});
+      if (path === ROUTES.probe) {
+        probeBodies.push(JSON.parse(String(init?.body)));
+        return Promise.resolve(
+          json(
+            {
+              error: {
+                code: "HUMAN_CHECK_FAILED",
+                message: "The automatic check did not pass.",
+                retryable: false,
+              },
+            },
+            403,
+          ),
+        );
+      }
+      return Promise.reject(new TypeError(`unexpected request ${path}`));
+    }),
+  );
+  await mountApp({ humanCheck: createTurnstileCheck });
+
+  analyse("check");
+  await settle();
+  expect(headingIn(box(0))).toBe("Analysing");
+
+  await advance(CONFIG_READ_TIMEOUT_MS - 1);
+  expect(headingIn(box(0))).toBe("Analysing");
+  expect(probeBodies).toHaveLength(0);
+
+  await advance(1);
+  expect(probeBodies).toHaveLength(1);
+  expect(probeBodies[0]).toMatchObject({ url: "https://videos.example.com/watch/check" });
+  expect(probeBodies[0]).not.toHaveProperty("humanCheckToken");
+  expect(headingIn(box(0))).toBe("Could not confirm you are a person");
+  expect(within(box(0)).getByRole("alert").textContent).toContain(
+    "Repeat what you just did to take a fresh one",
+  );
 });

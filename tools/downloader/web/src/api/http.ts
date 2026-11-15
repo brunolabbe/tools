@@ -106,8 +106,10 @@ export function createHttpClient(options: HttpClientOptions = {}): ApiClient {
     return parsed.data;
   }
 
-  const tokens = (options.humanCheck ?? noHumanCheck)(() =>
-    request(ROUTES.config, clientConfigResponseSchema),
+  // The signal is the check's own bound on the read (dl-141). Nothing else
+  // bounds a config read: `request()` gains none, per dl-138's Question 4.
+  const tokens = (options.humanCheck ?? noHumanCheck)((signal) =>
+    request(ROUTES.config, clientConfigResponseSchema, signal === undefined ? {} : { signal }),
   );
 
   /**
