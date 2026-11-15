@@ -42,10 +42,8 @@ no pattern sees — the downloader's browser tests launch Chromium through
 reproduce it with `npm test -- --project <tool> --sequence.shuffle.files
 --sequence.seed=<n>` and move the leaking file to the isolated half, or make
 it clean up after itself. Shuffle the files, not the tests: plain
-`--sequence.shuffle` also reorders the tests inside a file, and several fail
-that way in an isolated half too (ledger's `csv-import.test.ts` and
-`workbook-describe.test.ts`), which is an
-order the file depends on and not a leak. `core` and `repo` are not split: they run in two
+`--sequence.shuffle` also reorders the tests inside a file, so a file whose
+tests depend on their order fails without any leak. `core` and `repo` are not split: they run in two
 seconds and fourteen, and their import time is not what those seconds are.
 `scripts/test/vitest-projects.test.ts` holds that a split tool's `--project`
 still lists every test file exactly once.
