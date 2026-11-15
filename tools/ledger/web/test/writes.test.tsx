@@ -8,10 +8,13 @@
  * holds the write's answer and is marked stale, unread; every other route is
  * left as it was.
  *
- * The expected lists are written out here, apart from `writes.ts`, so a change
- * to a write's list is a change to this table too. The ticket's Log maps each
- * write to its row here and to the screen tests that show the same thing on a
- * real screen.
+ * Each write's routes are taken from `WRITES` itself, so this file proves the
+ * mechanism, not that a list is complete: for which routes a write marks, it
+ * compares `WRITES` with itself. Completeness is
+ * `api/test/writes-derived.test.ts`'s (lg-108), which sends each write to the
+ * in-process API and fails on a route that changed and is not marked, as far as
+ * each write's seed reaches. Nothing here restates a list of routes: `INPUTS`
+ * holds only the arguments and the fake answers the patchers read.
  */
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
@@ -47,115 +50,23 @@ vi.mock("../src/api/spending.ts");
 vi.mock("../src/api/statements.ts");
 vi.mock("../src/api/workbook.ts");
 
-// --- The table: what each write changes, written out apart from writes.ts ---
+// --- What a write is sent with, where its patch reads it; never its routes ---
 
-const STATS = [
-  ROUTES.statsMortgagePayments,
-  ROUTES.statsSalaries,
-  ROUTES.statsContributions,
-  ROUTES.statsMortgageOwn,
-  ROUTES.statsBuffer,
-  ROUTES.statsSpending,
-  ROUTES.statsFixedItems,
-  ROUTES.statsSettlements,
-];
-const BOOKS = [
-  ROUTES.buckets,
-  ROUTES.inbox,
-  ROUTES.autoFiled,
-  ROUTES.rows,
-  ROUTES.periods,
-  ROUTES.periodOpen,
-  ROUTES.periodLines,
-  ROUTES.mortgage,
-  ROUTES.spendingCategoryMap,
-  ...STATS,
-];
-// The rows: an unfiled row is given the category of the rule that would file it. Grounded
-// in `rule-rows.test.tsx`, whose fake answers differently after the rule (gate 1's F2).
-const RULES = [ROUTES.rules, ROUTES.inbox, ROUTES.rows];
-const SPENDING = [
-  ROUTES.spendingCategories,
-  ROUTES.spendingCategoryMap,
-  ROUTES.rows,
-  ROUTES.inbox,
-  ROUTES.autoFiled,
-  ROUTES.periodLines,
-  ROUTES.statsSpending,
-];
-const DIRECTORY = [ROUTES.me, ROUTES.household, ROUTES.adminHouseholds, ROUTES.people];
-const EVERYTHING = Object.values(ROUTES);
-
-interface Expected {
-  /** The routes the write marks stale. */
-  changes: readonly string[];
-  /** Of those, the ones it puts its answer into instead of reading again. */
-  patched?: readonly string[];
+interface Input {
   /** The arguments it is sent with, where the patch reads them. */
   args?: readonly unknown[];
   /** What the fake API answers, where the patch reads it. */
   answer?: unknown;
 }
 
-const INBOX_PATCH = [ROUTES.inbox, ROUTES.autoFiled];
-
-const EXPECTED: Record<WriteName, Expected> = {
-  // households.ts (9)
-  addHouseholdMember: { changes: [...DIRECTORY, ...BOOKS] },
-  renameHousehold: { changes: DIRECTORY },
-  adminRenameHousehold: { changes: DIRECTORY },
-  createHousehold: {
-    changes: [ROUTES.adminHouseholds],
-    patched: [ROUTES.adminHouseholds],
-    answer: { id: "zzz", name: "New", members: [], people: [] },
-  },
-  adminAddMember: { changes: [...DIRECTORY, ...BOOKS] },
-  adminRemoveMember: { changes: [...DIRECTORY, ...BOOKS] },
-  adminChangeAddress: { changes: DIRECTORY },
-  adminRetirePerson: { changes: [...DIRECTORY, ...BOOKS] },
-  adminRenamePerson: { changes: DIRECTORY },
-  // inbox.ts (1)
-  classifyRow: { changes: BOOKS, patched: INBOX_PATCH, args: [{ rowId: 1, ruleId: 7 }] },
-  // mortgage-splits.ts (1), mortgage.ts (1)
-  fileMortgageSplit: { changes: [ROUTES.mortgageSplits, ...BOOKS] },
-  saveMortgage: { changes: BOOKS, patched: [ROUTES.mortgage], answer: LIVE },
-  // periods.ts (6)
-  // A close applies the retirements waiting for it. Grounded in `periods.test.tsx` › "a
-  // person retired at the close is no longer offered on the Period tab once it is closed"
-  // (gate 1's F1).
-  closePeriod: { changes: [ROUTES.people, ROUTES.adminHouseholds, ...BOOKS] },
-  addLine: { changes: BOOKS },
-  correctLine: { changes: BOOKS },
-  retireLine: { changes: BOOKS },
-  addRecurring: { changes: [ROUTES.recurring, ...BOOKS] },
-  changeRecurring: { changes: [ROUTES.recurring, ...BOOKS] },
-  // receipts.ts (3)
-  uploadReceipt: { changes: [] },
-  readReceipt: { changes: [] },
-  fileReceipt: { changes: BOOKS },
-  // rules.ts (3)
-  createRule: { changes: RULES },
-  editRule: { changes: RULES },
-  retireRule: { changes: RULES },
-  // salaries.ts (2)
-  enterSalaries: { changes: [ROUTES.salaries, ROUTES.ratios, ...BOOKS] },
-  confirmRatio: { changes: [ROUTES.salaries, ROUTES.ratios, ...BOOKS] },
-  // spending.ts (5)
-  addSpendingCategory: { changes: SPENDING },
-  renameSpendingCategory: { changes: SPENDING },
-  retireSpendingCategory: { changes: SPENDING },
-  setSpendingMapEntry: { changes: SPENDING },
+const INPUTS: Partial<Record<WriteName, Input>> = {
+  createHousehold: { answer: { id: "zzz", name: "New", members: [], people: [] } },
+  classifyRow: { args: [{ rowId: 1, ruleId: 7 }] },
+  saveMortgage: { answer: LIVE },
   setRowSpendingCategory: {
-    changes: SPENDING,
-    patched: INBOX_PATCH,
     args: [1, 3],
     answer: { rowId: 1, spendingCategory: { id: 3, source: "override" } },
   },
-  // statements.ts (1)
-  importStatement: { changes: BOOKS },
-  // workbook.ts (2)
-  describeWorkbook: { changes: [] },
-  confirmWorkbook: { changes: EVERYTHING },
 };
 
 const MODULES: Record<string, Record<string, unknown>> = {
@@ -223,28 +134,24 @@ afterEach(cleanup);
 
 // --- The 34 ---
 
-test("this table names every write writes.ts sends (lg-98)", () => {
-  // `writes-source.test.ts` holds writes.ts to the 34 POST calls in web/src/api.
-  expect(Object.keys(EXPECTED).toSorted()).toEqual(Object.keys(WRITES).toSorted());
-});
-
 describe("after each write, what it changes is read again and shown, and nothing else is (lg-98)", () => {
-  test.each(Object.keys(EXPECTED) as WriteName[])("%s", async (name) => {
-    const expected = EXPECTED[name];
+  test.each(Object.keys(WRITES) as WriteName[])("%s", async (name) => {
+    const input = INPUTS[name] ?? {};
+    const entry = WRITES[name];
     const fake = Object.values(MODULES).find((module) => name in module)?.[name];
     if (typeof fake !== "function") throw new Error(`no api function for ${name}`);
-    vi.mocked(fake as () => Promise<unknown>).mockResolvedValue(expected.answer ?? {});
+    vi.mocked(fake as () => Promise<unknown>).mockResolvedValue(input.answer ?? {});
 
     const client = await mounted();
     const { result } = renderHook(() => useWrite(name), { wrapper: clientWrapper(client) });
     const write = result.current as unknown as (...args: readonly unknown[]) => Promise<unknown>;
     await act(async () => {
-      await write(...(expected.args ?? []));
+      await write(...(input.args ?? []));
     });
 
     expect(fake).toHaveBeenCalledTimes(1);
-    const patched = new Set(expected.patched ?? []);
-    const changed = new Set(expected.changes);
+    const patched = new Set<string>("patch" in entry ? entry.patch.routes : []);
+    const changed = new Set<string>(entry.changes);
     for (const route of ROUTE_LIST) {
       const state = client.getQueryState([route]);
       if (changed.has(route) && !patched.has(route)) {
