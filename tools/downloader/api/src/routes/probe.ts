@@ -124,7 +124,10 @@ export function registerProbeRoute(app: FastifyInstance, context: AppContext): v
     // `close` with `destroyed` true, so a listener on it registered here never
     // hears a later abort. The response's `close` is the one that follows the
     // client going away, and `writableFinished` tells it from a normal end: it
-    // is false only when the reply was never fully written.
+    // is true after a reply that finished. It is not a measure of what reached
+    // the client: a reply that was ended and then cut mid-flush reads true at
+    // `close` too (Node counts a destroyed socket's empty buffer as flushed),
+    // so that one aborts nothing, which is harmless once the handler is done.
     const controller = new AbortController();
     const abortIfClientLeft = (): void => {
       if (!reply.raw.writableFinished) controller.abort(new AppError("CANCELED"));

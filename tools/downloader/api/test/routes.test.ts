@@ -1126,9 +1126,11 @@ describe("a client that aborts POST /api/probe", () => {
       (taken) => taken === 1,
       { label: "the handler to take its per-client slot" },
     );
-    // Under the key the handler used, not `CLIENT`: this handler runs after the
-    // socket is gone, so `request.ip` no longer reads the address (it reads
-    // `"unknown"`), and `slots()` would look at an empty key and pass.
+    // Under the key the handler used, not `CLIENT`: with the probe rate limiter
+    // off, as this harness has it, a handler that runs after the socket is gone
+    // reads `request.ip` as `"unknown"`, and `slots()` would look at an empty
+    // key and pass. (With the limiter on, its `onRequest` read has cached the
+    // address; reading the key off the spy is right either way.)
     const key = String(takes.mock.calls[0]?.[0]);
     await waitFor(
       () => ({
@@ -1140,9 +1142,13 @@ describe("a client that aborts POST /api/probe", () => {
     );
   });
 
-  test("during the output vet frees the global slot at once and the client's when the vet returns", async () => {
+  test("during the output vet leaves the global slot free and holds the client's through the vet", async () => {
     // The vet takes no signal (dl-140 stopped at the chain), and the global
     // slot was released when the chain returned, so only the client's is held.
+    // After the vet the handler runs on into `captureThumbnail`, whose image
+    // fetch is bounded by its own 4 s timeout and not by the client's signal,
+    // so a probe that names a thumbnail holds the slot until that ends; this
+    // probe names none, so the capture is instant and the slot frees at once.
     const current = await createHarness({
       resolver: new StubResolver(probeResult()),
       config: { probeTimeoutMs: CHAIN_DEADLINE_MS, maxProbesPerClient: 2 },
