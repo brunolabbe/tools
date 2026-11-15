@@ -3,7 +3,7 @@ id: dl-141
 tool: downloader
 title: A stalled `GET /api/config` read leaves every later probe and job creation pending for the life of the page
 kind: fix
-status: needs-decision
+status: ready
 milestone: null
 depends_on: []
 difficulty: standard
@@ -198,3 +198,12 @@ reverses an answered question of dl-138.
   added here. Proof, an added sentence: `git diff d1ae1be7 HEAD -- tools/downloader/docs/work/dl-141-a-stalled-config-read-wedges-every-later-probe-and-job.md | grep -v 'Fixed at landing' | grep -c '^+.*the commit that records the owner'` → 1.
 - 2026-11-15 — Gate 1's full report is on the pull request thread, #809; status
   unchanged.
+- 2026-11-15 — Owner's answer 3, at batch intake (tools-60 dispatch), to
+  "Where does the bound go?". Options put: A, bound the config read
+  (recommended); B, bound the human-check wait; C, bound `request()` for every
+  call; D, record only. Answer: **A**. No recommendation was overridden. The
+  figure is the builder's to name, with its reasoning; the script-load and
+  `take()` stalls go to this Log as a follow-up. `status` moves to `ready` in
+  this commit. `depends_on: [dl-138]` is not added: Build 1 said to add it once
+  dl-138 is on `main`, and dl-138 merged (`4d0ad61d`, `done`), so the line would
+  gate nothing.
