@@ -287,3 +287,55 @@ before the fixes.**
   other test skipped and exit 0, without pinning the total. Proof, the same
   command: → `1` for `so the counts are what discriminate` (Done when 2) and `1`
   for `never on confirm.*exits 0 with` (Done when 8).
+
+**2026-11-15, built (builder, Sonnet 5.5), base `4e040577`.** Option (a), as the
+owner chose on 2026-11-10 (the Log above): each log test now makes its own
+requests against its own app and reads only the lines that app logged.
+
+- `csv-import.test.ts`, the log test: starts an app, describes and confirms
+  `csv-balance`, and reads `LOGGED.slice(first)`, `first` being `LOGGED.length`
+  before its own `start()`. `workbook-describe.test.ts`, the log test: the same
+  with `lg7` (describe, then confirm, both 200). The secret search, the
+  `a workbook was described` check and the `a described CSV was stored` /
+  `a described workbook was imported` checks all read that slice, so none can
+  be met by another test's lines. Both order comments are replaced (the csv one
+  by a statement that the test stands alone and why it slices).
+- **What the brief had wrong.** (1) The `toBeGreaterThan(20)` cannot hold on the
+  test's own run: a describe and a confirm log two lines (the route's `info`
+  line each, nothing else at `debug`), measured as `expected 2 to be greater
+  than 1000` in both files. The 20 came from every app of the file adding up.
+  It is now `toBeGreaterThanOrEqual(2)`, which is not met by an empty slice, and
+  the two `some` checks cover the specific lines. (2) The Reproduction's totals
+  (63/45), line numbers and base `a100f429` are stale: at `4e040577`
+  workbook-describe has 48 tests, its log test is at `:797` and `LOGGED` is
+  declared at `:152`; csv-import has 63. Seed 4 no longer fails workbook-describe
+  at the base; seeds 2, 9 and 10 do (below). (3) The old comment's premise that the log test is last was already
+  false in `workbook-describe.test.ts` (the
+  web's fixture describe follows it); the new test does not care.
+- **Base, same files copied under another name** (`git show 4e040577:<path>`,
+  run with `--sequence.shuffle --sequence.seed=N`, copies deleted): csv-import
+  seed 3 `expected 0 to be greater than 20`, seed 6 `expected false to be true`,
+  seed 7 `expected 0 to be greater than 20`, each `Tests 1 failed | 62 passed
+  (63)`; workbook-describe seed 2 and 9 `expected false to be true`, seed 10
+  `expected 0 to be greater than 20`, each `1 failed | 47 passed (48)`. `-t` on
+  the log test: `Tests 1 failed | 62 skipped (63)` and `1 failed | 47 skipped
+  (48)`.
+- **Head, Done when 1.** `npx vitest run <file> --sequence.shuffle
+  --sequence.seed=N`, N from 1 to 20 (the ticket asks 1 to 10): csv-import
+  `Tests 63 passed (63)` for all twenty, workbook-describe `Tests 48 passed
+  (48)` for all twenty.
+- **Done when 2.** `-t "no line of any request above holds a CSV"` reads
+  `Tests 1 passed | 62 skipped (63)`; `-t "no line of any request above holds the
+  upload"` reads `Tests 1 passed | 47 skipped (48)`.
+- **Done when 4.** Unshuffled: csv-import `63 passed (63)`, workbook-describe
+  `48 passed (48)`.
+- **Done when 5.** `grep -n "tests in order\|Last: it reads"` on the two files
+  prints nothing (grep exit 1).
+- **Done when 8.** `-t "the fake is called once on describe and never on
+  confirm"` reads `1 passed | 62 skipped (63)`; `-t "lg37: a fake answering its
+  correct description"` reads `1 passed | 47 skipped (48)`.
+- **Not folded in.** `csv-import.test.ts:1005`'s read of `LOGGED` needs no
+  change (its own app logs its rejected request). `.claude/rules/testing.md`
+  says plain `--sequence.shuffle` fails these two files; after this change it
+  no longer does, but that page is the owner's, so the line is proposed in the
+  report and not edited here.

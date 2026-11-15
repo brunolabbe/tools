@@ -1107,10 +1107,19 @@ describe("the web's CSV fixture (Done when 11)", () => {
   });
 });
 
-// Last: it reads what every test above logged.
+// Stands alone, in any order and under a filter: the test makes the requests
+// whose lines it reads, against an app of its own, and reads only what that app
+// logged (LOGGED is shared by every app of the file, so it is sliced).
 describe("the log (lg-66's rule, for a CSV)", () => {
-  test("no line of any request above holds a CSV's content, a file name or the key", () => {
-    expect(LOGGED.length).toBeGreaterThan(20);
+  test("no line of any request above holds a CSV's content, a file name or the key", async () => {
+    const first = LOGGED.length;
+    const started = await start(fake(answering(uploaded("csv-balance"))));
+    const described = await describeFile(started, bytesOf("csv-balance"));
+    expect(described.statusCode, described.body).toBe(200);
+    const confirmed = await confirmFile(started, bytesOf("csv-balance"), uploaded("csv-balance"));
+    expect(confirmed.statusCode, confirmed.body).toBe(200);
+    const logged = LOGGED.slice(first);
+    expect(logged.length).toBeGreaterThanOrEqual(2); // at least a line per request made above
     const secrets = [
       API_KEY,
       "EPICERIE",
@@ -1122,8 +1131,8 @@ describe("the log (lg-66's rule, for a CSV)", () => {
       "CAF",
       "TERRASSE",
     ];
-    expect(LOGGED.filter((line) => secrets.some((secret) => line.includes(secret)))).toEqual([]);
-    expect(LOGGED.some((line) => line.includes("a workbook was described"))).toBe(true);
-    expect(LOGGED.some((line) => line.includes("a described CSV was stored"))).toBe(true);
+    expect(logged.filter((line) => secrets.some((secret) => line.includes(secret)))).toEqual([]);
+    expect(logged.some((line) => line.includes("a workbook was described"))).toBe(true);
+    expect(logged.some((line) => line.includes("a described CSV was stored"))).toBe(true);
   });
 });
