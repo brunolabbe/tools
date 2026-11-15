@@ -1,7 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { EventEmitter } from "node:events";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { expect, test } from "vitest";
 import {
@@ -17,9 +16,13 @@ import {
   reviewedButReady,
   withheldFromReady,
 } from "../status.mjs";
+import { tempDirs } from "./temp-dirs.ts";
 
 const REPO = path.resolve(import.meta.dirname, "../..");
 const CLI = path.join(REPO, "scripts", "status.mjs");
+
+/** Every `repoWith` root is removed when its case ends (repo-147). */
+const temp = tempDirs();
 
 /**
  * A throwaway repo root with the tickets a case needs.
@@ -29,7 +32,7 @@ const CLI = path.join(REPO, "scripts", "status.mjs");
  * exist, a filename that disagrees with its own id, two tools side by side.
  */
 function repoWith(tickets: Record<string, string>): string {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "status-"));
+  const root = temp.make("status-");
   for (const [file, body] of Object.entries(tickets)) {
     const full = path.join(root, file);
     fs.mkdirSync(path.dirname(full), { recursive: true });
