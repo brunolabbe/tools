@@ -173,3 +173,58 @@ Traps:
   measurements above are the reproduction, and the fixture in Build is how a
   builder recreates it without the live site. The temporary 90 s limit was
   reverted the same session.
+- 2026-11-15 — Built (option A). `pressServerTab` and its two scripts are in
+  `resolvers/src/browser/provoke.ts`; `provokeFrame` calls it in the top frame
+  only, after the scroll and before the play selectors, once per probe
+  (`serverTab.attempted` is shared by both passes and set when a control was
+  found, whether or not the page then loaded the player), and only while
+  `hasPlayable()` is false. It does not count as a play press, so the box click
+  is not held back by it. Fixtures in `resolvers/test/fixtures/pages/`:
+  `player-tabs-blank-iframe.html` (primary; two tabs, two blank iframes, the
+  address base64 in `data-enc`, set into `src` only by a tab's handler),
+  `player-tabs-embed.html` (`{{SECONDARY}}`), `player-tabs-nav-no-iframe.html`
+  and `player-blank-iframe-no-tab.html`. Three tests, appended at the end of
+  `browser-resolver-press-targets.test.ts` (the browser-resolver suite was
+  split by dl-117, and that file is the one about what the press reaches).
+  - **The in-frame behaviour of the live embed was not measured.** The brief
+    said to measure first whether the live embed fetches its manifest on load or
+    after a click in its frame. The live site is left out of this public
+    repository on purpose, so no builder can take that reading, and the owner's
+    answer (2026-11-15, option 1) was to model it as the top-frame measurement
+    already recorded here: the embed requests its manifest only after a click in
+    its frame. The fixture does that and not the easy thing: no request on load,
+    none on `.play()` either, and its `<video>` (300x170) is smaller than its
+    frame (640x360), so the click a wrapper's centre would make lands on an empty
+    body and only the surface click at the video's corner can start it.
+  - **The click inside the cross-site frame reached it, with no change to
+    provoke's surface click**: `clickChosenVideo`'s non-scriptable branch
+    (`frame.locator("video").nth(i).click`) did it. Mutation, committed first and
+    restored by `git checkout 9a689b3f -- <file>`: making that branch return
+    early turns the first test red (`No downloadable video stream was found`).
+    Other mutations, each one test red and the other two green: the press
+    disabled (`if (false && …)`) reds the tab test; the blank-iframe precondition
+    removed reds the "no blank player iframe" test (the `Server 2` button is
+    pressed); the leaving-link rule disabled reds the "no tab to press" test
+    (the link's beacon is requested).
+  - **Two things the brief said that the code does not bear out.** `Build`'s Trap
+    says `MARK_PLAYER_BOX_SCRIPT` "deliberately excludes iframes", and its doc
+    comment says so too, but by reading the script it excludes them only by not
+    naming `iframe` in its selector: an `<iframe>` whose class or id contains
+    "player" (the page's `class="player-frame"`) matches
+    `[class*="player"], [id*="player"]` and is a candidate, so the box click can
+    land on a player iframe's centre. Not measured, and left alone as the Trap
+    asks; the embed fixture's small video is what keeps the test from depending
+    on it. Second, the brief's "after `SCROLL_SCRIPT` and before
+    `clickPlayerBox`" is two different functions: the press is in `provokeFrame`
+    after the scroll, and `clickPlayerBox` is in `provokeInput` after pass 0, so
+    "before" holds by construction.
+  - **A link is a tab only if it stays on the page** (its address is the page's
+    own, a fragment of it, or `javascript:`), and a `target=_blank` link never
+    is. The brief names only the "nav link labelled Server 2" risk and the two
+    guards; this is a third one, cheap and covered by the third test.
+  - Runs at `9a689b3f`: `npx vitest run
+    tools/downloader/resolvers/test/browser/browser-resolver-press-targets.test.ts`
+    → 22 of 22 passed (the file's 19 existing tests and the 3 new), 49.5 s;
+    `npm run check` exit 0. The rest of the browser tier is CI's to read on the
+    draft.
+  - Fold-in: none made. No other small, already-specified piece became free.
