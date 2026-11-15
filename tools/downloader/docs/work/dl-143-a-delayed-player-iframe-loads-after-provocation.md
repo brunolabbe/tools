@@ -303,9 +303,10 @@ resolved in about 5 s, which is what isolates the delay as the cause.
     skipped. e2e and container gates not run.
 - 2026-11-15 — Round 4 (the "not covered" case happens live). The coordinator's
   6 runs of b1705c67 came to 5 of 6; the miss had its second load 0.8 s into
-  provocation. My own 6 runs of the same code, then 6 of a first round-4 build,
-  each had one miss of the same family, which shows the two ways the wait could
-  still end on "no blank iframe" in a document that was not ready.
+  provocation. My own 6 runs of b1705c67 were 6 of 6 (none had the reload after
+  provocation began); a first round-4 build, the counter only, came to 5 of 6,
+  and its miss is the second way the wait could still end on "no blank iframe"
+  in a document that was not ready.
   - **Replacement is counted from the start of `provokePlayback`, not of the
     wait.** `provokePlayback` listens for main-frame `framenavigated` for the
     whole call (removed in a `finally`) and hands the count to the wait
