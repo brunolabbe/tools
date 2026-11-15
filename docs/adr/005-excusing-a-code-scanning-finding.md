@@ -75,7 +75,7 @@ Four rules, each carrying its own weight:
    keep in sync:
 
    ```bash
-   grep -rn 'codeql\[' --include='*.ts' --include='*.html' .
+   git grep -n 'codeql\[' -- ':!*.md' ':!*.yml'
    ```
 
    Every excused finding in the repo, with its reasoning in the lines above it.
@@ -83,16 +83,20 @@ Four rules, each carrying its own weight:
    is the whole answer to the question in Context, and it cannot drift from the
    code, because it _is_ the code.
 
-   `--include` is there because dropping it matches every document and workflow
-   that quotes the token (55 lines on `main`, 42 of them in `.md` and `.yml`
-   files). So the list of file types is the part that can drift: an excuse in a
-   type it does not name is excused and invisible to the register. `.html` is
-   named because dl-139 (PR #802) puts the repo's first excuse there, in the
-   inline script of a test fixture page. Name a new type here in the same change
-   that first excuses a finding in it. The AlertSuppression query's source has a
-   case for comments in HTML files, so `.html` is a candidate; that CodeQL
-   extracts that fixture and honours its excuse is not established, and waits
-   for dl-139 to merge.
+   The command lists the excluded types rather than the included ones. The token
+   appears in prose that quotes it, and `.md` and `.yml` files are where that
+   prose lives (this record, the tickets, `security.yml`); leaving them out
+   keeps the list to comments that excuse something. A file type CodeQL scans
+   needs no edit here: a new excuse in a `.tsx`, `.mjs` or `.html` file is
+   listed the day it is written, where a list of included types would miss it
+   until someone remembered to extend it. `git grep` reads tracked files only,
+   so it does not read other agents' worktrees or `node_modules` the way
+   `grep -rn .` does from a shared checkout. The first excuse outside a
+   `.ts` file is the one dl-139 (PR #802) adds, in the inline script of an
+   `.html` test fixture page. What is not established is that CodeQL extracts that script and honours the excuse in it.
+   The AlertSuppression query's source reads a `//` comment through its
+   `JS::Comment` branch, which would cover it if the extractor reads the script;
+   that waits for dl-139 to merge.
 
 Rule 4 is [003](./003-the-status-page-is-generated.md)'s reasoning applied to a
 second projection. A hand-maintained register of excused findings needs a writer,
