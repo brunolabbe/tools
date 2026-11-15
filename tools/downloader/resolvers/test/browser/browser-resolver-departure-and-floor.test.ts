@@ -580,6 +580,45 @@ describe("the two fixed sleeps every probe pays keep their production values (dl
   });
 });
 
+describe("a page's own redirect before the tier's first press is not a departure (dl-144)", () => {
+  // Production landing settle, on purpose: the hop lands ~1000 ms after `load`,
+  // past `LANDING_URL_SETTLE_MS` (500 ms), which is the window dl-55's
+  // decision 2 draws and this ticket leaves where it was.
+  test(
+    "an embed that moves itself to a mirror after the settle window resolves the mirror's stream",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const hls = recordingHlsParser();
+      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...STREAM_WAITS });
+      const result = await probe("/guard-late-embed.html", resolver);
+      expect(result.variants[0]?.url).toBe(server.secondaryUrl("/media/hls/master.m3u8"));
+    },
+  );
+
+  test(
+    "a press on the mirror that navigates is still a departure, measured from the mirror",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const warnings: { message: string; fields: Record<string, unknown> | undefined }[] = [];
+      const logger: BrowserResolverLogger = {
+        warn: (message, fields) => {
+          warnings.push({ message, fields });
+        },
+      };
+      const resolver = new BrowserResolver({ pool, quietMs: 1200, logger });
+      const error = await probeError("/guard-late-embed-press.html", resolver);
+
+      expectCode(error, "NO_MEDIA_FOUND");
+      expect(error.details?.["reason"]).toBe("navigated-away");
+      expect(error.details?.["url"]).toBe(server.secondaryUrl("/guard-late-embed-press.html"));
+      expect(error.details?.["departedTo"]).toBe(server.url("/mse.html"));
+      expect(String(warnings[0]?.fields?.["landingUrl"])).toBe(
+        server.secondaryUrl("/guard-late-embed-press.html"),
+      );
+    },
+  );
+});
+
 /** Elapsed milliseconds since the call, off a clock that follows no one's `date`. */
 function startStopwatch(): () => number {
   const startedAt = performance.now();

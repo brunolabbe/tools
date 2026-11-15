@@ -119,3 +119,58 @@ every top-frame navigation still counts, whether or not a click caused it.
   failure is shown to also fail on `main`.
 
 ## Log
+
+- 2026-11-15 — built (builder). Branch `downloader/dl-144-pre-press-self-redirect`.
+  - **Signal.** `provokePlayback` takes `onFirstPress?: () => void`. It registers a
+    once-only listener in a `WeakMap<Page, …>` in `provoke.ts`; each click site
+    calls `notePress(frame)` just before the click (ten sites: `clickVisible`,
+    `clickByText`, `clickByTextIn` (consent text), the modal close (marked and
+    semantic), the age press, the chosen-`<video>` click (scriptable and not),
+    the box click, dl-139's server tab). No helper signature changed, which keeps
+    the merge with dl-143 and dl-142 to the lines they already touch. Announced
+    before the click and on attempt, not success: a navigation can commit before
+    `click()` returns, and a covered click that times out only puts the guard back
+    to dl-55's strict reading. Not presses, as the Build section said: the scroll,
+    `mouse.wheel`, `play()` in script and the `Escape` key (`dismissModal`'s
+    fallback). The listener stays for the page's life, so `revisitOverlays`
+    presses are announced too (a no-op once the first has been).
+  - **Guard.** `watchForDeparture` now owns the landing URL: before `pressed()` a
+    main-frame navigation off it moves it (and remembers the one left); after,
+    dl-55 unchanged. The warn log and `navigated-away` details read the guard's
+    current landing URL. The settle window is untouched, and "count only after the
+    tier's own clicks" is not what this does: after the first press every
+    top-frame navigation counts.
+  - **Hits collected before the hop (Build 4): dropped at ranking.** Measured, not
+    guessed: with a first document that fetches `master.m3u8` before hopping,
+    ranking chose the abandoned page's manifest, because answered manifests order
+    by arrival (dl-92) and it arrived first. They belong to the page that was
+    left, as dl-55 says of hits after a departure. Filtered in `browser.ts` just
+    before `rankHits`, by the `frameUrl` the collector already records with each
+    hit, against the set of landing URLs the guard left. Not cleared at the hop:
+    that read races the mirror's own first request (it can fire before Node sees
+    `framenavigated`) and could drop the stream wanted. The collector itself is
+    unchanged, so `hasPlayableHit()` still counts a pre-hop hit for the press
+    gates and the quiet floor; only the result ignores it.
+  - **Red on `main`** (tests written first, run with only the fixtures): the late
+    redirect test failed `AppError: No downloadable video stream was found on that
+    page.` with details `{"reason":"navigated-away","url":"<primary>/guard-late-embed.html",
+    "departedTo":"<secondary>/guard-late-embed.html"}`; the post-press test failed
+    on `details.url` (expected the mirror, received the primary page's URL).
+  - **Mutation.** `let hasPressed = false` -> `true` in `watchForDeparture` turns
+    both new tests red (2 failed). Making `onFirstPress` a no-op turns the
+    post-press test red. Both restored.
+  - **Margin.** Fixture: the hop lands 1000 ms after `load` (503 ms after the
+    landing URL is read); the first document has nothing to press, and the mirror's
+    play button is first pressed ~535 ms after the hop (T0+1044 vs hop T0+509).
+    Live embed, two runs through the built tier: run 1, hop at +413 ms from the
+    landing read, first press at +1462 ms (about 1 s clear); run 2, the hop had
+    already landed before the landing URL was read and the first press came at
+    +79 ms on the mirror. Both resolved to a 720p HLS variant in about 7.7 s; on
+    `main` the same embed ended `NO_MEDIA_FOUND`, `navigated-away`. The named risk
+    (a hop within milliseconds of the first press) did not occur, but it is a
+    measured gap of about one second on one embed, not a proof.
+  - **Brief nits.** The fixture is one file serving both origins (`{{PRIMARY}}`
+    branch), so the mirror really is the same path. `{{SECONDARY}}` and
+    `{{PRIMARY}}` are substituted only in `.html`, as expected. No existing test
+    changed.
+  - **Not proved by CI:** e2e and the container build were not run.

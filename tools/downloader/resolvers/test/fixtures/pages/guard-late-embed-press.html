@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Guard: a mirror whose play button leaves</title>
+  </head>
+  <body>
+    <h1>Guard: a mirror whose play button leaves</h1>
+    <!-- `guard-late-embed.html`'s hop, to a mirror that has no stream of its own:
+         its play button navigates the top frame elsewhere (dl-144). The hop is
+         forgiven, the press is not: this is dl-55's departure, measured from
+         the mirror. -->
+    <button id="play" type="button" hidden>Play</button>
+
+    <script>
+      (function () {
+        if (location.origin === "{{PRIMARY}}") {
+          window.addEventListener("load", function () {
+            setTimeout(function () {
+              location.replace("{{SECONDARY}}" + location.pathname);
+            }, 1000);
+          });
+          return;
+        }
+        var play = document.getElementById("play");
+        play.hidden = false;
+        play.addEventListener("click", function () {
+          location.assign("{{PRIMARY}}/mse.html");
+        });
+      })();
+    </script>
+  </body>
+</html>

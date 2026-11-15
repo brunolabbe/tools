@@ -399,9 +399,10 @@ export class BrowserResolver implements Resolver {
     // counts against it. From here on, a top-frame navigation away from it is
     // a click that opened something else, and every hit collected after it
     // belongs to that other page.
-    const landingUrl = page.url();
+    // Until the tier's first press the page may still move itself, so the guard
+    // carries the landing URL along (dl-144, `watchForDeparture`).
+    const guard = watchForDeparture(page, page.url());
     let lastStep: "provoke-playback" | "network-quiet" = "provoke-playback";
-    const guard = watchForDeparture(page, landingUrl);
 
     this.#stage(options, "provoke-playback");
     await provokePlayback(page, {
@@ -412,6 +413,8 @@ export class BrowserResolver implements Resolver {
       passPauseMs: this.#passPauseMs,
       // dl-81: what could replace a stream with a worse one waits on this.
       hasPlayable: () => collector.hasPlayableHit(),
+      // dl-144: from the first press on, a top-frame navigation is a departure.
+      onFirstPress: () => guard.pressed(),
     });
 
     this.#stage(options, "network-quiet");
@@ -450,6 +453,7 @@ export class BrowserResolver implements Resolver {
     // departure could still be a preview clip belonging to the page that was
     // left, not the one that was reached.
     const departure = guard.departure();
+    const landingUrl = guard.landingUrl();
     if (departure !== undefined) {
       this.#logger.warn("browser tier left the landing page during provocation", {
         step: lastStep,
@@ -466,7 +470,15 @@ export class BrowserResolver implements Resolver {
     }
 
     const finalUrl = page.url();
-    const ranked = rankHits(collector.hits, finalUrl);
+    // dl-144: what the page asked for before it moved itself belongs to the page
+    // it left, as what follows a departure does (dl-55). Dropped here, by the
+    // frame URL the collector recorded with each request, and not when the hop
+    // happens: that read races the new document's own first request.
+    const left = guard.leftBehind();
+    const hits = collector.hits.filter(
+      (hit) => hit.frameUrl === undefined || !left.has(hit.frameUrl),
+    );
+    const ranked = rankHits(hits, finalUrl);
     const outcome = await this.#buildOutcome(context, collector, ranked, deadline, options);
 
     if (!outcome) {
@@ -483,7 +495,7 @@ export class BrowserResolver implements Resolver {
         finalUrl,
         status: navigation?.status(),
         quietReached,
-        segmentCount: countPlayedSegments(collector.hits),
+        segmentCount: countPlayedSegments(hits),
       });
     }
 
@@ -813,6 +825,12 @@ export function sameDocument(a: string, b: string): boolean {
 }
 
 interface NavigationGuard {
+  /** The page the guard measures from: the one read after `load`, moved by a pre-press self-redirect (dl-144). */
+  landingUrl(): string;
+  /** Every landing URL the page moved itself off before the first press (dl-144). */
+  leftBehind(): ReadonlySet<string>;
+  /** The tier has made its first press on the page: from here every top-frame navigation counts. */
+  pressed(): void;
   /** The URL the top frame first left the landing URL for, once seen. */
   departure(): string | undefined;
   /** Stops listening. Safe to call more than once. */
@@ -829,19 +847,43 @@ interface NavigationGuard {
  * navigated: no new document, so nothing that only watched for a load would
  * have caught it.
  *
+ * **Until the tier's first press, a top-frame navigation is the page moving
+ * itself, not a click that opened something else (dl-144).** An embed whose own
+ * script hops the top frame to a mirror a second or two after `load` lands just
+ * past `LANDING_URL_SETTLE_MS`; the landing URL follows it. `pressed()` ends that
+ * and the strict reading is dl-55's again, whether or not a click caused the
+ * navigation: this does not count departures "only after the tier's own clicks",
+ * which dl-55's decision 2 rejected, and the settle window is unchanged. The
+ * cost is a redirect that lands within milliseconds after the first press,
+ * which still counts as a departure. The SSRF guard sees every navigation
+ * either way.
+ *
  * Only the first departure is kept: once the page has left, later navigations
  * (back to the landing URL, onward again) do not change the verdict.
  */
-function watchForDeparture(page: Page, landingUrl: string): NavigationGuard {
+function watchForDeparture(page: Page, initialLandingUrl: string): NavigationGuard {
+  let landingUrl = initialLandingUrl;
+  const left = new Set<string>();
+  let hasPressed = false;
   let departedTo: string | undefined;
   const onNavigated = (frame: Frame): void => {
     if (frame !== page.mainFrame() || departedTo !== undefined) return;
     const url = frame.url();
     if (sameDocument(url, landingUrl)) return;
+    if (!hasPressed) {
+      left.add(landingUrl);
+      landingUrl = url;
+      return;
+    }
     departedTo = url;
   };
   page.on("framenavigated", onNavigated);
   return {
+    landingUrl: () => landingUrl,
+    leftBehind: () => left,
+    pressed: () => {
+      hasPressed = true;
+    },
     departure: () => departedTo,
     stop: () => page.off("framenavigated", onNavigated),
   };
