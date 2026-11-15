@@ -3,7 +3,7 @@ id: dl-140
 tool: downloader
 title: A client that aborts `POST /api/probe` never frees its probe slot, because the close listener is registered too late
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -160,6 +160,80 @@ Traps:
   listener does not abort the controller.
 - The Log states which event the remedy uses, the measurement that chose it, and
   what an abort during the output vet still does.
+
+## Review
+
+**Gate: FAIL** — 2026-11-15 · `5f15e56f..bc800d3a` · Opus 5.5, depth full
+
+| Done when                                                                                                                                      | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ---------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A real-port, real aborted `fetch` frees the per-client and the global slot (abort during the chain) within a stated bound, and fails on `main` | `api/test/routes.test.ts` › "a client that aborts POST /api/probe" › "during the chain frees both slots at once, not at the chain's deadline" ✓ — asserts `client 0, global 0` within `FREED_WITHIN_MS` (1,000 ms) against a 20 s chain deadline, and the signal's reason `CANCELED`. Red with `routes/probe.ts` at `5f15e56f` (3 failed of 48: this case, "so a client that aborted both its probes…" and "before the handler has a listener…"); green 10 of 10 at the head |
+| A normally completed request frees its slot as today and does not abort the controller                                                         | `api/test/routes.test.ts` › "a request that completes normally frees its slots and never aborts its signal" ✓ — asserts 200, both slots 0, and `signal.aborted === false` 100 ms after the response; the inverted-`writableFinished` control turns it red                                                                                                                                                                                                                    |
+| The Log states the event, the measurement that chose it, and what an abort during the output vet still does                                    | **not met** in its third clause (F1). The event (`reply.raw` `close` with `writableFinished` false) and the measurement (1,534 ms on the base, red/green) are stated and verified by reading; "frees it when the vet returns" and "an aborted probe now ends as `CANCELED`" are both false for an abort during the vet, measured                                                                                                                                             |
+
+- **high** · Done when 3 depends on it · **F1** — the Log's account of an abort
+  during the output vet is false in the unsafe direction, and so are the same
+  words in the line this branch adds to dl-138's Log ("one during the output vet
+  frees the per-client slot when the vet returns") and the title of
+  `routes.test.ts` › "during the output vet frees the global slot at once and the
+  client's when the vet returns". After the vet returns the handler runs on into
+  `captureThumbnail`, whose image fetch takes `AbortSignal.timeout(4 s)` and not
+  the client's signal. Measured on a real port: a probe naming a thumbnail whose
+  server answers after 2 s, client aborted during a held vet, vet released 100 ms
+  later — the per-client slot freed **2,013 ms after the vet returned**. And the
+  probe does not end `CANCELED`: it ends `ok` — an `ok` `probe_outcomes` row that
+  `report.ts` counts as an attempted success (`attempted 1, successes 1,
+  canceled 0`), a probe-cache write, `info probe complete`, and no `request
+  rejected` line (with and without a thumbnail). The Log's "An aborted probe now
+  ends as `CANCELED`" holds for an abort during the chain (9 of 9) and around the
+  listener's registration (260 of 260) and not for this one. The hold itself is
+  not the branch's: the base frees the same probe 2,010 ms after the vet; the
+  false text is. The sentence came from the brief's own
+  Build 3 ("one during the vet frees it when the vet returns"), which the owner's
+  intake option quotes: the remedy is text — the Log, the dl-138 line, the test
+  title, and Build 3's sentence (the ticket that asserted it) — and whether the
+  thumbnail fetch should take the client's signal is an open decision in the
+  full report, not a defect of this build.
+- **low** · `nfr:maintainability` · **F2** — the `routes/probe.ts` comment says
+  `writableFinished` "is false only when the reply was never fully written", and
+  the Log's _Not measured_ predicts a late abort aborts the finished controller.
+  Both false in the safe direction: a reply that was ended but cut mid-flush (a
+  real socket that read the headers of a 32 MiB body and stopped, then went away)
+  read `writableFinished` false 50 ms after its headers and **true at `close`** in
+  20 of 20, so the controller was not aborted, no `CANCELED` row, no extra
+  release. Node's getter counts the destroyed socket's empty buffer as flushed.
+- **low** · no live call site · **F3** — the Log's (b) and case 3's comment say a
+  handler that starts after the socket is gone reads `request.ip` as
+  `"unknown"`. That holds only with the probe rate limiter off, as the harness
+  sets it: with `rateLimitProbePerMinute` at its default of 10, the `onRequest`
+  hook's read caches Node's peername and the handler keys under `127.0.0.1`; with
+  `trustProxy` on, under the `X-Forwarded-For` address. Case 3 reads the key off
+  its spy, so it is right either way.
+- **dropped** · a response already flushing, or a keep-alive connection, aborting
+  the controller or writing `CANCELED`: 0 aborts, 0 `CANCELED` rows in 20 + 20 +
+  20 + 20 runs (fetch flush, raw-socket mid-body, 20 requests on 2 reused
+  connections then `closeAllConnections`, abort after the body was read). Not a
+  defect.
+- **dropped** · a slot released twice or below zero: acquires equalled releases
+  under the same key in every run of every case, global minimum 0; both gates'
+  releases are idempotent closures. Not a defect.
+- **dropped** · the shared `"unknown"` key letting one departed client hold
+  another's slot: the key line is unchanged by the branch, a live client's count
+  stayed 1 while a departed one acquired and released, and on the head a
+  departed-before-registration request releases at once (the base held it to the
+  chain's deadline). Pre-existing, shortened here; out of the reviewed range.
+- **findings** · the hunt returned 6; 3 carried, 3 dropped.
+- Positive controls, each red on a named test: listener moved back to
+  `request.raw` → "during the chain frees both slots…" and "so a client that
+  aborted both its probes…" (2 failed of 48); `reply.raw.closed` check deleted →
+  "before the handler has a listener still frees them once it starts" (1 of 48);
+  `writableFinished` inverted → those three and "a request that completes
+  normally…" (4 of 48).
+- CI at `bc800d3a`: every check green, `test (windows-latest, informational)`
+  included.
+- NFR: security n/a (no URL, header or credential path touched) · performance ✓
+  (one listener per request, as before) · reliability — F1 · maintainability —
+  F2, F3.
 
 ## Log
 
