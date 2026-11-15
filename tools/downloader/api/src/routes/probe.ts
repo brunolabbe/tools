@@ -118,10 +118,25 @@ export function registerProbeRoute(app: FastifyInstance, context: AppContext): v
 
     // A client that navigates away should not leave a browser probe running for
     // another 40 seconds holding a concurrency slot.
+    //
+    // dl-140. Listens on the *response*, not the request. By the time a handler
+    // runs, Fastify has read the body and `request.raw` has already emitted its
+    // `close` with `destroyed` true, so a listener on it registered here never
+    // hears a later abort. The response's `close` is the one that follows the
+    // client going away, and `writableFinished` tells it from a normal end: it
+    // is true after a reply that finished. It is not a measure of what reached
+    // the client: a reply that was ended and then cut mid-flush reads true at
+    // `close` too (Node counts a destroyed socket's empty buffer as flushed),
+    // so that one aborts nothing, which is harmless once the handler is done.
     const controller = new AbortController();
-    request.raw.on("close", () => {
-      if (request.raw.destroyed) controller.abort(new AppError("CANCELED"));
-    });
+    const abortIfClientLeft = (): void => {
+      if (!reply.raw.writableFinished) controller.abort(new AppError("CANCELED"));
+    };
+    reply.raw.on("close", abortIfClientLeft);
+    // The client may have left during the awaits above (the SSRF vet's DNS
+    // lookup, the human check), before there was a listener to hear it, and
+    // then no `close` is coming: ask once, now.
+    if (reply.raw.closed) abortIfClientLeft();
 
     // dl-43. Opened only for the fresh path — a cache hit returned above never
     // reaches here, and a channel for a probe that will not run would leave the

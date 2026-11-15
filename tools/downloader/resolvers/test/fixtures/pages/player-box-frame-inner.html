@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>The inside of a player frame that records any click on it</title>
+    <style>
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        background: #123;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- dl-142: the document an iframe box would be clicked into. Nothing here is
+         a player; the only thing it does is say it was pressed, which is how a
+         test shows a blind click landed in the frame. -->
+    <script>
+      document.addEventListener("click", function () {
+        fetch("/beacon/inner-click").catch(function () {});
+      });
+    </script>
+  </body>
+</html>

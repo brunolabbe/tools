@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A large player-classed frame beside a smaller player div</title>
+  </head>
+  <body style="margin: 0">
+    <!-- dl-142 gate 1: the frame (860x500) is the larger candidate by area, the div
+         (400x240) the smaller. A frame is never the box, so the choice must fall
+         to the div; if the frame stayed a candidate it would win the choice and
+         the walk would refuse it, leaving nothing pressed. -->
+    <div style="display: flex">
+      <iframe
+        class="player-frame"
+        src="/player-box-frame-inner.html"
+        width="860"
+        height="500"
+        style="border: 0"
+      ></iframe>
+      <div
+        class="video-player"
+        style="width: 400px; height: 240px; background: #222"
+        onclick="fetch('/beacon/div-clicked')"
+      ></div>
+    </div>
+  </body>
+</html>

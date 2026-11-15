@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <title>A large player-classed frame beside a smaller player div, as XHTML</title>
+  </head>
+  <body style="margin: 0">
+    <!-- dl-142 gate 1: the same page as player-box-frame-beside-div.html, served as
+         application/xhtml+xml, where `tagName` is lowercase (`iframe`) and only
+         `localName` reads the same in both. -->
+    <div style="display: flex">
+      <iframe
+        class="player-frame"
+        src="/player-box-frame-inner.html"
+        width="860"
+        height="500"
+        style="border: 0"
+      ></iframe>
+      <div
+        class="video-player"
+        style="width: 400px; height: 240px; background: #222"
+        onclick="fetch('/beacon/div-clicked')"
+      ></div>
+    </div>
+  </body>
+</html>
