@@ -22,12 +22,8 @@ const PENDING = Symbol("pending");
 function watch(call: Promise<unknown>): () => unknown {
   let outcome: unknown = PENDING;
   call.then(
-    (value) => {
-      outcome = { resolved: value };
-    },
-    (error: unknown) => {
-      outcome = error;
-    },
+    (value) => (outcome = { resolved: value }),
+    (error: unknown) => (outcome = error),
   );
   return () => outcome;
 }
