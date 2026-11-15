@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Embed: a player that asks for its manifest only after a click</title>
+  </head>
+  <body style="margin: 0; background: #222">
+    <!-- dl-139: the embed behind player-tabs-blank-iframe.html, served from the
+         other fixture origin. It requests its manifest only after a click on its
+         `<video>`, never on load and never on `.play()`: the top-frame
+         measurement behind this ticket needed provoke's surface click, and the
+         owner chose to model the embed the same way (2026-11-15). The live embed
+         was not measured inside a frame. In a frame from another site that
+         click goes through the locator API (`isScriptableFrame`).
+
+         The video is smaller than the 640x360 frame it sits in, so that a click
+         at the frame's centre (the box click on the page's player wrapper) lands
+         on the empty body and starts nothing: only the surface click on the
+         `<video>` itself, at its top-left corner, can request the manifest. -->
+    <video id="v" width="300" height="170" muted playsinline></video>
+    <script>
+      (function () {
+        var started = false;
+        document.getElementById("v").addEventListener("click", function () {
+          if (started) return;
+          started = true;
+          fetch("/media/related/master.m3u8")
+            .then(function (r) {
+              return r.text();
+            })
+            .then(function () {
+              return fetch("/media/related/v720.m3u8");
+            })
+            .then(function (r) {
+              return r.text();
+            })
+            .catch(function () {});
+        });
+      })();
+    </script>
+  </body>
+</html>

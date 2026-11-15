@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A blank player iframe and no server tab to press</title>
+  </head>
+  <body style="margin: 0">
+    <!-- dl-139: a blank player iframe whose address sits in a data attribute and
+         that nothing on the page ever loads, beside a "Server 2" link that leaves
+         the page (a real href) and a button that is not a server tab. Neither is a
+         tab to press, so the probe ends as it did before the press existed. -->
+    <nav>
+      <a href="/beacon/server-2-leaves">Server 2</a>
+      <button id="share">Share</button>
+    </nav>
+    <div class="player-wrap">
+      <iframe
+        id="player-1"
+        class="player-frame"
+        src="about:blank"
+        width="640"
+        height="360"
+        style="border: 0"
+        data-enc="aHR0cHM6Ly9leGFtcGxlLmludmFsaWQv"
+        title="Video player 1"
+      ></iframe>
+    </div>
+    <script>
+      document.getElementById("share").addEventListener("click", function () {
+        fetch("/beacon/share").catch(function () {});
+      });
+    </script>
+  </body>
+</html>

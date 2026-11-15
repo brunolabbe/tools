@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A video page whose player iframes stay blank until a server tab is pressed</title>
+  </head>
+  <body style="margin: 0">
+    <!-- dl-139: the shape of a WordPress video page that loads its player on a tab
+         press. Each player is an iframe at about:blank with its real address
+         base64-encoded in `data-enc`, and only a tab's click handler copies it
+         into `src`; nothing else on the page ever does. A tab press records a
+         beacon, which is how a test shows the press happened. -->
+    <div class="player-tabs">
+      <button class="player-btn active" data-player="4">Player 01</button>
+      <button class="player-btn" data-player="6">Player 02</button>
+    </div>
+    <div class="player-wrap">
+      <div id="wrap-4">
+        <iframe
+          id="player-4"
+          class="player-frame"
+          src="about:blank"
+          width="640"
+          height="360"
+          style="border: 0"
+          loading="lazy"
+          title="Video player 4"
+        ></iframe>
+      </div>
+      <div id="wrap-6" style="display: none">
+        <iframe
+          id="player-6"
+          class="player-frame"
+          src="about:blank"
+          width="640"
+          height="360"
+          style="border: 0"
+          loading="lazy"
+          title="Video player 6"
+        ></iframe>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        // The embed lives on the other fixture origin, whose port is not known
+        // until the server is listening: the server fills `{{SECONDARY}}` in, and
+        // the encoded attribute is built here, so the page still holds the address
+        // only as base64 in the DOM.
+        var embed = "{{SECONDARY}}/player-tabs-embed.html";
+        document.getElementById("player-4").setAttribute("data-enc", btoa(embed + "?player=4"));
+        document.getElementById("player-6").setAttribute("data-enc", btoa(embed + "?player=6"));
+
+        var buttons = document.querySelectorAll(".player-btn");
+        for (var i = 0; i < buttons.length; i++) {
+          buttons[i].addEventListener("click", function (event) {
+            var id = event.currentTarget.getAttribute("data-player");
+            fetch("/beacon/server-tab-" + id).catch(function () {});
+            for (var j = 0; j < buttons.length; j++) buttons[j].classList.remove("active");
+            event.currentTarget.classList.add("active");
+            ["4", "6"].forEach(function (n) {
+              document.getElementById("wrap-" + n).style.display = n === id ? "" : "none";
+            });
+            var frame = document.getElementById("player-" + id);
+            // js/xss-through-dom, excused under docs/adr/005 by category, in
+            // tools/downloader/resolvers/test/fixtures/pages/player-tabs-blank-iframe.html,
+            // 2026-11-15, by the owner (dl-139, gate round 1): this is a test
+            // fixture, served only by the test's own server, and it copies a DOM
+            // attribute into an iframe's src on purpose, because that is the page
+            // dl-139 reproduces: the live page keeps each player's address in a
+            // data attribute and sets it only on a tab press. It never ships, and
+            // no visitor reaches it. Field five has no production design behind it
+            // to regress: what goes red if the fixture stops doing it is "presses
+            // the active tab, and the embed it loads is clicked in its own frame
+            // and yields the stream" in browser-resolver-press-targets.test.ts,
+            // since the iframe then stays blank and the probe ends NO_MEDIA_FOUND.
+            // The assignment is on one line because the suppression covers exactly
+            // the line after the comment.
+            // codeql[js/xss-through-dom]
+            frame.src = atob(frame.getAttribute("data-enc"));
+          });
+        }
+      })();
+    </script>
+  </body>
+</html>

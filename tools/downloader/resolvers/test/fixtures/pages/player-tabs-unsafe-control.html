@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A blank player iframe beside a control that looks like a server tab and is not one</title>
+  </head>
+  <body style="margin: 0">
+    <!-- dl-139, gate round 1: one control chosen by ?ctl=, each a thing that reads
+         "Server 2" (or carries data-player) and would take the page somewhere if
+         it were pressed. Pressing it records `/beacon/pressed-<ctl>` from the
+         document's capture-phase click listener (a click on the control, `#t`,
+         or inside it); where it leaves the page, the
+         link's or form's own target records `/beacon/left-<ctl>`. Both targets
+         answer 204, so the page stays put and the request is the evidence.
+
+         li-text        a list item whose text is "Server 2", holding the link
+         role-button    a role="button" wrapper of the same link
+         li-data        a list item with data-player around a "Next video" link
+         link-around    a "Server 2" button inside a link
+         form-outside   a "Server 2" button owned by a form it is not inside
+         target-new     a "Server 2" link to "#" that opens a new window
+         li-form        a list item whose text is "Server 2", holding a form's submit button
+         role-form      a role="button" wrapper of the same form
+         li-form-attr   a list item holding a "Server 2" button owned by a form outside it
+         li-label       a list item holding a label "Server 2" for a submit button of a form beside it
+         role-label     a role="tab" wrapper of a label "Player 01" for the same button
+         li-label-attr  a list item holding a label "Server 2" for an input owned by a form outside it -->
+    <div id="slot"></div>
+    <div class="player-wrap">
+      <iframe
+        id="player-1"
+        class="player-frame"
+        src="about:blank"
+        width="640"
+        height="360"
+        style="border: 0"
+        title="Video player 1"
+      ></iframe>
+    </div>
+    <script>
+      var ctl = new URLSearchParams(location.search).get("ctl") || "";
+      var left = "/beacon/left-" + ctl;
+      var markup = {
+        "li-text":
+          '<ul style="margin:0;padding:0"><li id="t" style="display:inline-block"><a href="' +
+          left +
+          '">Server 2</a></li></ul>',
+        "role-button":
+          '<div id="t" role="button" style="display:inline-block"><a href="' +
+          left +
+          '">Server 2</a></div>',
+        "li-data":
+          '<ul style="margin:0;padding:0"><li id="t" data-player="x" style="display:inline-block"><a href="' +
+          left +
+          '">Next video</a></li></ul>',
+        "link-around": '<a href="' + left + '"><button id="t">Server 2</button></a>',
+        "form-outside":
+          '<form id="f" action="' +
+          left +
+          '"><input type="hidden" name="q" value="1" /></form><button id="t" form="f">Server 2</button>',
+        "target-new": '<a id="t" href="#" target="_new">Server 2</a>',
+        "li-form":
+          '<ul style="margin:0;padding:0"><li id="t" style="display:inline-block"><form action="' +
+          left +
+          '"><button>Server 2</button></form></li></ul>',
+        "role-form":
+          '<div id="t" role="button" style="display:inline-block"><form action="' +
+          left +
+          '"><button>Server 2</button></form></div>',
+        "li-form-attr":
+          '<form id="f" action="' +
+          left +
+          '"><input type="hidden" name="q" value="1" /></form><ul style="margin:0;padding:0"><li id="t" style="display:inline-block"><button form="f">Server 2</button></li></ul>',
+        "li-label":
+          '<ul style="margin:0;padding:0"><li id="t" style="display:inline-block"><label for="s">Server 2</label></li></ul><form action="' +
+          left +
+          '"><button id="s">Go</button></form>',
+        "role-label":
+          '<div id="t" role="tab" aria-selected="true" style="display:inline-block"><label for="s">Player 01</label></div><form action="' +
+          left +
+          '"><button id="s">Go</button></form>',
+        "li-label-attr":
+          '<form id="f" action="' +
+          left +
+          '"><input type="hidden" name="q" value="1" /></form><ul style="margin:0;padding:0"><li id="t" style="display:inline-block"><label for="s">Server 2</label></li></ul><input type="submit" id="s" form="f" value="Go" />',
+      };
+      document.getElementById("slot").innerHTML = markup[ctl] || "";
+      document.addEventListener(
+        "click",
+        function (event) {
+          // Only a click on the control: the page's own box click, on the player
+          // wrapper, is another step's and lands elsewhere.
+          if (event.target.closest && event.target.closest("#t")) {
+            navigator.sendBeacon("/beacon/pressed-" + ctl);
+          }
+        },
+        true,
+      );
+    </script>
+  </body>
+</html>
