@@ -151,9 +151,12 @@ code {
   justify-content: space-between;
 }
 
+/* A page's own title, or an address with no spaces, has no break points of its
+   own (dl-137). */
 .card__title {
   margin: 0 0 0.25rem;
   font-size: 1.05rem;
+  overflow-wrap: anywhere;
 }
 
 /* The preview and the text it labels travel together, so the `space-between`
@@ -789,6 +792,8 @@ code {
 
 .notice__message {
   margin: 0.35rem 0 0;
+  /* A stored error message is text this page did not write (dl-137). */
+  overflow-wrap: anywhere;
 }
 
 .notice__detail {

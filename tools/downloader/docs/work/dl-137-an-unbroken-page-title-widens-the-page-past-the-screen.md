@@ -39,7 +39,9 @@ the page unguarded.
 - **The probe panel's heading**, `h2.card__title` in
   `web/src/components/ProbePanel.tsx`, shows `probe.title`: the page's own
   `<title>`, which the resolver passes through and a site chooses.
-- **The job card's heading**, `h3.job__title` in `web/src/components/JobCard.tsx`:
+- **The job card's heading** (on `main` at `a100f429` `h3.job__title`; since dl-133 the
+  same `h2.card__title` the analysis uses, drawn by `BoxHead`), in
+  `web/src/components/JobCard.tsx`:
   `const heading = title ?? job.variant?.label ?? job.sourceUrl;`. The title is
   the one the visitor saw at Download, kept beside the job list under
   `downloader:titles:v1` (`web/src/lib/job-store.ts`, `loadTitles`/`saveTitles`).
@@ -163,9 +165,11 @@ unchanged on dl-133's head, which was read, not run.
    Beside the width reading, each case asserts that the string is **whole and
    wrapped, not cut**: the element's text equals the string, and its box is
    taller than one line (its height exceeds 1.5 times its computed
-   `font-size`, read with `getComputedStyle` as a pixel value; `line-height`
-   reads `normal` on these elements and is not a number) with its right edge
-   inside `innerWidth`. A heading clipped to a letter would pass the width
+   `line-height`, read with `getComputedStyle` as a pixel value: the shared
+   base sets `1.55`, so it computes to a pixel value on these elements, and
+   the brief's `font-size` bound and its claim that `line-height` reads
+   `normal` were wrong, see the 2026-11-15 Log entry) with its right edge
+   inside `innerWidth` and the text not running past the element's own box. A heading clipped to a letter would pass the width
    reading alone. **Open the screenshots**.
 
    `h2.card__title` is not unique on the page the cases reach: the "Analyse a
@@ -367,3 +371,47 @@ this ticket `dropped` with the reason. If C, `depends_on` stays empty.
 - 2026-11-10 — Gate 1's and gate 2's full reports are on the pull request thread,
   #784; status unchanged. This pull request only files the ticket, so the thread
   is the record and the ticket carries no `## Review` section.
+- **2026-11-15, built** (Sonnet 5.5, base `4e040577`, branch
+  `downloader/dl-137-overflow-wrap`). dl-133 had merged (#781, `43026e11`), so
+  Build 1 held. Two declarations: `overflow-wrap: anywhere` on `.card__title`
+  and on `.notice__message` in `web/src/styles.css`, nothing on any wrapper.
+  The boxes already shrink: `.job__titles` has `min-width: 0` and
+  `.card__headline` too, and the notice is a block, so no `min-width` was
+  added; the layout reading below is the proof.
+  - **Five cases appended to `e2e/layout.spec.ts`**, four unbroken and the
+    spaced one (Build 3 and 4), each read at 360 and 1280 px through
+    `fitsBothWidths` plus a `wrapsWhole` helper (text equals the string,
+    box taller than one and a half lines, right edge in the window, text not
+    running past its box).
+  - **Red before, green after**, `E2E_PORT=8237 npm run e2e:downloader --
+    tools/downloader/e2e/layout.spec.ts`. Before the fix: `4 failed, 10
+    passed`; the four unbroken cases failed at both widths on the width
+    reading (`Unbroken title, analysis is 1846 px wide in a 360 px window`,
+    `1998` at 1280; running job 1846 / 1998; restored job address 2091 /
+    2243; restored job message 2505 / 2658) and on `taller than one and a
+    half lines` and `the text runs past its box` at both widths. After:
+    `14 passed (32.7s)`; the spaced case is green on both sides.
+  - **What the brief had wrong.** (1) Build 3 said `line-height` reads
+    `normal` and to measure height against 1.5 times the font size. It
+    computes to `26.04px` (the base's `1.55` on a `16.8px` font), so one line
+    is taller than 1.5 times the font size (25.2 px) and that bound passed on
+    the unfixed page; the helper measures against the computed `line-height`
+    instead. (2) A right edge inside `innerWidth` passes on the unfixed page
+    too: the box stays the column's width and the text spills out of it
+    (`scrollWidth 2063` against `clientWidth 305` in a debug read), so the
+    helper also asserts `scrollWidth <= clientWidth`. Both were found by the
+    first run, where the cases failed on the width reading alone and the
+    wrapped-not-cut assertions passed before the fix. (3) The Why's
+    "job card's heading `h3.job__title`" is `h2.card__title` on `main` now;
+    the bullet says so. The rest of the Why is the filing's record of
+    `a100f429` and was left as it was.
+  - **Screenshots opened** (`e2e/.artifacts/layout/`, ignored by git, uploaded by CI):
+    `Unbroken title, analysis-360.png` shows the 200 "T" wrapped into eleven
+    lines beside the preview, the page not scrolled; `Unbroken title, running
+    job-1280.png` shows it on three lines under the Re-analysing pill, whole;
+    `Unbroken address, restored job-360.png` shows the address on six lines
+    above the Failed pill; `Unbroken message, restored job-360.png` shows the
+    message on eleven lines inside the notice, the title and code still on
+    their own row.
+  - **Fold-in:** none. Nothing small and already specified came free; dl-135's
+    `.card__title` font-size edit is its own and was left alone.

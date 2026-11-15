@@ -29,7 +29,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "@playwright/test";
-import type { Page, TestInfo } from "@playwright/test";
+import type { Locator, Page, TestInfo } from "@playwright/test";
 import { startDelayingProxy, startHlsOrigin } from "./fixtures/hls-origin.ts";
 import type { HlsOrigin } from "./fixtures/hls-origin.ts";
 
@@ -303,7 +303,7 @@ test("a box waiting for a probe slot beside two analysing fits a phone and a des
 /**
  * A page title of the length some sites give, with spaces: the job's title is
  * the analysis's, and it heads the box through the download. An unbroken one
- * is a separate defect, filed apart from dl-133.
+ * is dl-137's, below.
  */
 const LONG_TITLE = Array.from(
   { length: 12 },
@@ -360,4 +360,183 @@ test("a waiting Download beside a running job and a refused one, under a long ti
   } finally {
     await slow.close();
   }
+});
+
+/**
+ * dl-137: a string with no break points in a heading or a notice. A page's own
+ * `<title>`, an address a restored job falls back to, and a stored error
+ * message are text this page does not write, and one with no spaces is as wide
+ * as it is long unless the element is allowed to break it. 200 characters is
+ * wider than a desktop column as well as a phone, so both widths are read.
+ */
+const UNBROKEN = "T".repeat(200);
+const UNBROKEN_MESSAGE = "M".repeat(200);
+const UNBROKEN_ADDRESS = `https://example.test/${"u".repeat(210)}`;
+
+/**
+ * The string is wrapped, not cut: its text is the whole string, its box is
+ * taller than one and a half lines, and the text does not run past the box's
+ * own edge. A heading clipped to a letter would pass `fitsBothWidths` alone.
+ * The box alone is not the proof either: an element that cannot break its text
+ * stays narrow and one line tall while the text spills out of it, so the
+ * overflow is read too. The height is measured against the computed
+ * `line-height`, which is a pixel value here (the shared base sets 1.55) and
+ * falls back to the font size if a stylesheet ever sets `normal`.
+ */
+async function wrapsWhole(page: Page, locator: Locator, text: string): Promise<void> {
+  for (const { width, height } of WIDTHS) {
+    await page.setViewportSize({ width, height });
+    await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(resolve)));
+    await expect(locator).toHaveText(text);
+    const box = await locator.evaluate((element) => {
+      const computed = getComputedStyle(element);
+      const lineHeight = Number.parseFloat(computed.lineHeight);
+      return {
+        height: element.getBoundingClientRect().height,
+        right: element.getBoundingClientRect().right,
+        innerWidth: window.innerWidth,
+        line: Number.isFinite(lineHeight) ? lineHeight : Number.parseFloat(computed.fontSize),
+        spill: element.scrollWidth - element.clientWidth,
+      };
+    });
+    const at = `at ${String(width)} px`;
+    expect
+      .soft(box.height, `taller than one and a half lines ${at}`)
+      .toBeGreaterThan(box.line * 1.5);
+    expect
+      .soft(box.right, `right edge inside the window ${at}`)
+      .toBeLessThanOrEqual(box.innerWidth);
+    expect.soft(box.spill, `the text runs past its box ${at}`).toBeLessThanOrEqual(0);
+  }
+}
+
+/** The probe's answer, with the page's title swapped for `title`. */
+async function answerWithTitle(page: Page, title: string): Promise<void> {
+  await page.route("**/api/probe", async (route) => {
+    const response = await route.fetch();
+    const body = (await response.json()) as { probe: { title: string } };
+    body.probe.title = title;
+    await route.fulfill({ response, json: body });
+  });
+}
+
+/**
+ * A failed job as `downloader:jobs:v1` holds it, with no title stored beside it.
+ * `variant: null` is what sends the heading to the address; a variant sends it
+ * to its label, which is short.
+ */
+async function seedFailedJob(
+  page: Page,
+  options: { sourceUrl: string; message: string; label: string | null },
+): Promise<void> {
+  await page.addInitScript((seed) => {
+    const now = new Date().toISOString();
+    const job = {
+      id: "restored-1",
+      sourceUrl: seed.sourceUrl,
+      variantId: seed.label === null ? null : "v1",
+      variant:
+        seed.label === null
+          ? null
+          : {
+              id: "v1",
+              protocol: "hls",
+              url: "https://example.test/v1.m3u8",
+              hasVideo: true,
+              label: seed.label,
+            },
+      status: "failed",
+      progress: {
+        stage: "failed",
+        percent: null,
+        downloadedBytes: 0,
+        totalBytes: null,
+        segmentsDone: null,
+        segmentsTotal: null,
+        speedBps: null,
+        etaSec: null,
+        processedSec: null,
+        originConnections: null,
+      },
+      result: null,
+      error: { code: "VARIANT_GONE", message: seed.message, retryable: false },
+      attempts: 1,
+      createdAt: now,
+      updatedAt: now,
+      finishedAt: now,
+    };
+    globalThis.localStorage.setItem("downloader:jobs:v1", JSON.stringify([job]));
+  }, options);
+}
+
+test("an unbroken page title in the analysis box's heading wraps (dl-137)", async ({
+  page,
+}, testInfo) => {
+  await answerWithTitle(page, UNBROKEN);
+  await page.goto("/");
+  await page.getByLabel("Page address").fill(longUrl());
+  await page.getByRole("button", { name: "Analyse" }).click();
+  await expect(page.getByRole("table")).toBeVisible();
+  const heading = page.getByRole("heading", { name: UNBROKEN, exact: true });
+  await wrapsWhole(page, heading, UNBROKEN);
+  await fitsBothWidths(page, testInfo, "Unbroken title, analysis");
+});
+
+test("an unbroken page title in a running job's heading wraps (dl-137)", async ({
+  page,
+}, testInfo) => {
+  // Segments held back, so the job is still downloading while it is measured.
+  const slow = await startDelayingProxy(hls, 2500);
+  try {
+    await answerWithTitle(page, UNBROKEN);
+    await page.goto("/");
+    await page.getByLabel("Page address").fill(slow.masterUrl);
+    await page.getByRole("button", { name: "Analyse" }).click();
+    await expect(page.getByRole("table")).toBeVisible();
+    await page.getByRole("button", { name: "Download", exact: true }).click();
+    const box = page.getByRole("list", { name: "Analyses" }).locator(":scope > li").first();
+    await expect(box.getByRole("progressbar")).toBeVisible();
+    const heading = box.getByRole("heading", { name: UNBROKEN, exact: true });
+    await wrapsWhole(page, heading, UNBROKEN);
+    await fitsBothWidths(page, testInfo, "Unbroken title, running job");
+
+    // Left as found for the specs after this one, which need the server's one
+    // job slot.
+    await box.getByRole("button", { name: "Stop", exact: true }).click();
+    await expect(box.getByRole("button", { name: "Dismiss" })).toBeVisible();
+  } finally {
+    await slow.close();
+  }
+});
+
+test("a restored job's address as its heading wraps (dl-137)", async ({ page }, testInfo) => {
+  await seedFailedJob(page, { sourceUrl: UNBROKEN_ADDRESS, message: "It failed.", label: null });
+  await page.goto("/");
+  const heading = page.getByRole("heading", { name: UNBROKEN_ADDRESS, exact: true });
+  await wrapsWhole(page, heading, UNBROKEN_ADDRESS);
+  await fitsBothWidths(page, testInfo, "Unbroken address, restored job");
+});
+
+test("a restored job's unbroken error message wraps (dl-137)", async ({ page }, testInfo) => {
+  await seedFailedJob(page, {
+    sourceUrl: "https://example.test/page",
+    message: UNBROKEN_MESSAGE,
+    label: "720p",
+  });
+  await page.goto("/");
+  const message = page.locator("p.notice__message");
+  await wrapsWhole(page, message, UNBROKEN_MESSAGE);
+  await fitsBothWidths(page, testInfo, "Unbroken message, restored job");
+});
+
+test("a title with spaces still wraps at them (dl-137)", async ({ page }, testInfo) => {
+  const words = Array.from({ length: 40 }, () => "abcde").join(" ");
+  await answerWithTitle(page, words);
+  await page.goto("/");
+  await page.getByLabel("Page address").fill(longUrl());
+  await page.getByRole("button", { name: "Analyse" }).click();
+  await expect(page.getByRole("table")).toBeVisible();
+  const heading = page.getByRole("heading", { name: words, exact: true });
+  await wrapsWhole(page, heading, words);
+  await fitsBothWidths(page, testInfo, "Spaced title");
 });
