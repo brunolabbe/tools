@@ -1081,8 +1081,9 @@ describe("a client that aborts POST /api/probe", () => {
     // which is before the handler has registered anything: no `close` is coming
     // after that, so a listener alone would leave the probe running its whole
     // chain for nobody. The vet is held open here, and let go after the close.
+    const resolver = holdUntilAborted();
     const current = await createHarness({
-      resolver: holdUntilAborted(),
+      resolver,
       config: { probeTimeoutMs: CHAIN_DEADLINE_MS, maxProbesPerClient: 2 },
     });
     harness = current;
@@ -1092,6 +1093,7 @@ describe("a client that aborts POST /api/probe", () => {
     const vetHeld = new Promise<void>((resolve) => {
       letVetGo = resolve;
     });
+    const takes = vi.spyOn(current.app.context.probeClientGate, "tryAcquire");
     let vetEntered = false;
     vi.spyOn(guard, "assertAllowed").mockImplementation(async (raw) => {
       vetEntered = true;
@@ -1115,10 +1117,19 @@ describe("a client that aborts POST /api/probe", () => {
     await new Promise((resolve) => setTimeout(resolve, 100));
     letVetGo?.();
 
+    // Read the slots only once the handler has taken one: before that they are
+    // free because nothing has taken them yet, which would pass with or without
+    // the fix. (With it the chain may never be entered, so `resolver.calls` is
+    // not the thing to wait on.)
+    await waitFor(
+      () => takes.mock.calls.length,
+      (taken) => taken === 1,
+      { label: "the handler to take its per-client slot" },
+    );
     await waitFor(
       () => slots(current),
       (held) => held.client === 0 && held.global === 0,
-      { timeoutMs: FREED_WITHIN_MS, label: "the slots to free, or never to be taken" },
+      { timeoutMs: FREED_WITHIN_MS, label: "the slots to free" },
     );
   });
 
