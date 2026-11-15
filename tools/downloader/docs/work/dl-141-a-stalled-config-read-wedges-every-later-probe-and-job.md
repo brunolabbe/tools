@@ -69,7 +69,7 @@ of it when it chose. dl-138's own Log records the owner's answer at the 2026-11-
 that Question 4 stands for dl-138 and that this is filed separately, so nothing
 here reopens that ticket's scope.
 
-## Decision — open
+## Decision — answered 2026-11-15 by the owner (option A)
 
 **Where does the bound go?** The shared goal is that a stalled read cannot hold
 a later analysis forever. The options differ in how much of the human check they
