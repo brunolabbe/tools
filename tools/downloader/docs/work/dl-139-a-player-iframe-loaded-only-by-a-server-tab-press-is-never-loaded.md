@@ -3,7 +3,7 @@ id: dl-139
 tool: downloader
 title: A player iframe that only gets its source when a server tab is pressed stays blank, so the page reads NO_MEDIA_FOUND
 kind: fix
-status: needs-decision
+status: ready
 milestone: null
 depends_on: []
 difficulty: standard
@@ -68,7 +68,11 @@ box, which here is the blank iframe, and a click there does nothing.
 is to find the embed URL by hand and paste it, which nobody using the UI can be
 expected to do.
 
-## Decision — open
+## Decision — answered 2026-11-15 by the owner
+
+**Answer: A**, over B, C and D, as recommended. It was put to the owner through the
+orchestrator's checkpoint with the four options below and A first. No
+recommendation was overridden.
 
 How should the browser tier reach a player that stays blank until a server tab
 is pressed?
@@ -103,7 +107,7 @@ it adds no new kind of action, only a new label to an existing kind.
 
 ## Build
 
-Written for option A. Revise if another option is chosen.
+Written for option A, which the owner chose.
 
 1. **Fixtures**, in `resolvers/test/fixtures/pages/`:
    - `player-tabs-blank-iframe.html`: the shape above, two tabs and two
@@ -118,6 +122,18 @@ Written for option A. Revise if another option is chosen.
      click, and inside a cross-site frame that click goes through the locator
      API (`isScriptableFrame`'s comment). Make the fixture do what was
      measured, not the easy thing.
+
+     > **Answered 2026-11-15 by the owner** (raised by the orchestrator at
+     > intake: the live site is left out on purpose, so no builder can take the
+     > measurement above). Options: (1) the embed fixture requests the manifest
+     > only after a click in its frame, matching the top-frame measurement this
+     > ticket already records ("it needed provoke's surface click"); (2) the
+     > owner supplies the URL privately for a live measurement; (3) build both a
+     > load-time and a click-time fixture. **Answer: (1)**, as the orchestrator
+     > recommended; no recommendation was overridden. The Log records that the
+     > in-frame behaviour was not measured live, and why. The live site is not
+     > to be found or reached.
+
    - a negative fixture: a page with a "Server 2" nav link and no blank player
      iframe, whose link target records a beacon if pressed.
 2. **The press**, in `resolvers/src/browser/provoke.ts`: a step in the top frame
