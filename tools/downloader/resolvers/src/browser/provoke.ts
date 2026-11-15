@@ -1625,7 +1625,8 @@ const BOX_MIN_HEIGHT = 120;
 /**
  * Chooses the player-ish box to press when no `<video>` was, and marks it
  * (dl-81). The candidates are the ones `SCROLL_SCRIPT` scrolls to, minus
- * `<video>` and **minus `<iframe>`**, and the choice is the same rule
+ * `<video>` and **minus `<iframe>`** (and `<frame>`, `<object>`, `<embed>`),
+ * and the choice is the same rule
  * (`CHOOSE_VIDEO_INDEX_FN`). A frame is never clicked blind: its content is
  * another document the checks below cannot see into, and a click there pressed
  * an advertiser's link, or a full-viewport interstitial (the gate's
@@ -1634,8 +1635,10 @@ const BOX_MIN_HEIGHT = 120;
  * **It marks nothing a click could act on, as far as the page's own DOM shows.**
  * The point clicked is the centre of the box's visible part, and the topmost
  * element there must not sit inside a link, a form (so a form's own button is
- * out, as a submit is), a form control, a label or an `<iframe>` (a wrapper
- * covered by its frame is clicked into it, dl-142): a wrapper with a "Read more"
+ * out, as a submit is), a form control, a label or an `<iframe>`, `<frame>`,
+ * `<object>` or `<embed>` (a click lands inside the document they hold, which
+ * is what a wrapper covered by one would do, dl-142). "Topmost" is read through
+ * every open shadow root, since `elementFromPoint` stops at the host. A wrapper with a "Read more"
  * link in its middle is not a player, and pressing a form control or a label
  * changes a form. A button outside a form is allowed, since a poster's play
  * overlay is one; the departure guard catches whatever it does to the page's
@@ -1645,8 +1648,10 @@ const BOX_MIN_HEIGHT = 120;
  */
 const MARK_PLAYER_BOX_SCRIPT = `(() => {
   var candidates = (${ALL_MEDIA_FN})('[class*="player"], [id*="player"]').filter(function (box) {
-    // A frame is never the box (dl-142; the selector alone lets \`class="player-frame"\` in).
-    if (box.tagName === 'IFRAME') return false;
+    // A document holder is never the box (dl-142; the selector alone lets
+    // \`class="player-frame"\` in). \`localName\`, not \`tagName\`: the latter is
+    // lowercase in an XHTML document.
+    if (/^(iframe|frame|object|embed)$/i.test(box.localName)) return false;
     var size = box.getBoundingClientRect();
     return size.width >= ${BOX_MIN_WIDTH} && size.height >= ${BOX_MIN_HEIGHT};
   });
@@ -1663,6 +1668,14 @@ const MARK_PLAYER_BOX_SCRIPT = `(() => {
   if (covered > ${BOX_MAX_COVER}) return false;
   var hit = document.elementFromPoint((left + right) / 2, (top + bottom) / 2);
   if (!hit) return false;
+  // \`elementFromPoint\` stops at a shadow host. Go down through every open shadow
+  // root there, so the checks below read what is actually under the point: a frame
+  // or a link in a shadow root is otherwise hidden behind its host (dl-142).
+  while (hit.shadowRoot) {
+    var deeper = hit.shadowRoot.elementFromPoint((left + right) / 2, (top + bottom) / 2);
+    if (!deeper || deeper === hit) break;
+    hit = deeper;
+  }
   // Shadow-aware: a box in an open shadow root is reached through its host.
   var up = function (node) {
     return node.parentElement || (node.parentNode && node.parentNode.host) || null;
@@ -1672,9 +1685,10 @@ const MARK_PLAYER_BOX_SCRIPT = `(() => {
     return false;
   };
   if (!within(hit, el) && !within(el, hit)) return false;
-  // \`iframe\`: a click there lands in another document the checks above cannot see
-  // into, so a box whose centre is covered by a frame is refused too (dl-142).
-  var unsafe = 'a[href], [role="link"], form, input, select, textarea, label, iframe';
+  // The last four hold another document the checks above cannot see into, so a box
+  // whose centre is covered by one is refused too, however deep in shadow roots (dl-142).
+  var unsafe =
+    'a[href], [role="link"], form, input, select, textarea, label, iframe, frame, object, embed';
   for (var node = hit; node; node = up(node)) {
     if (node.matches && node.matches(unsafe)) return false;
   }
@@ -1690,8 +1704,8 @@ const UNMARK_PLAYER_BOX_SCRIPT = `(() => {
 /**
  * A click on the middle of the largest player-ish box, for a player that is a
  * poster in a `div` with no `<video>` to surface-click and no label to press
- * (dl-81). Top frame only, and never an `<iframe>` itself (see
- * `MARK_PLAYER_BOX_SCRIPT`). The caller skips it once anything playable has
+ * (dl-81). Top frame only, and never an `<iframe>`, `<frame>`, `<object>` or
+ * `<embed>` itself (see `MARK_PLAYER_BOX_SCRIPT`). The caller skips it once anything playable has
  * been captured: what the page already gave is not worth a click that could
  * navigate it away.
  */

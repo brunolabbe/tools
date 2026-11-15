@@ -355,4 +355,61 @@ describe("the box click and a frame (dl-142)", () => {
       expect(server.requests).not.toContain("/beacon/wrapper-clicked");
     },
   );
+
+  // Gate 1's high: `elementFromPoint` answers the shadow host, so the walk over the
+  // topmost element started above a frame in an open shadow root.
+  test.each([
+    ["the host is the player-classed box", "/player-box-shadow-frame.html"],
+    ["the box is a wrapper around an unclassed host", "/player-box-shadow-frame.html?wrapper"],
+  ])(
+    "a frame in an open shadow root that covers the centre is not clicked into: %s",
+    { timeout: TEST_TIMEOUT_MS },
+    async (_name, pathname) => {
+      server.requests.length = 0;
+      const error = await probeError(pathname, resolverWith());
+
+      expectCode(error, "NO_MEDIA_FOUND");
+      expect(server.requests).toContain("/player-box-frame-inner.html");
+      expect(server.requests).not.toContain("/beacon/inner-click");
+      expect(server.requests).not.toContain("/beacon/wrapper-clicked");
+    },
+  );
+
+  // Gate 1's first low: an `<object>` or `<embed>` that holds an HTML document is
+  // another document too, as the box and as what covers a wrapper's centre. (A
+  // `<frame>` is in the same list; a page cannot carry one beside its player
+  // without being a frameset, so no fixture reaches it.)
+  test.each([
+    ["an object that is itself the box", "/player-box-plugin-frame.html?tag=object"],
+    ["an embed that is itself the box", "/player-box-plugin-frame.html?tag=embed"],
+    ["an object covering a wrapper's centre", "/player-box-plugin-frame.html?tag=object&wrap"],
+    ["an embed covering a wrapper's centre", "/player-box-plugin-frame.html?tag=embed&wrap"],
+  ])("is not clicked into: %s", { timeout: TEST_TIMEOUT_MS }, async (_name, pathname) => {
+    server.requests.length = 0;
+    const error = await probeError(pathname, resolverWith());
+
+    expectCode(error, "NO_MEDIA_FOUND");
+    expect(server.requests).toContain("/player-box-frame-inner.html");
+    expect(server.requests).not.toContain("/beacon/inner-click");
+  });
+
+  // Gate 1's second low: the candidate filter has an effect the walk does not
+  // share. A frame that stays a candidate and is the larger wins the choice, the
+  // walk then refuses it, and the smaller div, the real player, is never pressed.
+  test.each([
+    ["HTML", "/player-box-frame-beside-div.html"],
+    // `tagName` is lowercase here, so a filter that reads it as `IFRAME` misses.
+    ["XHTML", "/player-box-frame-beside-div.xhtml"],
+  ])(
+    "a large player-classed frame does not win the choice over a smaller div player (%s)",
+    { timeout: TEST_TIMEOUT_MS },
+    async (_name, pathname) => {
+      server.requests.length = 0;
+      const error = await probeError(pathname, resolverWith());
+
+      expectCode(error, "NO_MEDIA_FOUND");
+      expect(server.requests).toContain("/beacon/div-clicked");
+      expect(server.requests).not.toContain("/beacon/inner-click");
+    },
+  );
 });
