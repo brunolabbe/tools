@@ -9,8 +9,8 @@
          records any click. `?over` makes the wrapper exactly the frame's size, so
          the click point is over the frame; the default is a 1000 px wrapper around
          a 300 px frame at its left, whose centre (500, 180) misses the frame.
-         Only the default is tested; `?over` is the variant dl-142's Log leaves
-         as an open decision (what to do when the click point is over a frame). -->
+         Both are tested: the default is still pressed, and `?over` is refused
+         because the topmost element at the click point is the frame. -->
     <div class="player-wrap" id="wrap">
       <iframe
         id="pf"

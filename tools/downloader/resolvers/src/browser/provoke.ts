@@ -1634,7 +1634,8 @@ const BOX_MIN_HEIGHT = 120;
  * **It marks nothing a click could act on, as far as the page's own DOM shows.**
  * The point clicked is the centre of the box's visible part, and the topmost
  * element there must not sit inside a link, a form (so a form's own button is
- * out, as a submit is), a form control or a label: a wrapper with a "Read more"
+ * out, as a submit is), a form control, a label or an `<iframe>` (a wrapper
+ * covered by its frame is clicked into it, dl-142): a wrapper with a "Read more"
  * link in its middle is not a player, and pressing a form control or a label
  * changes a form. A button outside a form is allowed, since a poster's play
  * overlay is one; the departure guard catches whatever it does to the page's
@@ -1671,7 +1672,9 @@ const MARK_PLAYER_BOX_SCRIPT = `(() => {
     return false;
   };
   if (!within(hit, el) && !within(el, hit)) return false;
-  var unsafe = 'a[href], [role="link"], form, input, select, textarea, label';
+  // \`iframe\`: a click there lands in another document the checks above cannot see
+  // into, so a box whose centre is covered by a frame is refused too (dl-142).
+  var unsafe = 'a[href], [role="link"], form, input, select, textarea, label, iframe';
   for (var node = hit; node; node = up(node)) {
     if (node.matches && node.matches(unsafe)) return false;
   }

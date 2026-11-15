@@ -341,4 +341,18 @@ describe("the box click and a frame (dl-142)", () => {
       expect(server.requests).not.toContain("/beacon/inner-click");
     },
   );
+
+  test(
+    "a div box whose centre is over a frame is not clicked either: the topmost element there is the frame",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      server.requests.length = 0;
+      const error = await probeError("/player-box-iframe-wrapper.html?over", resolverWith());
+
+      expectCode(error, "NO_MEDIA_FOUND");
+      expect(server.requests).toContain("/player-box-frame-inner.html");
+      expect(server.requests).not.toContain("/beacon/inner-click");
+      expect(server.requests).not.toContain("/beacon/wrapper-clicked");
+    },
+  );
 });
