@@ -189,3 +189,4 @@ Traps:
   Build 5 now name the Question 2 option by its words. Proof: `git diff d1ae1be7 HEAD -- tools/downloader/docs/work/dl-140-a-client-abort-of-the-probe-never-frees-its-slot.md | grep -c '^-.*corrects: option (c)'` → 1, and `... | grep -c '^-.*reading of option (c) and N6'` → 1.
 - 2026-11-15 — Gate 1's full report is on the pull request thread, #809; status
   unchanged.
+- 2026-11-15 — Owner's answer at intake, to Build 3's choice "whether this ticket stops there or also takes a signal through the vet". Options: stop at the chain (recommended: an abort during the chain frees the slot as the chain unwinds, one during the vet frees it when the vet returns, and a signature change in `ssrf.ts` is logged as a follow-up ticket); also take it through the vet (widen into `ssrf.ts`); the builder decides and records. Answer: stop at the chain. The brief's default and the recommendation, so nothing is overridden and Build 3 is unchanged. `status` stays `ready`.
