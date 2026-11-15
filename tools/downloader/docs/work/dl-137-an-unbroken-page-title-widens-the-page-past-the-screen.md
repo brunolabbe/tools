@@ -351,6 +351,29 @@ this ticket `dropped` with the reason. If C, `depends_on` stays empty.
 - **findings** · the hunt returned 5; 3 carried, 2 dropped.
 - NFR: security n/a (CSS and a test) · performance n/a · reliability ✓ (no base/head change in 242 element boxes over 16 state-widths of ordinary text) · maintainability — F2.
 
+### Gate 2
+
+**Gate: PASS** — 2026-11-15 · `8f64987c..bf990293` (the round: `7c0f6048`, `139c7ed5`; `bf990293` merges `main` at `e7d791d6`, three unrelated ticket files) · Opus 5.5, depth narrow
+
+| Done when                                                                            | Proof                                                                                                                                                                                                                      |
+| ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. `overflow-wrap: anywhere` on `.card__title` and `.notice__message`, on no wrapper | **verified** — both declarations unchanged since gate 1; the round adds a third on `.options__row label`, which wraps no page. The built CSS counts 7 `overflow-wrap:anywhere` at `bf990293`, 6 on `8f64987c`'s stylesheet |
+| 2. Four elements fit at 360 and 1280, each its own case                              | `e2e/layout.spec.ts` › the four dl-137 cases named in gate 1, `fitsBothWidths` ✓ — CI `e2e (direct)` (downloader) success at `bf990293`; local 15 of 15                                                                    |
+| 3. Whole, taller than one line, right edge inside; Log describes the screenshots     | the same four cases, `wrapsWhole` ✓ (CI as above). Screenshot clause **verified**: every line count the Log now states measured as box height over computed `line-height` and as distinct line boxes, all equal (F3)       |
+| 4. Spaced-title case green; the file's other cases green                             | **verified** — `layout.spec.ts` at `bf990293`: `15 passed`, "a title with spaces still wraps at them (dl-137)" among them                                                                                                  |
+| 5. Four unbroken cases red on the base, green after                                  | **verified** — gate 1's run at `8f64987c`; the round changes neither those four cases' assertions nor the two rules (the diff touches one comment in the running-job case), so it was not re-run                           |
+| 6. `npm run check` and `npm test -- --project downloader` pass                       | **verified** — check exit 0; 2622 passed, 2 skipped of 2624 (127 of 128 files, 1 skipped)                                                                                                                                  |
+
+- **F1 fixed.** Gate 1's own probe at `bf990293`: the subtitle-language reading is 360 at 360 px and 1280 at 1280 px, where gate 1 read 1875 and 2028. The new case "an unbroken subtitle language in the Embed subtitles label wraps (dl-137)" is red at both widths with the declaration planted out, and red on `8f64987c`'s stylesheet (1875 and 2028 px; right edge 1859.8 and 2012.6). It is green at the head. Recorded as the owner's question 4 with the options and the override, matching the dispatch.
+- **F2 fixed.** The comment now says "still active" and `probing`, and gives the reason (`BoxHead`).
+- **F3 fixed.** Measured at `bf990293`: title 11/3, running job 11/3, address 7/3, message 10/3, spaced title 14/3, subtitle label 9/4 (360/1280). Every one equals the Log, the message's 10 (the builder's own correction) included. The two subtitle screenshots match their description, the checkbox centred on the block included.
+- **Reach of the new rule:** no box moved. 176 boxes over 14 state-widths of ordinary text in every state with an `.options__row`: no subtitles (disabled), empty list, two languages, twelve languages (which wrap at spaces at 360 px), Audio only with and without subtitles, and the live row. Gate 1's 242 boxes over 16 state-widths, `8f64987c` against `bf990293`, differ only in a fixture port number in the text.
+- **low** · N1 · `nfr:maintainability` · no `Done when` line depends on it · the new case's "taller than one and a half lines" clause holds on the unfixed stylesheet. "Embed subtitles" and "(SSS…" break at the space before the bracket, so the label is 2 lines (44.66 px against 33.48) while the page is 1875 px wide. The case goes red only through `fitsBothWidths` and the right-edge clause, and the overflow clause does not fire either. The case still proves the fix, so a reader who trusts the height clause as evidence of wrapping is the only one misled.
+- **dropped** · the Log says "the brief allowed saying so in place of moving" the checkbox. The ticket's brief says nothing about the checkbox, so this presumably means the builder's dispatch, which a gate is not given. Unmeasured, not a defect I can establish.
+- **findings** · the round's attacks returned 2; 1 carried, 1 dropped.
+- NFR: security n/a (one CSS declaration and a test) · performance n/a · reliability ✓ (no box moved, above) · maintainability — N1.
+- CI at `bf990293`: 11 of 11 green, `test (windows-latest, informational)` included. Nothing pending.
+
 ## Log
 
 - **2026-11-10, filed** from dl-133's gate 1, F4 (Sonnet 5.5, dl-133's head
