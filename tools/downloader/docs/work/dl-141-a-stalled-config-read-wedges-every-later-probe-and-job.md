@@ -207,3 +207,58 @@ reverses an answered question of dl-138.
   this commit. `depends_on: [dl-138]` is not added: Build 1 said to add it once
   dl-138 is on `main`, and dl-138 merged (`4d0ad61d`, `done`), so the line would
   gate nothing.
+- 2026-11-15 — Built, option A (builder; model Sonnet 5.5). Draft pull request
+  pending its gate.
+  - **The change.** `ReadClientConfig` takes an optional `AbortSignal`;
+    `createTurnstileCheck` reads the config through `readWithin`, which aborts
+    the signal and rejects with core's `TIMEOUT` at `CONFIG_READ_TIMEOUT_MS`
+    (the abort and the race both, as dl-138's `withTimeout` has them);
+    `createHttpClient`'s reader in `http.ts` passes the signal to `request()`.
+    `request()` itself is unchanged (dl-138's Question 4 stands). A timed-out
+    read rejects as a failed one does, so `humanCheck()`'s existing handler
+    clears the memo and `next()`'s existing `catch` returns `null`: the call
+    goes out with no token and the server decides.
+  - **The figure: 15 s** (`CONFIG_READ_TIMEOUT_MS` in `human-check.ts`). The
+    read is one short JSON object, so the cost is round trips and not bytes. At a
+    2 s round trip, worse than most links a phone holds, a warm read is one trip
+    (about 2.5 s) and a cold one adds DNS, TCP and TLS, about 5 trips (about
+    10 s); 15 s clears the cold case with margin, so a slow phone is not
+    mistaken for a stall. The price of a longer figure is only how long a real
+    stall waits before the box reports it, and the wait comes before the probe's
+    own 90 s, which starts at the fetch. **Reasoned, not measured on a phone**:
+    the round-trip figures are arithmetic, not a capture.
+  - **Red before, green after.** `npx vitest run
+    tools/downloader/web/test/human-check.test.ts` at `58cfafd5` (tests, base
+    source): `3 failed | 12 passed (15)`, two of them hanging to vitest's 60 s
+    on the read that never answers. At `85899166`: `15 passed (15)`. The
+    App-level case, run against `58cfafd5`'s `web/src` (restored with
+    `git checkout 58cfafd5 -- tools/downloader/web/src`, then back from
+    `85899166`): `expected [] to have a length of 1 but got +0` (no probe was
+    ever sent); at `85899166`, 3 of 3 in `request-timeout-app.test.tsx`.
+  - **Where the tests are.** The client-level and unit cases are at the end of
+    `human-check.test.ts`. The App-level case is at the end of dl-138's
+    `request-timeout-app.test.tsx`, as the dispatch preferred, and not in
+    `app.test.tsx`, which dl-134 step 11 edits (its `mountApp`): that file's
+    `mountApp` gained an optional `HttpClientOptions` argument, which the other
+    two cases do not pass.
+  - **What the box shows** (Done when 3): with the check on and the read stalled,
+    the box reads "Analysing" until 15 s, then "Could not confirm you are a
+    person" with the repeat-the-step detail, once the server's
+    `HUMAN_CHECK_FAILED` for the token-less probe arrives (the test's server
+    models that refusal; the real one is `api/src/human-check.ts`'s).
+  - **Brief wrong or moot.** Build 1's wait for dl-138 and its `depends_on` line:
+    moot, dl-138 is on `main` (`4d0ad61d`); not added. The ticket's "ReadClientConfig
+    (`web/src/lib/human-check.ts`) takes no argument" was right on `main` and is
+    what changed.
+  - **Follow-up, not built, not filed.** The script load (`loadTurnstileScript`
+    listens for `load` and `error` only) and the widget's `take()` (a challenge
+    that never calls any callback) can still hold `next()`, and `line` holds every
+    later call behind a `take()` that never settles. They are read from the code
+    and unmeasured, so there is no reproduction to file against: whoever measures
+    one files it, and option B's costs in this ticket's Decision (the figure must
+    clear a person answering a challenge; the widget reset; the rejected turn)
+    are the starting point. The dispatch named this as the follow-up; nothing
+    folded in, because no other small already-specified piece was freed.
+  - **Checks.** `npm run check` exit 0 (24 warnings, none in files this branch
+    touches). `npm test -- tools/downloader/web`: `25 passed (25)` files,
+    `360 passed (360)` tests.
