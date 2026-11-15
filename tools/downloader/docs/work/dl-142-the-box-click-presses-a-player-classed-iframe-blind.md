@@ -66,7 +66,7 @@ control-plain-frame: box marked [], clicks []
   is the `DIV`, and nothing reaches the frame. It passes **at this viewport only**:
   the centre of the wrapper happened to miss the frame. A wrapper whose centre sits
   over the frame would have `elementFromPoint` return the iframe, which
-  `within(el, hit)` accepts, and the same click would land inside it. That variant
+  `within(hit, el)` accepts, and the same click would land inside it. That variant
   was not run.
 - **Control:** a plain `<iframe>` with no player class is not a candidate, and
   nothing is marked or clicked.
@@ -116,3 +116,15 @@ results for the three pages, which is the "pre-existing" reading.
   would reverse the owner's 2026-10-07 decision without asking. The reproduction
   was re-run on `main` at `e7d791d6`; the live page that surfaced dl-139 is not
   involved.
+- 2026-11-15 — Owner's answer, at the orchestrator's checkpoint after gate 1
+  graded `d1ae1be7` CONCERNS, on how the lander handles gate 1's findings.
+  Options: fix the meds and the lows at landing with no re-gate (the gate's
+  recommendation); fix the meds only; record only. Answer: fix the meds and the
+  lows at landing. No recommendation was overridden. Gate 1's one finding on this
+  ticket was a low.
+- 2026-11-15 — Fixed at landing by owner choice: gate 1, the last low — the
+  wrapper reading named `within(el, hit)`, and the clause that accepts a hit
+  inside the chosen box is `within(hit, el)` (`MARK_PLAYER_BOX_SCRIPT` in
+  `provoke.ts`, where `within(inner, outer)` is the signature). Proof: `git diff d1ae1be7 HEAD -- tools/downloader/docs/work/dl-142-the-box-click-presses-a-player-classed-iframe-blind.md | grep -c '^-.*within(el, hit)'` → 1.
+- 2026-11-15 — Gate 1's full report is on the pull request thread, #809; status
+  unchanged.
