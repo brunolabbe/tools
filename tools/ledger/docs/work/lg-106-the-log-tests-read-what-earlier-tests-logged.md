@@ -3,7 +3,7 @@ id: lg-106
 tool: ledger
 title: The two log tests read what earlier tests logged, so a shuffled run fails them
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -196,12 +196,121 @@ order is only ever shuffled by the flag on the command line.
 
 1. `npx vitest run tools/ledger/api/test/csv-import.test.ts --sequence.shuffle --sequence.seed=N` reports every test passing for each N from 1 to 10, and the same for `tools/ledger/api/test/workbook-describe.test.ts`. The sweep output, with its counts, goes in the Log.
 2. Each log test passes when it is the only test selected by name: `npx vitest run tools/ledger/api/test/csv-import.test.ts -t "no line of any request above holds a CSV"` exits 0 and reads `Tests  1 passed` with every other test skipped, and `npx vitest run tools/ledger/api/test/workbook-describe.test.ts -t "no line of any request above holds the upload"` does the same. The total is not pinned, so a fix that adds a test or splits a log test in two does not fail the line. At the base the same commands exit 1 and read `1 failed`, and a pattern that matches nothing reads no `passed` at all, so `1 passed` is what discriminates.
-3. No `LOGGED` precondition in either file is satisfied by an empty array: the `toBeGreaterThan(20)` and each `LOGGED.some(...)` assert against lines the test's own run produced.
+3. No `LOGGED` precondition in either file is satisfied by an empty array: the `toBeGreaterThanOrEqual(4)` floor, one per request the test makes, and each `LOGGED.some(...)` assert against lines the test's own run produced.
 4. Unshuffled, both files pass in full: `npx vitest run tools/ledger/api/test/csv-import.test.ts` and `npx vitest run tools/ledger/api/test/workbook-describe.test.ts`, with the counts in the Log.
 5. `grep -n "tests in order\|Last: it reads" tools/ledger/api/test/csv-import.test.ts tools/ledger/api/test/workbook-describe.test.ts` prints nothing. At the base it prints one line per file (`workbook-describe.test.ts:790` and `csv-import.test.ts:1110`), so it fails there.
 6. `git diff --name-only origin/main...HEAD` lists only the two spec files and this ticket. Nothing under `tools/ledger/api/src` or `tools/ledger/contract` changes.
 7. `npm run check` exits 0, and `npm test -- --project ledger` passes through the test gate, both at the fix's head.
 8. A filtered run of an unrelated test passes, so a file-level hook cannot hide: `npx vitest run tools/ledger/api/test/csv-import.test.ts -t "the fake is called once on describe and never on confirm"` exits 0 and reads `Tests  1 passed` with every other test skipped, and `npx vitest run tools/ledger/api/test/workbook-describe.test.ts -t "lg37: a fake answering its correct description"` does the same, without pinning the total. Both exit 0 at the base, measured 2026-11-10 (Reproduction 7).
+
+## Review
+
+**Gate: FAIL** — 2026-11-15 · `4e040577..c13b7559` (the branch merges `origin/main` `e7d791d6`, three downloader `.md` files only; diffed from `e7d791d6` for the branch's own files) · Opus 5.5, depth medium plus the dispatch's four attacks
+
+| Done when                                                         | Proof                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Seeds 1–10 pass for both files under `--sequence.shuffle`      | **verified** — seeds 1–20 run, one file at a time: csv-import `Tests 63 passed (63)` 20 of 20, workbook-describe `Tests 48 passed (48)` 20 of 20. At the base, csv-import fails at seeds 3 and 10 and workbook-describe at 2, 9 and 10, each on its log test                                                                                                                                                    |
+| 2. Each log test passes alone under `-t`                          | **verified** — `-t "no line of any request above holds a CSV"` exit 0, `1 passed \| 62 skipped (63)`; `-t "no line of any request above holds the upload"` exit 0, `1 passed \| 47 skipped (48)`                                                                                                                                                                                                                |
+| 3. No `LOGGED` precondition is satisfied by an empty array        | **verified** in property — `csv-import.test.ts` and `workbook-describe.test.ts` › the log test, `expect(logged.length).toBeGreaterThanOrEqual(2)` over `LOGGED.slice(first)`, plus the two `logged.some(...)`. Silencing the three route lines, or the whole logger, turns both red at `expected 0 to be greater than or equal to 2`. The line names `toBeGreaterThan(20)`, which no longer exists (low, below) |
+| 4. Both files pass unshuffled                                     | **verified** — `63 passed (63)` and `48 passed (48)`                                                                                                                                                                                                                                                                                                                                                            |
+| 5. The order-comment grep prints nothing                          | **verified** — grep exit 1, no output                                                                                                                                                                                                                                                                                                                                                                           |
+| 6. Only the two specs and the ticket change                       | **verified** — `git diff --name-only e7d791d6...c13b7559` lists `csv-import.test.ts`, `workbook-describe.test.ts` and the ticket. Nothing under `api/src`, `contract`, a vitest config or `.claude/`                                                                                                                                                                                                            |
+| 7. `npm run check` exits 0, `npm test -- --project ledger` passes | **verified** — PR #805 at `c13b7559`: `check` (CI) success; `test (ubuntu-latest)` ran `--project ledger --project repo --project core`, `Test Files 136 passed (136)`, `Tests 3119 passed (3119)`. Not run locally, as the dispatch directed                                                                                                                                                                   |
+| 8. A filtered run of an unrelated test passes                     | **verified** — `-t "the fake is called once on describe and never on confirm"` exit 0, `1 passed \| 62 skipped (63)`; `-t "lg37: a fake answering its correct description"` exit 0, `1 passed \| 47 skipped (48)`                                                                                                                                                                                               |
+
+- **high** · **open decision** · no `Done when` line depends on it, since every line is met as written · **The log tests no longer read a refused request's line, and the CSV half lost a guard against a real leak.** The base test read every line its file logged. Those lines included the error handler's `request rejected` lines from refused confirms, and the head test reads only one successful describe and one successful confirm. The plant was the `request rejected` fields in `registerErrorHandling` (`api/src/server.ts`) given `message: appError.message, details: appError.details`. With it, the base csv-import file in source order reads `Tests 1 failed | 62 passed (63)`: the log test catches three `CSV_NOT_AFTER_TAIL` lines whose message carries a CSV row's text (`2024-01-02 \"DEPOT PAIE\" 1823.45 $`). At head, `-t` on the same test reads `1 passed | 62 skipped (63)`, and no other test in the file catches the leak (62 of 62 passed under the plant at the base). The workbook half also goes from red at the base (`1 failed | 47 passed (48)`) to green at head. Its base catch, however, was the generic `.xlsx` substring in the `WORKBOOK_NOT_XLSX` message, not upload content. So for that half this measures a lost reading, not a lost content guard. The titles still say "no line of **any request above**", which promises coverage the body no longer keeps. A reader who trusts that title is unsafe. Options: (1) **recommended** — each log test also makes, against its own app, the refused requests whose lines it used to read. For csv-import that is at least a confirm refused with `CSV_NOT_AFTER_TAIL` (overlap and gap). For workbook-describe it is a refused describe and a refused confirm. The test stays order-free. This is a direction: the gate did not run it. (2) Accept the narrower test: reword both titles and their comments to say they cover their own successful describe and confirm, and file the refused-line coverage as a ticket. A title reword also changes Done when 2's `-t` patterns.
+- **med** · no `Done when` line depends on it · pre-existing: the secret list is unchanged from the base · **The CSV log test passes when the route logs the whole request body.** For the plant, `context.logger.info("body", { body: request.body })` went before the describe route's `a workbook was described` line, or before the confirm route's `if (body.kind === "csv")`. At head, `-t` reads `1 passed | 62 skipped (63)` for both plants. At the base, the full file reads `63 passed (63)` for both. The base64 upload holds none of the plain-text secrets, and the CSV list has no base64 entry, although the workbook list does. Remedy, run: add `bytesOf("csv-balance").toString("base64").slice(0, 40)` to the CSV test's `secrets`. Unplanted, that reads `1 passed | 62 skipped (63)`, and both body plants read `1 failed | 62 skipped (63)`. This is graded `med` rather than `high` only because the branch did not introduce it.
+- **low** · `workbook-describe.test.ts` › the log test keeps `fileOf("lg37").toString("base64").slice(0, 40)` as its body secret, but it now uploads only `lg7`. A plant that logs 60 base64 characters of the describe body still goes red (`1 failed | 47 skipped (48)`), which the gate infers comes from the two `.xlsx` files sharing their first 30 bytes (the zip header). The gate did not measure those bytes directly. Direction: name `lg7`, the file the test sends.
+- **low** · Done when 3 names `toBeGreaterThan(20)`, which the branch replaced with `toBeGreaterThanOrEqual(2)`. The Log explains why: the test's own two requests log exactly two lines, which the gate's dump confirmed. The property holds, so the wording is the owner's to reword.
+- **low** · false text in the safe direction · `.claude/rules/testing.md` still names `csv-import.test.ts` and `workbook-describe.test.ts` as failing under plain `--sequence.shuffle`, which is now false (40 of 40). Build 4 forbids the `.claude/` edit on this branch, and the Log proposes the line instead.
+- **dropped** · three controls whose plants did not reach their file's kind of upload: `confirm-row` on workbook-describe decodes `.xlsx` bytes as text, and `describe-cells` on csv-import reads sheets from a CSV. Both passed because they planted nothing readable. Also dropped: two `base-describe-cells` rows in the gate's own `controls.txt` that ran on head specs. A restore step in the gate's script had reverted the base copies.
+- **dropped** · the slice boundary (attack 2): neither file uses `concurrent`. Every `inject` and `start()` is awaited, `afterEach` awaits `app.shutdown()`, and the core logger's `write` is synchronous. Under `-t` the slice holds exactly the two route lines (`first=0 n=2` in both files). Nothing can enter the slice from another test. This is backed by 40 of 40 shuffled runs, not a proof over every order.
+- **findings** · the hunt returned 7; 5 carried, 2 dropped.
+- NFR: security — the high and med above (log-leak guards) · performance n/a (two requests per test) · reliability ✓ (order dependence gone, 40 of 40 seeds) · maintainability — the lows above.
+
+### Gate 2
+
+**Gate: FAIL** — 2026-11-15 · `c13b7559..481a23fe` (the round: `d08f3fdd`, `d4448884`, `481a23fe`; no merge in it) · Opus 5.5, depth medium on the round, plus the dispatch's five attacks
+
+| Done when                                                         | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1. Seeds 1–10 pass for both files under `--sequence.shuffle`      | **verified**. Seeds 1–20 were run, each file alone. csv-import read `Tests 63 passed (63)` on 20 of 20 seeds, and workbook-describe read `Tests 48 passed (48)` on 20 of 20. At the base spec files, csv-import still fails at seeds 3 and 10, and workbook-describe at 2, 9 and 10. Each failure is that file's log test.                                                                                                                                                           |
+| 2. Each log test passes alone under `-t`                          | **verified**. `-t "no line of any request above holds a CSV"`: exit 0, `1 passed \| 62 skipped (63)`. `-t "no line of any request above holds the upload"`: exit 0, `1 passed \| 47 skipped (48)`.                                                                                                                                                                                                                                                                                   |
+| 3. No `LOGGED` precondition is satisfied by an empty array        | **verified** in property, by `csv-import.test.ts` and `workbook-describe.test.ts` › the log test. Over `LOGGED.slice(first)`, each test asserts `toBeGreaterThanOrEqual(4)`, the two route `some(...)` checks and `toHaveLength(2)` on its `request rejected` lines. With the spec's logger silenced, both go red at `expected 0 to be greater than or equal to 4`. The line still names `toBeGreaterThan(20)`; that wording low is recorded unfixed on purpose (owner, 2026-11-15). |
+| 4. Both files pass unshuffled                                     | **verified**: `63 passed (63)` and `48 passed (48)`.                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| 5. The order-comment grep prints nothing                          | **verified**: grep exit 1, no output.                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| 6. Only the two specs and the ticket change                       | **verified**. `git diff --name-only origin/main...481a23fe`, with `origin/main` at `e7d791d6`, lists `csv-import.test.ts`, `workbook-describe.test.ts` and the ticket.                                                                                                                                                                                                                                                                                                               |
+| 7. `npm run check` exits 0, `npm test -- --project ledger` passes | **verified** from PR #805's CI at `481a23fe`, not run locally. `check` (CI) passed. `test (ubuntu-latest)` ran `--project ledger --project repo --project core` and read `Test Files 136 passed (136)` and `Tests 3119 passed (3119)`. Every other check passed.                                                                                                                                                                                                                     |
+| 8. A filtered run of an unrelated test passes                     | **verified**. `-t "the fake is called once on describe and never on confirm"`: exit 0, `1 passed \| 62 skipped (63)`. `-t "lg37: a fake answering its correct description"`: exit 0, `1 passed \| 47 skipped (48)`.                                                                                                                                                                                                                                                                  |
+
+**Gate 1's findings**
+
+- **F1 (high) · fixed in part. The workbook half remains, so this is still a `high`.**
+  - **The CSV half is fixed.** The test now makes a `CSV_NOT_AFTER_TAIL` overlap (a second confirm of the same file) and a gap (a second app whose stored tail the file does not follow). These are the same refusal kinds the base read, which were two overlaps and one gap. Under gate 1's `request rejected` message/details plant, the test goes red on exactly those two lines, and each message carries `2024-01-02 \"DEPOT PAIE\" 1823.45 $`. When the error handler no longer logs a refusal at all, the test reads `expected [] to have a length of 2 but got +0`, so it does not pass vacuously.
+  - **The workbook half is not fixed.** Its two refusals are a `WORKBOOK_NOT_XLSX` describe and confirm, as the base read. But the refused upload is `notOne`, and neither its bytes nor its base64 are in `secrets`. So a refusal line that carries the refused upload passes.
+  - The plant for that was the `request rejected` fields given the body's `file`: either its first 60 base64 characters, or its first 400 decoded characters. Under it:
+    - At head, `-t` on the workbook log test reads `1 passed | 47 skipped (48)` for both plants. The CSV log test is red for both.
+    - At the base spec, the base64 plant is red (`1 failed | 47 passed (48)`), on 12 refusal lines of real workbook uploads: `BAD_REQUEST`, `LAYOUT_UNREADABLE`, `WORKBOOK_IMPORT_REFUSED` and `LAYOUT_READER_UNCONFIGURED`.
+  - So the head test lost a guard the base had. Its title still says no line "holds the upload's content", and that claim breaks while the test passes. This is the same mechanism as F1, so it is a remaining part of F1 and not a new finding. No live call site: today the handler logs no body.
+  - Remedy, run: add `notOne.toString("base64")` and `"this is not a workbook"` to the workbook test's `secrets`. Unplanted, it reads `1 passed | 47 skipped (48)`, and the whole file `48 passed (48)`. Both plants then read `1 failed | 47 skipped (48)`.
+  - Alternative, not run: refuse a real `lg7` upload as well, for example a describe with no consent, so the existing `lg7` base64 secret reads it.
+- **F2 (med) · fixed.** The CSV `secrets` now carry `bytesOf("csv-balance").toString("base64").slice(0, 40)`. Gate 1's body plants, logged on describe and on confirm, now read `1 failed | 62 skipped (63)`. Gate 1's `remedy.mjs` exits 2 because the round already contains its line.
+- **F3 (low, lg37 → lg7) · fixed.** The secret names `lg7`. The 60-character body plant on describe is red on the workbook test (`1 failed | 47 skipped (48)`), and so are both whole-body plants.
+- **F4 (low, Done when 3 wording) · not fixed, on purpose.** The owner recorded it unfixed on 2026-11-15.
+- **F5 (low, `.claude/rules/testing.md`) · not fixed on this branch, on purpose.** The owner has placed it in a separate `docs(repo)` pull request after #805.
+
+**New**
+
+- **N1 · low.** This is false text in the safe direction. In `csv-import.test.ts` › the log test, the floor's comment reads "A line for each of the four requests". The round's Log says the same thing: "one line per request made".
+  - The slice actually holds 6 lines. Two of them are the first app's `shutting down` and `shutdown complete`, from the test's own `started.app.shutdown()`.
+  - So the floor `>= 4` still passes with two of the four request lines missing: both the route-silent plant and the unlogged-refusal plant pass it. Each of those plants is caught by a later assertion instead.
+  - The `some(...)` pair and `toHaveLength(2)` pin all four request lines, so nothing relies on the floor's count. In the workbook test the slice holds exactly 4 lines, and the floor is exact there.
+- **dropped** · gate 1's `confirm-row` plant on the workbook test, and its `describe-cells` plant on the CSV test. Both pass, as at gate 1, because neither plants anything readable for that file's kind of upload.
+- **findings** · the hunt returned 3. One is folded into F1 as its remaining part, one is carried as N1, and one is dropped.
+- NFR: security — the F1 remainder above · performance n/a: each log test makes four requests · reliability ✓: order dependence gone on 40 of 40 seeds, and the second app is shut down by `afterEach` because `start()` assigns it to the module's `app` · maintainability — N1.
+
+### Gate 3
+
+**Gate: PASS** — 2026-11-15 · `481a23fe..b34060c9` (the round: `c0757103`, `b34060c9`; no merge in it) · Opus 5.5, depth narrow: gate 2's F1 remainder only
+
+| Done when                                                         | Proof                                                                                                                                                                                                                                 |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Seeds 1–10 pass for both files under `--sequence.shuffle`      | **verified**. This round touched only `workbook-describe.test.ts` and the ticket. I ran workbook-describe alone under seeds 1–5 and each read `Tests 48 passed (48)`. csv-import is unchanged since gate 2 verified seeds 1–20 on it. |
+| 2. Each log test passes alone under `-t`                          | **verified** for workbook-describe: `-t "no line of any request above holds the upload"` exits 0 and reads `1 passed \| 47 skipped (48)`. csv-import is unchanged since gate 2.                                                       |
+| 3. No `LOGGED` precondition is satisfied by an empty array        | **verified**, carried from gate 2. The round added two strings to `secrets` and moved no precondition. The wording low (gate 1's F4) is recorded unfixed on purpose.                                                                  |
+| 4. Both files pass unshuffled                                     | **verified**. workbook-describe reads `48 passed (48)`. csv-import is unchanged.                                                                                                                                                      |
+| 5. The order-comment grep prints nothing                          | **verified**, carried from gate 2. The round's comment adds neither phrase.                                                                                                                                                           |
+| 6. Only the two specs and the ticket change                       | **verified**. `git diff --name-only origin/main...b34060c9` lists `csv-import.test.ts`, `workbook-describe.test.ts` and the ticket.                                                                                                   |
+| 7. `npm run check` exits 0, `npm test -- --project ledger` passes | **verified** from PR #805's CI at `b34060c9`: `check` passed and `test (ubuntu-latest)` passed. The informational Windows leg was still pending, and it is not graded.                                                                |
+| 8. A filtered run of an unrelated test passes                     | **verified**, carried from gate 2. The round did not touch those tests or any hook.                                                                                                                                                   |
+
+**Earlier findings**
+
+- **F1 (high) · fixed.**
+  - **The plants go red.** On `b34060c9`, under both of gate 2's `controls5.sh` plants, the workbook log test reads `1 failed | 47 skipped (48)` with `expected [ …(2) ] to deeply equal []`. The CSV log test reads `1 failed | 62 skipped (63)` under both. The base-spec b64 control is still red on 12 lines. `git status --porcelain` is empty after the restore.
+  - **The guard is real, not incidental.** I dumped the test's slice and checked which secret each line holds:
+    - Unplanted, none of the 4 lines holds any secret.
+    - Under `rejected-b64`, both `WORKBOOK_NOT_XLSX` lines are caught by `notOne.toString("base64")` and by no other secret.
+    - Under `rejected-text`, both lines are caught by `"this is not a workbook"` and by no other secret.
+    - So each new secret is the only thing that catches its plant, and neither matches a line from a successful request.
+- **N1 (low), gate 1's F4 and F5** · not fixed, on purpose, as recorded. Not re-graded.
+
+**New**
+
+- **P1 · low** · maintainability. No live call site. This text is false in the safe direction.
+  - The base64 secret is the whole encoding of `notOne`, which is 36 characters (`UEsDBCB0aGlzIGlzIG5vdCBhIHdvcmtib29r`).
+  - Gate 2's plant logs a 60-character prefix of the upload. It contains the secret only because 36 is less than 60.
+  - If `notOne` grew past 45 bytes, a prefix echo would stop matching the base64 secret, and only the text secret would be left.
+  - The `lg7` secret avoids this with `.slice(0, 40)`. A `.slice(0, 40)` on the `notOne` secret would make the two consistent.
+- **P2 · low** · no live call site. The title's claim covers only the refusals the test makes, which are `WORKBOOK_NOT_XLSX`.
+  - **The plant.** `echo-other` logs the body's `file` on every refusal except `WORKBOOK_NOT_XLSX`. It is not caught at head (`-t`: `1 passed | 47 skipped (48)`). The base spec catches it on 12 lines.
+  - **The real handler does not log that way.** It builds `fields` the same way for every 4xx. So any body echo added to the handler also reaches the test's `WORKBOOK_NOT_XLSX` lines, and those plants are red.
+  - **The other realistic leak path is not lost either.** That path is a code's own message or details values. Under the `msg-details` plant, the base's whole-file run caught only the 4 `WORKBOOK_NOT_XLSX` lines. None of its `LAYOUT_UNREADABLE`, `BAD_REQUEST` or `WORKBOOK_IMPORT_REFUSED` lines held a secret. So no realistic leak is caught at the base and missed at head.
+  - **Why the coverage is bounded.** Build 1, the owner's chosen shape, limits the test to its own requests.
+  - **The alternative, measured.** It adds a describe of `lg7` with `consent: false`. Unplanted, it passes (`1 passed`). Under `echo-other` it is red on 1 `BAD_REQUEST` line. It would close the gap for that one code only.
+- **dropped** · the `msg-details` plant is red at head for the wrong reason. Both of its lines match the pre-existing `".xlsx"` secret through the fixed copy "Only an .xlsx workbook…", not through any upload content. That secret is outside this round's lines, and the falsehood is in the safe direction, a false red.
+- **findings** · the hunt returned 3. Two are carried (P1, P2) and one is dropped.
+- NFR: security — P2 above; F1 is closed · performance n/a: two strings added · reliability ✓: seeds 1–5 are green, and so are `-t` and the unshuffled run · maintainability — P1.
 
 ## Log
 
@@ -287,3 +396,157 @@ before the fixes.**
   other test skipped and exit 0, without pinning the total. Proof, the same
   command: → `1` for `so the counts are what discriminate` (Done when 2) and `1`
   for `never on confirm.*exits 0 with` (Done when 8).
+
+**2026-11-15, built (builder, Sonnet 5.5), base `4e040577`.** Option (a), as the
+owner chose on 2026-11-10 (the Log above): each log test now makes its own
+requests against its own app and reads only the lines that app logged.
+
+- `csv-import.test.ts`, the log test: starts an app, describes and confirms
+  `csv-balance`, and reads `LOGGED.slice(first)`, `first` being `LOGGED.length`
+  before its own `start()`. `workbook-describe.test.ts`, the log test: the same
+  with `lg7` (describe, then confirm, both 200). The secret search, the
+  `a workbook was described` check and the `a described CSV was stored` /
+  `a described workbook was imported` checks all read that slice, so none can
+  be met by another test's lines. Both order comments are replaced (the csv one
+  by a statement that the test stands alone and why it slices).
+- **What the brief had wrong.** (1) The `toBeGreaterThan(20)` cannot hold on the
+  test's own run: a describe and a confirm log two lines (the route's `info`
+  line each, nothing else at `debug`), measured as `expected 2 to be greater
+  than 1000` in both files. The 20 came from every app of the file adding up.
+  It is now `toBeGreaterThanOrEqual(2)`, which is not met by an empty slice, and
+  the two `some` checks cover the specific lines. (2) The Reproduction's totals
+  (63/45), line numbers and base `a100f429` are stale: at `4e040577`
+  workbook-describe has 48 tests, its log test is at `:797` and `LOGGED` is
+  declared at `:152`; csv-import has 63. Seed 4 no longer fails workbook-describe
+  at the base; seeds 2, 9 and 10 do (below). (3) The old comment's premise that the log test is last was already
+  false in `workbook-describe.test.ts` (the
+  web's fixture describe follows it); the new test does not care.
+- **Base, same files copied under another name** (`git show 4e040577:<path>`,
+  run with `--sequence.shuffle --sequence.seed=N`, copies deleted): csv-import
+  seed 3 `expected 0 to be greater than 20`, seed 6 `expected false to be true`,
+  seed 7 `expected 0 to be greater than 20`, each `Tests 1 failed | 62 passed
+  (63)`; workbook-describe seed 2 and 9 `expected false to be true`, seed 10
+  `expected 0 to be greater than 20`, each `1 failed | 47 passed (48)`. `-t` on
+  the log test: `Tests 1 failed | 62 skipped (63)` and `1 failed | 47 skipped
+  (48)`.
+- **Head, Done when 1.** `npx vitest run <file> --sequence.shuffle
+  --sequence.seed=N`, N from 1 to 20 (the ticket asks 1 to 10): csv-import
+  `Tests 63 passed (63)` for all twenty, workbook-describe `Tests 48 passed
+  (48)` for all twenty.
+- **Done when 2.** `-t "no line of any request above holds a CSV"` reads
+  `Tests 1 passed | 62 skipped (63)`; `-t "no line of any request above holds the
+  upload"` reads `Tests 1 passed | 47 skipped (48)`.
+- **Done when 4.** Unshuffled: csv-import `63 passed (63)`, workbook-describe
+  `48 passed (48)`.
+- **Done when 5.** `grep -n "tests in order\|Last: it reads"` on the two files
+  prints nothing (grep exit 1).
+- **Done when 8.** `-t "the fake is called once on describe and never on
+  confirm"` reads `1 passed | 62 skipped (63)`; `-t "lg37: a fake answering its
+  correct description"` reads `1 passed | 47 skipped (48)`.
+- **Not folded in.** `csv-import.test.ts:1005`'s read of `LOGGED` needs no
+  change (its own app logs its rejected request). `.claude/rules/testing.md`
+  says plain `--sequence.shuffle` fails these two files; after this change it
+  no longer does, but that page is the owner's, so the line is proposed in the
+  report and not edited here.
+
+**2026-11-15, the owner's answers on gate 1's findings at `c13b7559`, recorded
+before round 1's changes.**
+
+- Question (gate 1, high): the log tests no longer read a refused request's
+  line (`request rejected`), so the CSV half lost a guard against a real leak.
+  The gate's plant, `message` and `details` added to that line in
+  `registerErrorHandling`, turned the base csv-import log test red on
+  `CSV_NOT_AFTER_TAIL` lines carrying a CSV row's text, and left the head test
+  green. Options: (1) each log test also makes, against its own app, the
+  refused requests whose lines it used to read; (2) accept the narrower test,
+  reword both titles and file the refused-line coverage, which would also
+  change Done when 2's `-t` patterns.
+- Choice: (1). The recommended option (the gate's and the builder's). The
+  titles stay, so Done when 2's `-t` patterns keep matching.
+- Also decided: `.claude/rules/testing.md`'s parenthesis naming
+  `csv-import.test.ts` and `workbook-describe.test.ts` as shuffle-order
+  dependent will be dropped by a separate `docs(repo)` pull request after #805
+  merges, on the owner's instruction. Nothing under `.claude/` changes on this
+  branch (Build 4, Done when 6).
+- Not in this round, by the owner's instruction: Done when 3 still names
+  `toBeGreaterThan(20)`; it is not reworded.
+- The med (CSV secrets lack a base64 entry) and the low (workbook names `lg37`
+  while sending `lg7`) are fixed with the high, without a question.
+- Provenance: the owner, 2026-11-15; the orchestrator relayed it in the round-1
+  message, and the builder records it as relayed, not verified against the owner.
+
+**2026-11-15, round 1 (builder, Sonnet 5.5), gate 1's findings on `c13b7559`,
+fixed in `d4448884`.**
+
+- High, fixed (owner's option 1). Each log test now also makes its refusals
+  against its own apps and checks them. csv-import: the same file confirmed a
+  second time (overlap), and a confirm onto a stored tail it does not follow
+  (gap), in a second app started after the first is shut down; both are
+  `CSV_NOT_AFTER_TAIL`, and the test requires exactly two `request rejected`
+  lines carrying that code. workbook-describe: `PK\u0003\u0004` plus text,
+  refused by Describe and by Confirm as `WORKBOOK_NOT_XLSX`, and exactly two
+  such lines. The line-count floor is now 4 in both files, one line per request made
+  (describe, confirm and two refusals). The titles
+  are unchanged, so Done when 2's patterns match.
+- Med, fixed. The CSV secrets gain
+  `bytesOf("csv-balance").toString("base64").slice(0, 40)`.
+- Low, fixed. The workbook test's base64 secret names `lg7`, the file it sends.
+- The gate's plants, run at `d4448884` with the gate's own `mutate3.mjs` and
+  `mutate2.mjs`, each restored with `git checkout HEAD -- <path>` and the tree
+  clean after (`-t`, one file, each reading `1 failed | N skipped`):
+  - `request rejected` carrying `message` and `details`: csv-import red,
+    `expected [ …(2) ] to deeply equal []`, the two lines `CSV_NOT_AFTER_TAIL`
+    with `2024-01-02 \"DEPOT PAIE\" 1823.45 $` in `message`; workbook-describe
+    red, `expected [ …(2) ] to deeply equal []`.
+  - `describe-body` (the whole body logged before the describe line): both red,
+    `expected [ Array(1) ] to deeply equal []`.
+  - `confirm-body`: both red, the same message.
+  - Unplanted: `1 passed | 62 skipped (63)` and `1 passed | 47 skipped (48)`.
+- Done when 1 to 20 seeds, each file alone: csv-import `63 passed (63)` for
+  all twenty and unshuffled, workbook-describe `48 passed (48)` for all twenty
+  and unshuffled. Done when 2, 8: exit 0 for the four `-t` commands, with
+  `1 passed` and the rest skipped. Done when 5: grep exit 1, no output. Done
+  when 6: `git diff --name-only origin/main...HEAD` lists the two specs and this
+  ticket. `npm run check` exit 0.
+- Not changed, on the owner's instruction: Done when 3 still names
+  `toBeGreaterThan(20)`; the property it states holds (`>= 4`
+  over the slice, never over an empty array).
+- Proposed, for the owner, not edited: `.claude/rules/testing.md`'s parenthesis
+  naming `csv-import.test.ts` and `workbook-describe.test.ts` as
+  shuffle-order dependent. The owner has said a separate `docs(repo)` pull
+  request drops it after #805 merges.
+
+**2026-11-15, round 2 (fixer, Sonnet 5.5), gate 2's finding on `481a23fe`, fixed
+in `c0757103`.**
+
+- Finding, fixed. The workbook log test's refusals upload `notOne`, and neither
+  its bytes nor its base64 were in `secrets`, so a `request rejected` line
+  carrying the refused upload passed. The test lost a guard the base had: at the
+  base spec the base64 plant is red on 12 refusal lines. The workbook test's
+  `secrets` now also hold `notOne.toString("base64")` and `"this is not a
+  workbook"`, the change gate 2 measured as its remedy; nothing else moved. Gate 2's
+  other remedy (refusing a real `lg7` upload as well) is not part of this
+  round.
+- Reproduced before the fix, gate 2's `controls5.sh` at `481a23fe`: under both
+  plants the workbook log test read `Tests 1 passed | 47 skipped (48)` and the
+  CSV log test `1 failed | 62 skipped (63)`.
+- After, `controls5.sh` at `c0757103`, under `-t`: `rejected-b64` and
+  `rejected-text` each give the workbook test `1 failed | 47 skipped (48)`
+  (`expected [ …(2) ] to deeply equal []`) and the CSV test `1 failed | 62
+  skipped (63)`. At the base spec the b64 plant is `1 failed | 47 passed (48)`
+  with 12 lines. `git status --short` empty after the restore.
+- Unplanted: `-t "no line of any request above holds the upload"` reads `1 passed
+  | 47 skipped (48)`, the whole file `48 passed (48)`. Seeds 1 to 20 with
+  `--sequence.shuffle --sequence.seed=N`, workbook-describe alone: `Tests 48
+  passed (48)` for all twenty. `git diff --name-only origin/main...HEAD` lists
+  the two specs and this ticket. `npm run check` exit 0.
+- Recorded unfixed, not touched: gate 2's N1 (the CSV floor comment says "four
+  requests", the slice holds 6), gate 1's F4 (Done when 3's wording) and F5
+  (`.claude/rules/testing.md`, a separate pull request).
+
+**2026-11-15, three below-floor findings the owner chose to fix at the landing,
+with no re-gate.**
+
+- 2026-11-15 — Fixed at landing by owner choice: gate 3, P1 — "A .slice(0, 40) on the notOne secret would make the two consistent". The workbook log test's `notOne.toString("base64")` secret now carries `.slice(0, 40)`, as the `lg7` secret does. Proof, `controls5.sh` of gate 2 with `mutate4.mjs` copied to the lander's out directory: under `rejected-b64` the workbook log test reads `1 failed | 47 skipped (48)` and the CSV log test `1 failed | 62 skipped (63)`, and unplanted `workbook-describe.test.ts` reads `48 passed (48)`; `git status --short` is empty after the restore.
+- 2026-11-15 — Fixed at landing by owner choice: gate 2, N1 — "A line for each of the four requests". The CSV log test's floor comment now says the slice holds at least a line for each of the four requests plus the first app's shutdown lines, so `>= 4` is a floor; no assertion changed. Proof, run after the commit: `git diff b34060c9 HEAD -- tools/ledger/api/test/csv-import.test.ts | grep -c '^-.*A line for each of the four requests'` → `1`, and `-t "no line of any request above holds a CSV"` reads `1 passed`.
+- 2026-11-15 — Fixed at landing by owner choice: gate 1, the low on Done when 3 — "Done when 3 names toBeGreaterThan(20)". Done when 3 now names the floor as it stands, `toBeGreaterThanOrEqual(4)`, one per request the test makes, and nothing else in that line changed. Proof, run after the commit: `git diff b34060c9 HEAD -- <this file> | grep -c '^-.*precondition in either file is satisfied'` → `1`.

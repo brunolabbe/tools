@@ -791,13 +791,35 @@ describe("the confirmation's bucket labels (Done when 10)", () => {
 });
 
 describe("the log (Done when 8)", () => {
-  test("no line of any request above holds the upload's content, a name or the key", () => {
-    // Read after every test above has run in this file: vitest runs a file's
-    // tests in order, and LOGGED holds every app's lines.
-    expect(LOGGED.length).toBeGreaterThan(20);
+  test("no line of any request above holds the upload's content, a name or the key", async () => {
+    // Stands alone, in any order and under a filter: it makes the requests whose
+    // lines it reads, against an app of its own, and reads only what that app
+    // logged (LOGGED is shared by every app of the file, so it is sliced). The
+    // refusals are among them: a refused request is logged by the error handler,
+    // and that line is where a refusal's message could leak the upload's text.
+    const first = LOGGED.length;
+    const each = fixture("lg7");
+    const started = await start({ people: each.people, ask: fake(answering(each.layout)).ask });
+    expect((await describeFile(started, fileOf("lg7"))).statusCode).toBe(200);
+    expect((await confirmFile(started, fileOf("lg7"), each.layout)).statusCode).toBe(200);
+    // A file that is neither a workbook nor a CSV, refused by Describe and by Confirm.
+    const notOne = Buffer.from("PK\u0003\u0004 this is not a workbook");
+    for (const response of [
+      await describeFile(started, notOne),
+      await confirmFile(started, notOne, each.layout),
+    ]) {
+      expect(errorOf(response).code).toBe("WORKBOOK_NOT_XLSX");
+    }
+    const logged = LOGGED.slice(first);
+    // A line for each of the four requests, so the search below read something.
+    expect(logged.length).toBeGreaterThanOrEqual(4);
     const secrets = [
       API_KEY,
-      fileOf("lg37").toString("base64").slice(0, 40),
+      fileOf("lg7").toString("base64").slice(0, 40),
+      // The refused upload, as a body carries it and as text: a refusal line is
+      // where it would show, and it is not in the lg7 secrets above.
+      notOne.toString("base64").slice(0, 40),
+      "this is not a workbook",
       "classeur",
       "releve",
       ".xlsx",
@@ -807,11 +829,16 @@ describe("the log (Done when 8)", () => {
       "Solde reporté",
       "Hypothèque",
     ];
-    const leaking = LOGGED.filter((line) => secrets.some((secret) => line.includes(secret)));
+    const leaking = logged.filter((line) => secrets.some((secret) => line.includes(secret)));
     expect(leaking).toEqual([]);
     // And it did log the requests, so the search read something.
-    expect(LOGGED.some((line) => line.includes("a workbook was described"))).toBe(true);
-    expect(LOGGED.some((line) => line.includes("a described workbook was imported"))).toBe(true);
+    expect(logged.some((line) => line.includes("a workbook was described"))).toBe(true);
+    expect(logged.some((line) => line.includes("a described workbook was imported"))).toBe(true);
+    expect(
+      logged.filter(
+        (line) => line.includes("request rejected") && line.includes("WORKBOOK_NOT_XLSX"),
+      ),
+    ).toHaveLength(2);
   });
 });
 
