@@ -1,8 +1,8 @@
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { expect, test } from "vitest";
+import { tempDirs } from "./temp-dirs.ts";
 
 /**
  * The `PreToolUse` Bash hooks, exercised the way the harness runs them: a JSON
@@ -310,10 +310,13 @@ const MERGE = ["gh", "pr", "merge"].join(" ");
 const STACK_MERGE = ["gh", "stack", "merge"].join(" ");
 const PUSH = ["git", "push"].join(" ");
 
+/** Every `checkoutOn` directory is removed when its case ends (repo-147). */
+const temp = tempDirs();
+
 /** A checkout whose HEAD is a known branch. No commit is needed: */
 /** `git symbolic-ref` answers on an unborn branch, which is what the hook reads. */
 function checkoutOn(branch: string): string {
-  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "main-writes-")));
+  const dir = fs.realpathSync(temp.make("main-writes-"));
   const init = spawnSync("git", ["init", "-b", branch, dir], { encoding: "utf8", shell: false });
   expect(init.status, init.stderr).toBe(0);
   return dir;
