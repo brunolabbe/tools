@@ -135,7 +135,7 @@ test.each([
   expect(directTempUses(line)).toBeGreaterThan(0);
 });
 
-test("the scan does not count the registry's own call or a prose mention", () => {
+test("the scan does not count the registry's own call or a backticked mkdtemp with no open parenthesis", () => {
   expect(directTempUses('const dir = temp.make("status-")')).toBe(0);
   expect(directTempUses("// a `mkdtemp` under the temp root, made once")).toBe(0);
 });

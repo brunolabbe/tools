@@ -86,8 +86,8 @@ temp directory reads every earlier run's leftovers.
 2. Each file on its own does the same: `status.test.ts` leaves 0 of the 133
    entries it left, `next-id.test.ts` 0 of 30, `hooks.test.ts` 0 of 3,
    `status-gate-record.test.ts` 0 of 17, and the four together leave 0 of 183.
-3. With the cleanup disabled (the body of `cleanup` emptied), the same command
-   leaves 183 again — the count is what shows a planted leak — and
+3. With the cleanup disabled (the body of `cleanup` emptied), the four specs
+   together leave 183 again — the count is what shows a planted leak — and
    `scripts/test/temp-dirs.test.ts` goes red on its removal case.
 4. With one call site turned back into a bare `fs.mkdtempSync`, a
    `mkdtempDisposableSync`, or a `mkdirSync` under `os.tmpdir()`, the scan in
@@ -183,3 +183,6 @@ temp directory reads every earlier run's leftovers.
   at landing with no re-gate (recommended), record all four, or also close L2's
   remainder, which would need a round. **The owner chose to fix N1 and N3 at
   landing**; L2's remainder and N2 stay recorded and unfixed.
+- 2026-11-15 — Fixed at landing by owner choice: gate 2, N1 — "claims more than the test checks". The test is renamed to say what it excludes, the registry's own call and a backticked mkdtemp with no open parenthesis; the pattern and the assertions are unchanged. `git diff 51db3759 HEAD -- scripts/test/temp-dirs.test.ts | grep -c '^-.*or a prose mention'` → `1`.
+- 2026-11-15 — Fixed at landing by owner choice: gate 2, N3 — "the same command leaves 183 again" can be read two ways. Done when 3 now names the four specs together, the reading that leaves 183. `git diff 51db3759 HEAD -- docs/work/repo-147-script-tests-leave-temp-directories-behind.md | grep -c '^-.*the same command'` → `1`.
+- 2026-11-15 — Gate 2's other two lows stay recorded and unfixed, by the owner's choice: N2 (the repo-73 and repo-76 citations that were already off by one before this branch) and the two scan spellings left from gate 1's L2.
