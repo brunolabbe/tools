@@ -18,8 +18,9 @@
  * **Loaded only when configured.** `GET /api/config` says whether the
  * deployment asks for a check. When it does not, Cloudflare's script is never
  * fetched, and a self-hoster's page contacts no third party at all. When that
- * read fails, no token is sent and the server decides: if it wanted one, the
- * answer is `HUMAN_CHECK_FAILED`, the same as for any missing token.
+ * read fails or times out (`CONFIG_READ_TIMEOUT_MS`), no token is sent and the
+ * server decides: if it wanted one, the answer is `HUMAN_CHECK_FAILED`, the
+ * same as for any missing token.
  *
  * The token is a credential. It goes from the widget's callback into the
  * request body and nowhere else — not UI state, not storage, not a log.
@@ -40,7 +41,24 @@ export interface HumanCheckTokens {
   next(): Promise<string | null>;
 }
 
-export type ReadClientConfig = () => Promise<ClientConfigResponse>;
+/**
+ * Reads `GET /api/config`. The signal is the bound's: the reader hands it to
+ * its `fetch` so a read given up on is closed and not left open (dl-141).
+ */
+export type ReadClientConfig = (signal?: AbortSignal) => Promise<ClientConfigResponse>;
+
+/**
+ * How long the config read may stay out before the page stops waiting for it
+ * (dl-141). It is a small same-origin `GET` of one short JSON object, so the
+ * bytes are nothing and the time is round trips. At a 2 s round trip, worse
+ * than most links a phone holds, a warm read is one trip, about 2.5 s; a cold
+ * one adds DNS, TCP and TLS, about 5 trips, about 10 s. 15 s
+ * clears the cold case with margin, so a slow phone is not mistaken for a
+ * stall, and costs a real stall 15 s of waiting before the box reports it. The
+ * figure was reasoned, not measured on a phone. It is added to a probe's wait
+ * and not to its own 90 s bound, which starts at the fetch (dl-138).
+ */
+export const CONFIG_READ_TIMEOUT_MS = 15_000;
 
 /** How the transport builds its token source; see `createHttpClient`. */
 export type HumanCheckFactory = (readConfig: ReadClientConfig) => HumanCheckTokens;
@@ -78,6 +96,27 @@ export const noHumanCheck: HumanCheckFactory = () => ({ next: async () => null }
 export interface TurnstileCheckOptions {
   /** Injected in tests, which have no network to fetch Cloudflare's script over. */
   loadTurnstile?: () => Promise<TurnstileApi>;
+}
+
+/**
+ * Gives up on a config read that has not settled by `ms`. Both halves, as
+ * `http.ts`'s `withTimeout` has them: the abort closes a real `fetch`'s
+ * socket, and the race settles the read even when the reader ignores its signal.
+ */
+async function readWithin(readConfig: ReadClientConfig, ms: number): Promise<ClientConfigResponse> {
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const expired = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => {
+      reject(new AppError("TIMEOUT"));
+      controller.abort();
+    }, ms);
+  });
+  try {
+    return await Promise.race([readConfig(controller.signal), expired]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function checkFailed(detail: string): AppError {
@@ -181,7 +220,9 @@ export function createTurnstileCheck(
   let line: Promise<unknown> = Promise.resolve();
 
   const humanCheck = (): Promise<ClientConfigResponse["humanCheck"]> => {
-    config ??= readConfig().then(
+    // A read that times out rejects like a failed one, so the memo clears and
+    // every call that was waiting on it goes on without a token (dl-141).
+    config ??= readWithin(readConfig, CONFIG_READ_TIMEOUT_MS).then(
       (response) => response.humanCheck,
       (error: unknown) => {
         config = null;

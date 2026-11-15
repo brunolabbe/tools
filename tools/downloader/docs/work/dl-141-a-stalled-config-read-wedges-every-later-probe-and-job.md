@@ -3,7 +3,7 @@ id: dl-141
 tool: downloader
 title: A stalled `GET /api/config` read leaves every later probe and job creation pending for the life of the page
 kind: fix
-status: needs-decision
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -69,7 +69,7 @@ of it when it chose. dl-138's own Log records the owner's answer at the 2026-11-
 that Question 4 stands for dl-138 and that this is filed separately, so nothing
 here reopens that ticket's scope.
 
-## Decision — open
+## Decision — answered 2026-11-15 by the owner (option A)
 
 **Where does the bound go?** The shared goal is that a stalled read cannot hold
 a later analysis forever. The options differ in how much of the human check they
@@ -157,6 +157,52 @@ reverses an answered question of dl-138.
   message rather than "Analysing" for a stalled read.
 - `npm run check` exits 0 and `npm test -- tools/downloader/web` passes.
 
+## Review
+
+**Gate: CONCERNS** — 2026-11-15 · `5f15e56f..2a80720d` · Opus 5.5, depth full
+
+| Done when                                                                                                        | Proof                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ---------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A stalled `GET /api/config` no longer leaves a later `probe` or `createJob` pending, after the bound, red before | `web/test/human-check.test.ts` › "two probes and a createJob are freed at the bound, sent with no token, and a later call reads the config again" ✓ — all three pending at 14,999 ms with `/api/config` the only fetch, none pending at 15,000 ms. Red against the base's `web/src`: `expected true to be false` (4 of 18 failed across this file and the App file)                                                        |
+| A timed-out read is not memoised: the next call reads again                                                      | `web/test/human-check.test.ts` › "every call waiting on the shared read is freed together, and the next call reads again" ✓ (`readConfig` called once, then twice, and the retry yields `token-1`), and the transport case above (`configReads` is 2). A planted "keep a `TIMEOUT` memoised" turns both red                                                                                                                |
+| On a deployment that wants the check, the box shows the `HUMAN_CHECK_FAILED` message, not "Analysing"            | `web/test/request-timeout-app.test.tsx` › "on a deployment that wants the check, a stalled config read ends in the human-check message, not in Analysing (dl-141)" ✓ — "Analysing" at 14,999 ms with no probe sent; at 15,000 ms one token-less probe and "Could not confirm you are a person". The modelled refusal matches the real api's status, code and `retryable` (measured); its message does not (second finding) |
+| `npm run check` exits 0 and `npm test -- tools/downloader/web` passes                                            | **verified** — `npm run check` exit 0; `npm test -- tools/downloader/web` 25 of 25 files, 360 of 360 tests. CI `check` and `test (ubuntu-latest)` green at `2a80720d`                                                                                                                                                                                                                                                      |
+
+- **med** · no `Done when` line depends on it · `nfr:reliability` — nothing tests that the
+  abort reaches the network. Remove the signal from the config reader in `http.ts`
+  (`createHttpClient`'s `humanCheck` reader → `request(..., {})`) and all 30 tests in
+  `human-check.test.ts`, `request-timeout-app.test.tsx`, `request-timeout.test.ts` and
+  `http-client.test.ts` stay green. Over a real port the stalled config socket then stays
+  open: 0 of 3 closed, against 3 of 3 (and 20 of 20) at the head. The Decision's stated
+  reason for changing `ReadClientConfig`'s type is the open fetch ("leaves the stalled fetch
+  open, and each retry opens another"), and the comments on `ReadClientConfig` and
+  `readWithin` promise the socket closes. Both are true today and unguarded. Direction: in
+  the transport case, keep the `init.signal` the `/api/config` fetch receives and assert it
+  is aborted at the bound.
+- **low** · `nfr:maintainability` — the App test's modelled refusal carries the message "The
+  automatic check did not pass.", and its comment says it is refused "as `routes/probe.ts`
+  refuses one". The real api answers `403 {"code":"HUMAN_CHECK_FAILED","message":"We could
+  not confirm this request came from a person. Try again.","retryable":false}`, and
+  `ErrorPanel` prints that message. The comment is false only about the message, and that
+  is the safe direction: no assertion reads it.
+- **dropped** · under the dropped-signal plant, the first network run read 12,711–12,714 ms,
+  under the 15 s bound. That was the probe's wall clock (`Date.now`) on this machine, not
+  the bound firing early: on `performance.now` the same plant read 15,026–15,029 ms. Not a
+  defect.
+- **dropped** · the read's `TIMEOUT` never reaches a caller, because `next()` swallows it and
+  sends no token. That is the decided path (option A, "no token is sent and the server
+  decides"), so it is not a defect.
+- **dropped** · the config wait adds to dl-138's bounds: a fully stalled server times out a
+  probe at 105 s and a job creation at 45 s (measured), not at 90 s and 30 s. The comment on
+  `CONFIG_READ_TIMEOUT_MS` says so, and no copy on the page promises a total. This was
+  chosen, not a defect.
+- **findings** · the hunt returned 5; 2 carried, 3 dropped.
+- Positive controls: changing the bound to `60_000` fails four tests (the three new
+  `human-check.test.ts` cases and the App case). Making a timed-out read stay memoised fails
+  two (the two not-memoised proofs above). Dropping the signal fails none (the med above).
+- NFR: security ✓ (a token-less request is still refused by the server) · performance n/a ·
+  reliability — above · maintainability — above.
+
 ## Log
 
 - 2026-11-15 — Filed from dl-138's first gate (Opus 5.5), on the owner's answer
@@ -198,3 +244,83 @@ reverses an answered question of dl-138.
   added here. Proof, an added sentence: `git diff d1ae1be7 HEAD -- tools/downloader/docs/work/dl-141-a-stalled-config-read-wedges-every-later-probe-and-job.md | grep -v 'Fixed at landing' | grep -c '^+.*the commit that records the owner'` → 1.
 - 2026-11-15 — Gate 1's full report is on the pull request thread, #809; status
   unchanged.
+- 2026-11-15 — Owner's answer 3, at batch intake (tools-60 dispatch), to
+  "Where does the bound go?". Options put: A, bound the config read
+  (recommended); B, bound the human-check wait; C, bound `request()` for every
+  call; D, record only. Answer: **A**. No recommendation was overridden. The
+  figure is the builder's to name, with its reasoning; the script-load and
+  `take()` stalls go to this Log as a follow-up. `status` moves to `ready` in
+  this commit. `depends_on: [dl-138]` is not added: Build 1 said to add it once
+  dl-138 is on `main`, and dl-138 merged (`4d0ad61d`, `done`), so the line would
+  gate nothing.
+- 2026-11-15 — Built, option A (builder; model Sonnet 5.5). Draft pull request
+  pending its gate.
+  - **The change.** `ReadClientConfig` takes an optional `AbortSignal`;
+    `createTurnstileCheck` reads the config through `readWithin`, which aborts
+    the signal and rejects with core's `TIMEOUT` at `CONFIG_READ_TIMEOUT_MS`
+    (the abort and the race both, as dl-138's `withTimeout` has them);
+    `createHttpClient`'s reader in `http.ts` passes the signal to `request()`.
+    `request()` itself is unchanged (dl-138's Question 4 stands). A timed-out
+    read rejects as a failed one does, so `humanCheck()`'s existing handler
+    clears the memo and `next()`'s existing `catch` returns `null`: the call
+    goes out with no token and the server decides.
+  - **The figure: 15 s** (`CONFIG_READ_TIMEOUT_MS` in `human-check.ts`). The
+    read is one short JSON object, so the cost is round trips and not bytes. At a
+    2 s round trip, worse than most links a phone holds, a warm read is one trip
+    (about 2.5 s) and a cold one adds DNS, TCP and TLS, about 5 trips (about
+    10 s); 15 s clears the cold case with margin, so a slow phone is not
+    mistaken for a stall. The price of a longer figure is only how long a real
+    stall waits before the box reports it, and the wait comes before the probe's
+    own 90 s, which starts at the fetch. **Reasoned, not measured on a phone**:
+    the round-trip figures are arithmetic, not a capture.
+  - **Red before, green after.** `npx vitest run
+    tools/downloader/web/test/human-check.test.ts` at `58cfafd5` (tests, base
+    source): `3 failed | 12 passed (15)`, two of them hanging to vitest's 60 s
+    on the read that never answers. At `85899166`: `15 passed (15)`. The
+    App-level case, run against `58cfafd5`'s `web/src` (restored with
+    `git checkout 58cfafd5 -- tools/downloader/web/src`, then back from
+    `85899166`): `expected [] to have a length of 1 but got +0` (no probe was
+    ever sent); at `85899166`, 3 of 3 in `request-timeout-app.test.tsx`.
+  - **Where the tests are.** The client-level and unit cases are at the end of
+    `human-check.test.ts`. The App-level case is at the end of dl-138's
+    `request-timeout-app.test.tsx`, as the dispatch preferred, and not in
+    `app.test.tsx`, which dl-134 step 11 edits (its `mountApp`): that file's
+    `mountApp` gained an optional `HttpClientOptions` argument, which the other
+    two cases do not pass.
+  - **What the box shows** (Done when 3): with the check on and the read stalled,
+    the box reads "Analysing" until 15 s, then "Could not confirm you are a
+    person" with the repeat-the-step detail, once the server's
+    `HUMAN_CHECK_FAILED` for the token-less probe arrives (the test's server
+    models that refusal; the real one is `api/src/human-check.ts`'s).
+  - **Brief wrong or moot.** Build 1's wait for dl-138 and its `depends_on` line:
+    moot, dl-138 is on `main` (`4d0ad61d`); not added. The ticket's "ReadClientConfig
+    (`web/src/lib/human-check.ts`) takes no argument" was right on `main` and is
+    what changed.
+  - **Follow-up, not built, not filed.** The script load (`loadTurnstileScript`
+    listens for `load` and `error` only) and the widget's `take()` (a challenge
+    that never calls any callback) can still hold `next()`, and `line` holds every
+    later call behind a `take()` that never settles. They are read from the code
+    and unmeasured, so there is no reproduction to file against: whoever measures
+    one files it, and option B's costs in this ticket's Decision (the figure must
+    clear a person answering a challenge; the widget reset; the rejected turn)
+    are the starting point. The dispatch named this as the follow-up; nothing
+    folded in, because no other small already-specified piece was freed.
+  - **Checks.** `npm run check` exit 0 (24 warnings, none in files this branch
+    touches). `npm test -- tools/downloader/web`: `25 passed (25)` files,
+    `360 passed (360)` tests.
+- 2026-11-15 — Fixed at landing by owner choice: gate 1, the med — "nothing tests
+  that the abort reaches the network". New test at the end of the transport
+  describe in `web/test/human-check.test.ts`, "the config fetch is handed a
+  signal, aborted at the bound and not before, so a read given up on is closed
+  (dl-141)", keeps the `init.signal` the `/api/config` fetch receives and asserts
+  it is not aborted at 14,999 ms and is at 15,000 ms. Red with the signal dropped
+  from the config reader in `http.ts` (`request(..., {})`): 1 of 31 failed across
+  `human-check.test.ts`, `request-timeout-app.test.tsx`, `request-timeout.test.ts`
+  and `http-client.test.ts`, with `expected undefined to be false`; green with it
+  restored: 31 of 31.
+- 2026-11-15 — Fixed at landing by owner choice: gate 1, the low — "the App test's
+  modelled refusal carries the message". The modelled `HUMAN_CHECK_FAILED` in
+  `web/test/request-timeout-app.test.tsx` now carries the real api's message,
+  "We could not confirm this request came from a person. Try again." Proof:
+  `git diff 2a80720d HEAD -- tools/downloader/web/test/request-timeout-app.test.tsx | grep -c '^-.*did not pass'`
+  gives 1.
