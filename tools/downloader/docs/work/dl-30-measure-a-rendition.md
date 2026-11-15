@@ -394,7 +394,7 @@ rather than from a run.
 
   **Which resolver produced the reported cards is still not established, and the
   fix covers all three tiers anyway.** The network is blocked in this container
-  (`curl https://twitter.yandex.com.tr/` times out), so nothing was probed
+  (a `curl` to the reported host times out), so nothing was probed
   against the reported URLs, and there was no job store to read a `resolver`
   field out of. What is now measured rather than argued: `yt-dlp` is priority 20
   and `enableYtdlpResolver` defaults true, so it is tried first; the browser
