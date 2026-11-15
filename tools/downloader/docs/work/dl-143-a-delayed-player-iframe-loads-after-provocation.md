@@ -341,3 +341,93 @@ resolved in about 5 s, which is what isolates the delay as the cause.
     (counter only): 5 of 6, its miss the slow-document one above.
   - `npm run check` exit 0; `npm test -- --project downloader` 2672 passed, 2
     skipped. e2e and container gates not run.
+
+## Review
+
+**Gate: FAIL** — 2026-11-15 · `5f15e56f..4fe63aeb` · Opus 5.5, depth medium
+
+| Done when                                                                                                            | Proof                                                                                                                                                                                                                                                                                                                                                                        |
+| -------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The single-iframe delayed fixture resolves through the browser tier, and is red on `main`'s `provoke.ts`             | `resolvers/test/browser/browser-resolver-press-targets.test.ts` › "a player iframe that a delay-JS plugin fills after the first interaction resolves, once its embed has hopped to the document with the player" ✓ (asserts the first variant is the embed's `/media/related/master.m3u8`); red with the base's `provoke.ts`, rerun by the gate: `NO_MEDIA_FOUND` in 3069 ms |
+| The delayed-tab fixture resolves                                                                                     | same file › "a server tab whose handler a delay-JS plugin registers late is pressed once the page is ready" ✓ (the variant and the `/beacon/delayed-tab-0` press); red with the base's `provoke.ts`, `NO_MEDIA_FOUND` in 2964 ms                                                                                                                                             |
+| A page with no blank player iframe pays no wait                                                                      | **not met** — a page with no iframe at all whose `load` is still pending pays the whole wait: `provokePlayback` 6173 ms at this head against 117 ms with the base's `provoke.ts` (F1). The branch's test, "a page with no blank player iframe pays no wait, and one whose iframe never fills pays the bound", measures only a document that is `complete`                    |
+| `npm run check` exits 0; `npm test -- --project downloader` passes, or every failure is shown to also fail on `main` | verified — `npm run check` exit 0; `npm test -- --project downloader` exit 0, 2672 passed, 2 skipped (129 files, 1 skipped); the press-targets spec 42 of 42                                                                                                                                                                                                                 |
+
+- **high** · F1 · Done when 3 depends on it · **open decision** ·
+  `waitForBlankPlayerFill` in `resolvers/src/browser/provoke.ts` treats "no
+  blank player iframe" as final only when `document.readyState` is `complete`
+  (the round-4 retry). So a page with no player iframe at all, whose `load` is
+  held by one slow subresource (an ad, a tracker), polls until `load` or until
+  `BLANK_PLAYER_FILL_WAIT_MS` runs out. Measured with `provokePlayback` 2 s after
+  `domcontentloaded`, which is the point the tier reaches after its 1.5 s `load`
+  budget and settle. The page is a `.player` div with an `<img>` whose request never
+  answers: 6173 ms at this head, 117 ms with the base's `provoke.ts`. The same
+  page without the image takes 118 ms. Every probe of such a page pays this
+  before its first play click, unless a stream was captured already. The shipped
+  text is false in the unsafe direction: the `BLANK_PLAYER_FILL_WAIT_MS`
+  docstring ("only on a page that has a blank player iframe") and the Log's round-4
+  claim ("a complete document with none still ends it at once, so a page with
+  no blank iframe pays nothing"). The second route to the same cost is
+  unmeasured: `framenavigated` counted a same-document `replaceState` and
+  `pushState` (one each in the gate's probe), so a hash change before the wait's
+  first look would also make a complete page with no iframe pay the wait. In the
+  gate's fixture the change landed after that look (96 ms and 112 ms). Options:
+  (a) **recommended** — when no replacement was counted, retry a still-loading
+  document for a short cap only (for example `BLANK_PLAYER_RELEASE_WAIT_MS`),
+  and count only cross-document main-frame navigations; `?slow` may need
+  retiming. This is untested and only a direction. (b) The owner rewords
+  Done when 3 to "a page whose document is complete…" and accepts up to 6 s on
+  slow-loading pages; the cost on real traffic is unmeasured. (c) Drop the
+  round-4 retry and its `?slow` test, and accept the live miss it answered
+  (1 run in about 12 in the Log).
+- **med** · F2 · no `Done when` line depends on it · `BLANK_PLAYER_IFRAMES_FN`
+  (dl-139's predicate, reused as the brief asked) also matches a visible,
+  script-written `about:blank` iframe under any `[class*="player"]` or
+  `[id*="player"]` ancestor, `<body>` included. Before this change that cost
+  nothing without a server tab. Now it costs the whole wait, and the hover is
+  aimed at that iframe: an ad slot written with `document.write` under
+  `<body class="single single-player-page">` took 6305 ms against 177 ms on the
+  base, and the same slot under `<body class="single">` took 184 ms. Direction
+  only, untested: bound the ancestor walk short of `body` and `html`, or require
+  an address-carrying attribute on the iframe. dl-139's press reads the same
+  predicate, so the fix reaches it too.
+- **low** · F3 · Build step 3's route, re-reading `page.frames()` before each
+  visit, has no teeth. Restoring a once-per-pass snapshot (mutation `snapshot`)
+  leaves all 7 dl-143 tests green.
+- **low** · F4 · `nfr:reliability` · the hover is not a press for dl-144 (branch
+  `downloader/dl-144-pre-press-self-redirect`, not merged), and that branch
+  follows a top-frame navigation before the first press as the page's own. A
+  navigation that a page's `mouseover` handler sets off would therefore move the
+  landing URL rather than read as a departure. The delay-JS first-visit reload is
+  the wanted case of this, and the gate saw no page that does it with a
+  different URL. No live call site.
+- **low** · F5 · an abort thrown in the wait is swallowed by `provokePlayback`'s
+  per-frame `catch`, so the rest of pass 0's frames are still visited before the
+  pass pause's `sleep` rethrows. The `catch` is older than this branch; the wait
+  is a new thrower behind it.
+- **med** · F6 · Done when 3 depends on it · the line's named proof is a
+  wall-clock assertion that failed 1 run in 10: `npx vitest run
+  browser-resolver-press-targets.test.ts -t "pays no wait"` ten times, run 1
+  `AssertionError: expected 3751 to be greater than 5000` (test 6558 ms) and
+  runs 2–10 green. Unexplained: the `?never` page's wait ended about 1.2 s
+  short of its bound in that run.
+- **dropped** · unbounded pass from the `visited` loop on a page that keeps
+  attaching iframes: an iframe replaced every 200 ms took 178 ms at this head
+  and 188 ms on the base. Not a defect.
+- **dropped** · unbounded reload and hover loops: `allowedMs` is fixed per call
+  from the shared `spentMs`, the deadline less 1500 and the cap, and the inner
+  loop, the hovers and the reload rounds all sit inside it. The awaits without a
+  timeout (`evaluate`, `boundingBox`, `mouse.move`) have the same exposure as the
+  existing `SCROLL_SCRIPT` evaluate, under `browser.ts`'s hard cap.
+- **dropped** · names in the diff: no host, site or video address in any added
+  line. LiteSpeed and `guest.vary` name the plugin, not a site.
+- **findings** · the hunt returned 9; 6 carried, 3 dropped.
+- Teeth: the `nohover` mutation turned 4 of 7 dl-143 tests red, `nocounter`
+  turned 2 red (the `reload=early` one included), and `noready` turned 2 red
+  (`?slow`, and the never-fills timing test).
+- Merge with `main` (dl-142 landed as `b795fa13`): `git merge-tree` is clean.
+  On the merged tree, 7 of 7 dl-143 tests and 32 of 32 in
+  `browser-resolver-player-input.test.ts` pass, so dl-142's refusal of an
+  iframe box leaves this page's in-frame click intact.
+- NFR: security — F2 aims a hover at an ad iframe; no host names · performance —
+  F1, F2 · reliability — F4, F5, F6 · maintainability — F3.
