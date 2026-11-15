@@ -1038,7 +1038,7 @@ describe("a client that aborts POST /api/probe", () => {
 
     expect(performance.now() - abortedAt).toBeLessThan(FREED_WITHIN_MS);
     expect(resolver.lastOptions?.signal.aborted).toBe(true);
-    expect((resolver.lastOptions?.signal.reason as AppError).code).toBe("CANCELED");
+    expect(AppError.from(resolver.lastOptions?.signal.reason).code).toBe("CANCELED");
   });
 
   test("so a client that aborted both its probes is admitted when it asks again", async () => {
