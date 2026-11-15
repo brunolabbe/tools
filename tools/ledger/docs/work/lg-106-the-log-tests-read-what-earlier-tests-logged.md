@@ -196,7 +196,7 @@ order is only ever shuffled by the flag on the command line.
 
 1. `npx vitest run tools/ledger/api/test/csv-import.test.ts --sequence.shuffle --sequence.seed=N` reports every test passing for each N from 1 to 10, and the same for `tools/ledger/api/test/workbook-describe.test.ts`. The sweep output, with its counts, goes in the Log.
 2. Each log test passes when it is the only test selected by name: `npx vitest run tools/ledger/api/test/csv-import.test.ts -t "no line of any request above holds a CSV"` exits 0 and reads `Tests  1 passed` with every other test skipped, and `npx vitest run tools/ledger/api/test/workbook-describe.test.ts -t "no line of any request above holds the upload"` does the same. The total is not pinned, so a fix that adds a test or splits a log test in two does not fail the line. At the base the same commands exit 1 and read `1 failed`, and a pattern that matches nothing reads no `passed` at all, so `1 passed` is what discriminates.
-3. No `LOGGED` precondition in either file is satisfied by an empty array: the `toBeGreaterThan(20)` and each `LOGGED.some(...)` assert against lines the test's own run produced.
+3. No `LOGGED` precondition in either file is satisfied by an empty array: the `toBeGreaterThanOrEqual(4)` floor, one per request the test makes, and each `LOGGED.some(...)` assert against lines the test's own run produced.
 4. Unshuffled, both files pass in full: `npx vitest run tools/ledger/api/test/csv-import.test.ts` and `npx vitest run tools/ledger/api/test/workbook-describe.test.ts`, with the counts in the Log.
 5. `grep -n "tests in order\|Last: it reads" tools/ledger/api/test/csv-import.test.ts tools/ledger/api/test/workbook-describe.test.ts` prints nothing. At the base it prints one line per file (`workbook-describe.test.ts:790` and `csv-import.test.ts:1110`), so it fails there.
 6. `git diff --name-only origin/main...HEAD` lists only the two spec files and this ticket. Nothing under `tools/ledger/api/src` or `tools/ledger/contract` changes.
@@ -434,3 +434,10 @@ in `c0757103`.**
 - Recorded unfixed, not touched: gate 2's N1 (the CSV floor comment says "four
   requests", the slice holds 6), gate 1's F4 (Done when 3's wording) and F5
   (`.claude/rules/testing.md`, a separate pull request).
+
+**2026-11-15, three below-floor findings the owner chose to fix at the landing,
+with no re-gate.**
+
+- 2026-11-15 — Fixed at landing by owner choice: gate 3, P1 — "A .slice(0, 40) on the notOne secret would make the two consistent". The workbook log test's `notOne.toString("base64")` secret now carries `.slice(0, 40)`, as the `lg7` secret does. Proof, `controls5.sh` of gate 2 with `mutate4.mjs` copied to the lander's out directory: under `rejected-b64` the workbook log test reads `1 failed | 47 skipped (48)` and the CSV log test `1 failed | 62 skipped (63)`, and unplanted `workbook-describe.test.ts` reads `48 passed (48)`; `git status --short` is empty after the restore.
+- 2026-11-15 — Fixed at landing by owner choice: gate 2, N1 — "A line for each of the four requests". The CSV log test's floor comment now says the slice holds at least a line for each of the four requests plus the first app's shutdown lines, so `>= 4` is a floor; no assertion changed. Proof, run after the commit: `git diff b34060c9 HEAD -- tools/ledger/api/test/csv-import.test.ts | grep -c '^-.*A line for each of the four requests'` → `1`, and `-t "no line of any request above holds a CSV"` reads `1 passed`.
+- 2026-11-15 — Fixed at landing by owner choice: gate 1, the low on Done when 3 — "Done when 3 names toBeGreaterThan(20)". Done when 3 now names the floor as it stands, `toBeGreaterThanOrEqual(4)`, one per request the test makes, and nothing else in that line changed. Proof, run after the commit: `git diff b34060c9 HEAD -- <this file> | grep -c '^-.*precondition in either file is satisfied'` → `1`.
