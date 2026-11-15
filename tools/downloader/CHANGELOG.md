@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.12.0](https://github.com/brunolabbe/tools/compare/downloader-v0.11.0...downloader-v0.12.0) (2026-11-15)
+
+
+### Features
+
+* **downloader:** one box per analysis, several at once, queued in the browser (dl-133) ([#781](https://github.com/brunolabbe/tools/issues/781)) ([43026e1](https://github.com/brunolabbe/tools/commit/43026e1122268c13f980df19270c33f5e25a0ce3))
+
+
+### Fixes
+
+* **downloader:** an edge 429 reads as a rate limit, not INTERNAL (dl-136) ([#737](https://github.com/brunolabbe/tools/issues/737)) ([ab464a2](https://github.com/brunolabbe/tools/commit/ab464a28835d1d81cd80873ea41ee5c38ebe9197))
+* **downloader:** bound a probe at 90 s and a job creation at 30 s in the client (dl-138) ([#799](https://github.com/brunolabbe/tools/issues/799)) ([4d0ad61](https://github.com/brunolabbe/tools/commit/4d0ad61d21bee33b595c26d0e48703322581d631))
+* **downloader:** bound the human check's config read so a stall frees later calls (dl-141) ([#816](https://github.com/brunolabbe/tools/issues/816)) ([ad22bde](https://github.com/brunolabbe/tools/commit/ad22bded8ecfe593e15678f233253ec2396c794a))
+* **downloader:** break an unbroken title or error message instead of widening the page (dl-137) ([#801](https://github.com/brunolabbe/tools/issues/801)) ([3327773](https://github.com/brunolabbe/tools/commit/33277734039fb10729229055da8fbd3079e1d211))
+* **downloader:** bump yt-dlp to 2026.10.26 ([#746](https://github.com/brunolabbe/tools/issues/746)) ([f7b31c4](https://github.com/brunolabbe/tools/commit/f7b31c4dc9eb61f796c5ad042be84576bada9e60))
+* **downloader:** free a probe's slots when the client aborts its request (dl-140) ([#818](https://github.com/brunolabbe/tools/issues/818)) ([32f1525](https://github.com/brunolabbe/tools/commit/32f1525c31a544a76ec34e6c81d6f59d331e9825))
+* **downloader:** never choose a player-classed iframe as the box click's target (dl-142) ([#817](https://github.com/brunolabbe/tools/issues/817)) ([b795fa1](https://github.com/brunolabbe/tools/commit/b795fa1305a8e96c56a942afc5d539a097967b58))
+* **downloader:** press a server tab when a player iframe is blank until one is (dl-139) ([#802](https://github.com/brunolabbe/tools/issues/802)) ([5f15e56](https://github.com/brunolabbe/tools/commit/5f15e56f9993bd88adff93ff4bf3329c6953d711))
+
 ## [0.11.0](https://github.com/brunolabbe/tools/compare/downloader-v0.10.0...downloader-v0.11.0) (2026-11-01)
 
 
