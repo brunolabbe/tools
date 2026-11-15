@@ -269,6 +269,49 @@ order is only ever shuffled by the flag on the command line.
 - **findings** · the hunt returned 3. One is folded into F1 as its remaining part, one is carried as N1, and one is dropped.
 - NFR: security — the F1 remainder above · performance n/a: each log test makes four requests · reliability ✓: order dependence gone on 40 of 40 seeds, and the second app is shut down by `afterEach` because `start()` assigns it to the module's `app` · maintainability — N1.
 
+### Gate 3
+
+**Gate: PASS** — 2026-11-15 · `481a23fe..b34060c9` (the round: `c0757103`, `b34060c9`; no merge in it) · Opus 5.5, depth narrow: gate 2's F1 remainder only
+
+| Done when                                                         | Proof                                                                                                                                                                                                                                 |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Seeds 1–10 pass for both files under `--sequence.shuffle`      | **verified**. This round touched only `workbook-describe.test.ts` and the ticket. I ran workbook-describe alone under seeds 1–5 and each read `Tests 48 passed (48)`. csv-import is unchanged since gate 2 verified seeds 1–20 on it. |
+| 2. Each log test passes alone under `-t`                          | **verified** for workbook-describe: `-t "no line of any request above holds the upload"` exits 0 and reads `1 passed \| 47 skipped (48)`. csv-import is unchanged since gate 2.                                                       |
+| 3. No `LOGGED` precondition is satisfied by an empty array        | **verified**, carried from gate 2. The round added two strings to `secrets` and moved no precondition. The wording low (gate 1's F4) is recorded unfixed on purpose.                                                                  |
+| 4. Both files pass unshuffled                                     | **verified**. workbook-describe reads `48 passed (48)`. csv-import is unchanged.                                                                                                                                                      |
+| 5. The order-comment grep prints nothing                          | **verified**, carried from gate 2. The round's comment adds neither phrase.                                                                                                                                                           |
+| 6. Only the two specs and the ticket change                       | **verified**. `git diff --name-only origin/main...b34060c9` lists `csv-import.test.ts`, `workbook-describe.test.ts` and the ticket.                                                                                                   |
+| 7. `npm run check` exits 0, `npm test -- --project ledger` passes | **verified** from PR #805's CI at `b34060c9`: `check` passed and `test (ubuntu-latest)` passed. The informational Windows leg was still pending, and it is not graded.                                                                |
+| 8. A filtered run of an unrelated test passes                     | **verified**, carried from gate 2. The round did not touch those tests or any hook.                                                                                                                                                   |
+
+**Earlier findings**
+
+- **F1 (high) · fixed.**
+  - **The plants go red.** On `b34060c9`, under both of gate 2's `controls5.sh` plants, the workbook log test reads `1 failed | 47 skipped (48)` with `expected [ …(2) ] to deeply equal []`. The CSV log test reads `1 failed | 62 skipped (63)` under both. The base-spec b64 control is still red on 12 lines. `git status --porcelain` is empty after the restore.
+  - **The guard is real, not incidental.** I dumped the test's slice and checked which secret each line holds:
+    - Unplanted, none of the 4 lines holds any secret.
+    - Under `rejected-b64`, both `WORKBOOK_NOT_XLSX` lines are caught by `notOne.toString("base64")` and by no other secret.
+    - Under `rejected-text`, both lines are caught by `"this is not a workbook"` and by no other secret.
+    - So each new secret is the only thing that catches its plant, and neither matches a line from a successful request.
+- **N1 (low), gate 1's F4 and F5** · not fixed, on purpose, as recorded. Not re-graded.
+
+**New**
+
+- **P1 · low** · maintainability. No live call site. This text is false in the safe direction.
+  - The base64 secret is the whole encoding of `notOne`, which is 36 characters (`UEsDBCB0aGlzIGlzIG5vdCBhIHdvcmtib29r`).
+  - Gate 2's plant logs a 60-character prefix of the upload. It contains the secret only because 36 is less than 60.
+  - If `notOne` grew past 45 bytes, a prefix echo would stop matching the base64 secret, and only the text secret would be left.
+  - The `lg7` secret avoids this with `.slice(0, 40)`. A `.slice(0, 40)` on the `notOne` secret would make the two consistent.
+- **P2 · low** · no live call site. The title's claim covers only the refusals the test makes, which are `WORKBOOK_NOT_XLSX`.
+  - **The plant.** `echo-other` logs the body's `file` on every refusal except `WORKBOOK_NOT_XLSX`. It is not caught at head (`-t`: `1 passed | 47 skipped (48)`). The base spec catches it on 12 lines.
+  - **The real handler does not log that way.** It builds `fields` the same way for every 4xx. So any body echo added to the handler also reaches the test's `WORKBOOK_NOT_XLSX` lines, and those plants are red.
+  - **The other realistic leak path is not lost either.** That path is a code's own message or details values. Under the `msg-details` plant, the base's whole-file run caught only the 4 `WORKBOOK_NOT_XLSX` lines. None of its `LAYOUT_UNREADABLE`, `BAD_REQUEST` or `WORKBOOK_IMPORT_REFUSED` lines held a secret. So no realistic leak is caught at the base and missed at head.
+  - **Why the coverage is bounded.** Build 1, the owner's chosen shape, limits the test to its own requests.
+  - **The alternative, measured.** It adds a describe of `lg7` with `consent: false`. Unplanted, it passes (`1 passed`). Under `echo-other` it is red on 1 `BAD_REQUEST` line. It would close the gap for that one code only.
+- **dropped** · the `msg-details` plant is red at head for the wrong reason. Both of its lines match the pre-existing `".xlsx"` secret through the fixed copy "Only an .xlsx workbook…", not through any upload content. That secret is outside this round's lines, and the falsehood is in the safe direction, a false red.
+- **findings** · the hunt returned 3. Two are carried (P1, P2) and one is dropped.
+- NFR: security — P2 above; F1 is closed · performance n/a: two strings added · reliability ✓: seeds 1–5 are green, and so are `-t` and the unshuffled run · maintainability — P1.
+
 ## Log
 
 **2026-11-10, filed by a maintenance builder (no work built).** The
