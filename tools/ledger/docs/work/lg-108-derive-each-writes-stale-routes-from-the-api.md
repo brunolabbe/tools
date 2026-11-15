@@ -554,3 +554,20 @@ screen case still proves were open here until the owner answered them on
 
   `npx tsc --build` → 0 `error TS`; `npx oxlint tools/ledger/api tools/ledger/web`
   exit 0. The ledger suite is left to CI on the draft.
+- 2026-11-15 — **Owner answers after the build** (owner, 2026-11-15; recorded by the
+  round-1 fixer, Sonnet 5.5). Two decisions, each with the options put to the owner
+  and the choice.
+  1. Gate 1's F1, `retireRule`'s seed cannot reach `/api/rows` (the plant
+     `retireRule: entry(() => retireRule, [ROUTES.rules, ROUTES.inbox])` passed the
+     harness). Options: (1) widen `retireRule`'s seed; (2) record it under the
+     accepted bound (Question 5). **Chosen: (1).** The seed now retires a rule that
+     files an unfiled row; see the round entry below.
+  2. The builder's open decision on `fileReceipt` filed onto a row: only
+     `receiptMatches` changes, and `fileReceipt`'s list does not mark it, because the
+     web reads matches uncached through `fetchReceiptMatches`. Options: (1) accept
+     as a known limit, recorded in the Log; (2) add `ROUTES.receiptMatches` to
+     `fileReceipt`'s list plus a row case, as a follow-up ticket; (3) the harness
+     skips uncached routes from a hand-written list. **Chosen: (1).** Known limit:
+     the committed case files `fileReceipt` to a line, so an omission of
+     `receiptMatches` on a filing onto a row is not caught, and no screen holds that
+     answer stale.
