@@ -1,10 +1,10 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { expect, test } from "vitest";
 import { checkReview } from "../preflight.mjs";
 import { readTickets, reviewedButReady } from "../status.mjs";
-
+import { tempDirs } from "./temp-dirs.ts";
+const temp = tempDirs(); // removed per case (repo-147)
 /**
  * repo-73: `hasGateRecord` reads fences with the same rule `extractSections`
  * does, rather than a looser one of its own — and so does preflight's check 3,
@@ -20,7 +20,7 @@ import { readTickets, reviewedButReady } from "../status.mjs";
  * starts with a backtick run that is followed by another backtick.
  */
 function repoWith(tickets: Record<string, string>): string {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "status-gate-"));
+  const root = temp.make("status-gate-");
   for (const [file, body] of Object.entries(tickets)) {
     const full = path.join(root, file);
     fs.mkdirSync(path.dirname(full), { recursive: true });

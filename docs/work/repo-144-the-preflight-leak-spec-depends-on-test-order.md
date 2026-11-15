@@ -3,7 +3,7 @@ id: repo-144
 tool: repo
 title: The preflight leak spec counts the shim directories earlier tests made, so a shuffled run reds it
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -16,8 +16,9 @@ difficulty: standard
 `scripts/test/preflight.test.ts` ends with a spec that reads a module-level list,
 `shimDirsMade`, and asserts two things about it: that at least three shim
 directories were made, and that none of them still exists
-(`scripts/test/preflight.test.ts:3038-3041`). The two-line comment above it says
-why it sits last: "it reads what every test above left behind" (`:3036-3037`).
+(`scripts/test/preflight.test.ts:3038-3041` at `a100f429`). The two-line comment
+above it says why it sits last: "it reads what every test above left behind"
+(`:3036-3037` at `a100f429`).
 Under vitest's file order that holds. Under `--sequence.shuffle` it does not. The
 spec runs before some of the tests that call `makeShimDir()`, so the floor sees
 fewer than three and fails, even though nothing leaks.
@@ -36,7 +37,7 @@ Log; this is the repo half. The ledger half is a separate ticket and is not
 covered here. The repo-129 builder's report at that checkpoint recommended
 filing a ledger ticket for the two ledger files and a repo ticket for ghshim,
 and the owner chose that. repo-129's branch (`repo-129-split-isolation`, pull
-request #783, not merged) diagnoses the same failure on 2026-11-10 and leaves it
+request #783, since merged as `768661a7`) diagnosed the same failure on 2026-11-10 and left it
 alone. It was never an isolation problem, which is why `--isolate` is not the
 fix and why this ticket does not touch the project split.
 
@@ -150,7 +151,7 @@ what it says.
    it proves `makeShimDir` pushes onto `shimDirsMade`, and says nothing about the
    six tests that call it.
 3. Remove the old `test(...)` at `:3038-3041` and its two-line comment at
-   `:3036-3037`. Delete all six lines (comment 2, test 4): deleting only `:3037` leaves a
+   `:3036-3037` (both at `a100f429`). Delete all six lines (comment 2, test 4): deleting only `:3037` leaves a
    dangling comment. Keep an explanatory comment in the hook that says why it is in an
    `afterAll`: shuffled order is the reason.
 4. Mutation control, committed first: commit the file as a baseline
@@ -228,6 +229,30 @@ checkpoint 6 for the first form and re-asked at checkpoint 9.
 6. `npm run check` exits 0 and `npx oxfmt --check scripts/test/preflight.test.ts`
    exits 0, both at the branch head.
 
+## Review
+
+**Gate: PASS** — 2026-11-15 · `4e040577..2f072e86` · Opus 5.5, depth standard (dispatch: medium steps, 15-minute sweep budget)
+
+| Done when                                                                                                                                    | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| -------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. `--sequence.shuffle --sequence.seed=2` exits 0, `Test Files  1 passed (1)`                                                                | **verified** — re-run on the head: exit 0, `Tests  121 passed \| 1 skipped (122)`. Nothing in `npm test` shuffles, so no test asserts it                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| 2. Seeds 1–20 shuffled each exit 0; the Log records the sweep and the base's 2, 7, 8, 16                                                     | **verified** — 20 of 20 seeds exit 0 with `Test Files  1 passed (1)`, one `npx vitest run` each; the Log's `2026-11-15 — built` entry records the sweep and the four base seeds (read)                                                                                                                                                                                                                                                                                                                                                                            |
+| 3. File order and `--sequence.shuffle.files --sequence.seed=2` exit 0, `Test Files  1 passed (1)`                                            | **verified** — both re-run: exit 0, 121 passed, 1 skipped (122). File order also runs in CI's `test (ubuntu-latest)`, green on `2f072e86`                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| 4. The hook, the `shimDirsMade` grep, the mutation control red in file order and seed 2 naming the path, and an empty diff from the baseline | **verified** — `grep -n afterAll` shows the new file-level hook beside the two existing ones; `grep -n shimDirsMade` shows the declaration, `makeShimDir`'s push, the hook (with its own comment) and the cover test `scripts/test/preflight.test.ts` › "makeShimDir records each directory (repo-144)", and no other test body. Planted leak (no `removeShimDir` in the `--only mergeTree` test): exit 1, `Test Files  1 failed (1)`, `leaked: <path>` in file order and under seeds 1, 2, 7, 8, 16. `git diff --stat 355d186b 2f072e86` touches only the ticket |
+| 5. Five `-t` filters exit 0, `Test Files  1 passed (1)`                                                                                      | **verified** — `repo-110` 3 passed \| 119 skipped; `repo-104` 14 \| 108; the id-sweep wording 2 \| 120; `allProjects is exactly` 1 \| 121; `makeShimDir records each directory` 1 \| 121; each exit 0                                                                                                                                                                                                                                                                                                                                                             |
+| 6. `npm run check` and `npx oxfmt --check scripts/test/preflight.test.ts` exit 0 at the head                                                 | **verified** — `oxfmt --check` exit 0 locally; `npm run check` read from CI's `check` job (workflow `CI`), SUCCESS on `2f072e86`, not run locally                                                                                                                                                                                                                                                                                                                                                                                                                 |
+
+- **low** · no `Done when` line depends on it · `nfr:reliability` — a red leak hook stops the file's other `afterAll` hooks. Vitest runs `afterAll` in stack order, so the new hook in `scripts/test/preflight.test.ts` runs before the `repoTemplate` and `titleDir` cleanups declared above it, and its failure skips them. One planted-leak file-order run in an empty `TMPDIR` leaves `preflight-ghshim`, `preflight-template` and `preflight-title`; the same plant on the base's last-test shape leaves only `preflight-ghshim`. The condition is a run that is already red for a leak, so this is litter, not a hidden failure. Measured remedy: declare the hook before the file's first `afterAll`, and the planted run leaves only the shim directory, still exit 1 naming it (file order and seed 2), clean exit 0. That move was not run through `npm run check` or `oxlint`.
+- **low** · no `Done when` line depends on it · `nfr:maintainability` — `.claude/rules/testing.md` still names "`preflight.test.ts`'s ghshim case" among the files that fail under plain `--sequence.shuffle`. Since this change it does not (20 of 20 seeds pass). The text is false in the safe direction: a reader avoids an order that now works. Rule pages are the owner's, which is why the builder left it. **Open decision**: (a, recommended) delete that clause at the landing with the owner's approval; (b) leave it for the next log review.
+- **low** · no `Done when` line depends on it · `nfr:maintainability` — the Why paragraph and Build 3 cite the old spec as `:3038-3041` and `:3036-3037` with no sha in those sentences. At the base `4e040577` the block is at `:3049-3053`. They are `a100f429`'s numbers, as only the later "state it depends on" heading says. The builder's Log discloses this. False in the safe direction: the build is done and deleted the right block.
+- **dropped** · the hook as vacuous: refuted. The two other `afterAll` hooks remove only `repoTemplate` and `titleDir`, never shim directories or `shimDirsMade`, and the planted leak reds every run tried (6 direct runs, `npm test -- --project repo`, `-t "repo-104"`).
+- **dropped** · the mid-file insert shifts every later line by 21. Only two citations past the insert exist outside this ticket, and both are pinned to their own shas (repo-129's Log at `7134af89`, `reference/history.md` at `8f870cc4`).
+- **dropped** · `grep -n shimDirsMade` prints one comment line beyond the four Done when 4 names. It is the hook's own explanatory comment, which Build 3 asks for.
+- **dropped** · out of the reviewed range: one clean run each of `scripts/test/status.test.ts`, `next-id.test.ts` and `hooks.test.ts` leaves 133, 31 and 3 temp directories. None is in the diff. This is for the orchestrator to file or not.
+- **findings** · the hunt returned 7; 3 carried, 4 dropped.
+- NFR: security n/a · performance ✓ (one test, about 1 ms) · reliability — first low · maintainability — second and third lows.
+- Build skipped: the diff's one source file is a `scripts/test` spec importing `node:` builtins, `vitest` and sibling `scripts/*.mjs`. Farmed. The Windows leg `test (windows-latest, informational)` is SUCCESS on `2f072e86`.
+
 ## Log
 
 ### 2026-11-10 — filed
@@ -242,7 +267,7 @@ ledger ticket; the owner chose filing two, the repo-129 builder's recommendation
 
 Two readings on record that this measurement qualifies. repo-110's Log on `main`
 says seed 1 fails with the same message, and repo-128's gate record on the
-unmerged branch `repo-129-split-isolation` says seeds 1 and 2 fail on the base's
+branch `repo-129-split-isolation` (unmerged then, merged since as `768661a7`) says seeds 1 and 2 fail on the base's
 copy of the file. At `a100f429`, seed 1 passes and seed 2 fails (run twice). The
 failing seeds move with the test set, so the Build asks for a sweep rather than
 one seed.
@@ -352,3 +377,82 @@ ledger ticket is outside this pull request's range, so it is not a defect here.
   `git diff 264f2e1d HEAD -- docs/work/repo-144-the-preflight-leak-spec-depends-on-test-order.md | grep -c '^-.*list. The mutation control in Build 4'` → `1`.
 - 2026-11-10 — Fixed at landing by owner choice: gate 2, F6 (fixed in part) —
   "Delete all four lines miscounts a six-line block." `git diff 264f2e1d HEAD -- docs/work/repo-144-the-preflight-leak-spec-depends-on-test-order.md | grep -c '^-.*Delete all four lines: deleting only'` → `1`.
+
+### 2026-11-15 — built
+
+Base `origin/main` at `4e040577`; baseline commit `355d186b` carries the change to
+`scripts/test/preflight.test.ts` (the only source file touched).
+
+- **What changed.** The leak check is a file-level `afterAll` beside `makeShimDir`,
+  asserting `shimDirsMade.filter(existsSync)` is empty with the message
+  `leaked: <paths>`; it has no floor. The old test and its two-line comment are
+  deleted (seven lines, the blank line before them included). A cover test,
+  `makeShimDir records each directory (repo-144)`, makes its own directory,
+  asserts it is in `shimDirsMade` and exists, and removes it. `vitest.config.ts`
+  is untouched. The file still reports 122 tests, one skipped: one removed, one added.
+  _Withdrawn at the landing: "beside `makeShimDir`" no longer holds. The lander
+  moved the hook above the file's first `afterAll`; see the landing entry below._
+- **Sweep, at the branch head, one `npx vitest run scripts/test/preflight.test.ts`
+  per row.** File order: exit 0, `Test Files  1 passed (1)`, `Tests  121 passed | 1
+  skipped (122)`. `--sequence.shuffle.files --sequence.seed=2`: the same. Done when
+  2: `--sequence.shuffle --sequence.seed=n` for n = 1 to 20, exit 0 and
+  `Test Files  1 passed (1)` on all twenty. The base's failing seeds, from the
+  ticket's Reproduction and re-measured by the intake at `4e040577`, were 2, 7, 8
+  and 16.
+- **Filters (Done when 5), each exit 0, `Test Files  1 passed (1)`:**
+  `-t "repo-110"` 3 passed | 119 skipped; `-t "repo-104"` 14 passed | 108 skipped;
+  `-t "the CLI never leaks next-id.mjs's id-sweep wording"` 2 passed | 120 skipped;
+  `-t "allProjects is exactly"` 1 passed | 121 skipped;
+  `-t "makeShimDir records each directory"` 1 passed | 121 skipped.
+- **Mutation control (Build 4).** With `removeShimDir(shimDir);` commented out in
+  the `finally` of the `--only mergeTree` test (line 2296), file order: exit 1,
+  `AssertionError: leaked: /tmp/preflight-ghshim-YwX4z4: expected [
+  '/tmp/preflight-ghshim-YwX4z4' ] to deeply equal []`, `Test Files  1 failed (1)`,
+  `Tests  121 passed | 1 skipped (122)`. Under `--sequence.shuffle --sequence.seed=2`:
+  exit 1, `leaked: /tmp/preflight-ghshim-H4ssqM`, `Test Files  1 failed (1)`. Both
+  name the leaked directory. Restored with `git checkout 355d186b -- scripts/test/preflight.test.ts`;
+  `git diff 355d186b -- scripts/test/preflight.test.ts | wc -l` → `0`. The two
+  leaked directories were removed by hand.
+- **Build 6.** `npx oxlint scripts/test/preflight.test.ts` and
+  `npx oxfmt --check scripts/test/preflight.test.ts` clean; `npm run check` exit 0.
+- **What the brief had wrong.** repo-129's pull request #783 is merged
+  (`768661a7`), not open; the Why and the 2026-11-10 filing entry now say so.
+  The spec had moved to about `:3049-3054` after #783 added lines near 2593; the
+  line numbers in the Why and Reproduction are the base `a100f429`'s and are left
+  as that record. The removal at the `--only mergeTree` test is still at `:2296`.
+- **Not folded in.** `.claude/rules/testing.md` still lists "`preflight.test.ts`'s
+  ghshim case" among files that fail under `--sequence.shuffle`; after this change
+  it no longer does, so that sentence is now stale. It is a rule page, which a
+  builder never edits: reported for the owner.
+
+### 2026-11-15 — landing
+
+- 2026-11-15 — Owner's answers at the landing, relayed in the lander's dispatch.
+  The stale rule-page clause (`.claude/rules/testing.md` still listing the ghshim
+  case among the files that fail under plain `--sequence.shuffle`); options:
+  (1) the lander edits it on #803, (2) leave it for the next log review, (3) file a
+  ticket; the owner chose (1). The gate's first and third lows; options: fix both
+  at landing with no re-gate, the first only, neither; the owner chose both.
+- 2026-11-15 — The rule-page edit is made on the owner's explicit instruction, by
+  the lander and not the builder: the ghshim item is removed from the parenthesis
+  in `.claude/rules/testing.md`, the ledger's two files remain.
+  `git diff 2f072e86 HEAD -- .claude/rules/testing.md | grep -c '^-.*ghshim case'` → `1`.
+- 2026-11-15 — Fixed at landing by owner choice: gate 1, the first low — "declare
+  the hook before the file's first `afterAll`, and the planted run leaves only the
+  shim directory". The hook and its comment now sit above the `repoTemplate`
+  cleanup. Planted leak (no `removeShimDir` in the `--only mergeTree` test's
+  `finally`), one `npx vitest run scripts/test/preflight.test.ts` each under a
+  private `TMPDIR`: file order exit 1, `Test Files  1 failed (1)`, and a
+  `leaked:` line naming the path; `--sequence.shuffle --sequence.seed=2` the
+  same; each left one `preflight-ghshim-*` directory and no `preflight-template`
+  or `preflight-title` (the only other entry was node's own `node-compile-cache`).
+  Restored with `git checkout 3e4224ca -- scripts/test/preflight.test.ts`, then
+  `git diff 3e4224ca -- scripts/test/preflight.test.ts | wc -l` → `0`. Seeds 1
+  to 20 shuffled: 20 of 20 exit 0, `Test Files  1 passed (1)`.
+  `npm run check` exit 0 at the fix commit `3e4224ca`, after `npm run build` exit 0.
+- 2026-11-15 — Fixed at landing by owner choice: gate 1, the third low — "the Why
+  paragraph and Build 3 cite the old spec as `:3038-3041` and `:3036-3037` with no
+  sha in those sentences". Pinned to `a100f429`, the sha whose numbers they are:
+  `git show a100f429:scripts/test/preflight.test.ts | sed -n 3036,3041p` is the
+  two-line comment and the four-line test.
+  `git diff 2f072e86 HEAD -- docs/work/repo-144-the-preflight-leak-spec-depends-on-test-order.md | grep -c '^-.*above left behind'` → `1`.

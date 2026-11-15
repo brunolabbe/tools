@@ -46,9 +46,17 @@ import {
   runCommand,
   stackSources,
 } from "../next-id.mjs";
+import { tempDirs } from "./temp-dirs.ts";
 
 const REPO = path.resolve(import.meta.dirname, "../..");
 const CLI = path.join(REPO, "scripts", "next-id.mjs");
+
+/**
+ * Every directory a case makes with `temp.make` is removed when that case ends
+ * (repo-147). The one exception is `mergedRemoteTemplate`'s, which outlives its
+ * case on purpose and is removed in this file's `afterAll`.
+ */
+const temp = tempDirs();
 
 /**
  * The scripted board's stand-in for an object store.
@@ -399,7 +407,7 @@ test("a command that dies after writing part of its output contributes nothing",
  * of argv entirely.
  */
 test("runCommand discards the stdout of a command that failed after writing some", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "next-id-partial-"));
+  const dir = temp.make("next-id-partial-");
   const child = path.join(dir, "half.mjs");
   fs.writeFileSync(
     child,
@@ -510,7 +518,7 @@ const runGit = (cwd: string, args: string[]) => {
 };
 
 function pathWithout(missing: string): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "next-id-path-"));
+  const dir = temp.make("next-id-path-");
   const entries = (process.env.PATH ?? "").split(path.delimiter).filter(Boolean);
   const extensions = ["", ".exe", ".cmd", ".bat"];
   for (const command of ["git", "gh"]) {
@@ -562,7 +570,7 @@ test("a command that is not on PATH exits 127 and says which one", () => {
  * from a different tree is this ticket's defect in one more costume.
  */
 test("a missing default rev keeps git's status and says how to fix it", () => {
-  const shallow = fs.mkdtempSync(path.join(os.tmpdir(), "next-id-shallow-"));
+  const shallow = temp.make("next-id-shallow-");
   for (const args of [
     ["init", "-q"],
     [
@@ -587,7 +595,7 @@ test("a missing default rev keeps git's status and says how to fix it", () => {
 });
 
 test("git failing outside a repository exits non-zero rather than printing a short list", () => {
-  const outside = fs.mkdtempSync(path.join(os.tmpdir(), "next-id-outside-"));
+  const outside = temp.make("next-id-outside-");
   const result = cli(["repo", "--repo", outside]);
   expect(result.status).not.toBe(0);
   expect(result.stdout).toBe("");
@@ -622,7 +630,7 @@ test("the CLI reports usage and exits 1 with no prefix", () => {
  * is the seam the CLI itself uses, not a test-only branch.
  */
 test("against a real fixture remote, an unfetched branch is named and a fetched one is read", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "next-id-remote-"));
+  const dir = temp.make("next-id-remote-");
   const bare = path.join(dir, "remote.git");
   const peer = path.join(dir, "peer");
   const mine = path.join(dir, "mine");
@@ -693,7 +701,7 @@ test("against a real fixture remote, an unfetched branch is named and a fetched 
  * fetched.
  */
 test("a branch sharing no history with the rev over-claims rather than killing the sweep", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "next-id-orphan-"));
+  const dir = temp.make("next-id-orphan-");
   const bare = path.join(dir, "remote.git");
   const peer = path.join(dir, "peer");
   const write = (file: string, text: string) => {
@@ -774,7 +782,7 @@ afterAll(() => {
 });
 
 function copyOfMergedRemote(merged: Record<string, string>) {
-  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "next-id-edit-")));
+  const dir = fs.realpathSync(temp.make("next-id-edit-"));
   fs.cpSync(mergedRemoteTemplate(merged), dir, { recursive: true });
   const bare = path.join(dir, "remote.git");
   const peer = path.join(dir, "peer");
