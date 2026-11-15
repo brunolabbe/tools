@@ -7311,3 +7311,75 @@ Wall times of about 10–11 h on three agents and the orchestrator are a 5-hour 
 - _An answer given on a premise a later measurement changed is re-asked_: the testing.md answer was re-asked twice. The first time was against lg-106's Build 4 and Done when 6. The second was after repo-144 emptied the parenthesis. Both times the owner re-chose.
 - A third gate after gate 2's high, narrow and with no owner question, closed lg-106 at $1.72.
 - records.md's rule for a suite failing in an untouched file landed lg-108 with one `--only check` rerun and no second `--land`.
+
+### Batch 2026-11-15 (tools-60, dl-137 dl-138 dl-139, dl-140 dl-141 dl-142 filed, adr/005 register) — base 4e040577
+
+| PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| — | — | Sonnet 5.5 / high | a4f58073fdf6a1caf | seam-mapper, dl-134 step 11, dl-135, dl-137, dl-138, dl-139 | 1m37s / 1m35s | 0 | $0.3441 |
+| #801 | open, ready, 11/11 at 4e37db09 | Sonnet 5.5 / high | a49abf85ed3cfa534 | builder-standard, dl-137 build + round 1 (subtitle-label fold-in, F2, F3) | 13m53s / 33m05s | 0 | $1.9029 |
+| #801 | as above | Opus 5.5 / high | aa9488dda2aa0a64a | ticket-reviewer-opus, dl-137 gate 1 | 15m10s / 14m38s | 0 | $3.6560 |
+| #801 | as above | Opus 5.5 / high | a605c49d0f182646a | ticket-reviewer-opus, dl-137 gate 2, narrow | 9m45s / 9m42s | 0 | $2.5815 |
+| #801 | as above | Sonnet 5.5 / high | a25c671ba5a400ada | fixer, dl-137 owner answers + landing | 4m39s / 4m38s | 0 | $0.4725 |
+| #799 | open, ready, 11/11 at e476fa75 | Sonnet 5.5 / high | a04fe2ff6db5be5e8 | builder-standard, dl-138 | 6m40s / 6m26s | 0 | $1.2709 |
+| #799 | as above | Opus 5.5 / high | a731f0090d66248b0 | ticket-reviewer-opus, dl-138 gate 1 | 16m52s / 16m48s | 0 | $4.2664 |
+| #799 | as above | Sonnet 5.5 / high | a7880c5187649a383 | fixer, dl-138 med + low at landing + landing | 7m19s / 6m30s | 0 | $1.0503 |
+| #802 | open, ready, 10/11 at 27613f49 (`CodeQL` red: the one adr/005-excused fixture alert, clears on the push to main) | Sonnet 5.5 / high | a3ff23b9be795a872 | builder-standard, dl-139 build + round 1 | 27m51s / 45m54s | 0 | $3.3627 |
+| #802 | as above | Opus 5.5 / high | a27b294526a90cb14 | ticket-reviewer-opus, dl-139 gate 1 | 13m52s / 13m46s | 0 | $3.6079 |
+| #802 | as above | Opus 5.5 / high | a4ccc876bbafd9392 | ticket-reviewer-opus, dl-139 gate 2 | 9m41s / 9m36s | 0 | $2.9166 |
+| #802 | as above | Sonnet 5.5 / high | ada5f3804ce4aac59 | builder-standard, dl-139 round 2 (fresh; first builder spent) | 12m16s / 12m12s | 0 | $0.8815 |
+| #802 | as above | Opus 5.5 / high | a83c43dcf79bce54e | ticket-reviewer-opus, dl-139 gate 3, narrow (owner-asked) | 11m07s / 11m01s | 0 | $2.1790 |
+| #802 | as above | Sonnet 5.5 / high | aa8c361d9e70697f7 | fixer, dl-139 label-for fix at landing + landing | 32m56s / 22m54s | 0 | $0.9344 |
+| #809 | open, ready, 6/6 + matrix skipped at b1998a85 | Sonnet 5.5 / high | aec54907ebfbfb5f4 | builder-standard, filing dl-140 dl-141 dl-142 | 6m06s / 6m02s | 0 | $1.1916 |
+| #809 | as above | Opus 5.5 / high | ad4a7d5c82688b619 | ticket-reviewer-opus, filing gate 1, narrow | 6m37s / 6m33s | 0 | $2.3415 |
+| #809 | as above | Sonnet 5.5 / high | a1500133bfa635efd | fixer, 2 meds + 7 lows at landing + landing (no `--land`) | 5m55s / 5m31s | 0 | $0.9073 |
+| #810 | open, ready, 6/6 + matrix skipped at e5529030 | Sonnet 5.5 / high | aadc7b4925d542a17 | builder-standard, adr/005 register + round 1 | 4m07s / 11m51s | 0 | $0.4955 |
+| #810 | as above | Opus 5.5 / high | a06188db06fd64b6c | ticket-reviewer-opus, gate 1, narrow | 5m24s / 5m21s | 0 | $1.6135 |
+| #810 | as above | Opus 5.5 / high | ad33256b607e899c4 | ticket-reviewer-opus, gate 2, narrow | 6m09s / 6m06s | 0 | $1.6986 |
+| #810 | as above | Sonnet 5.5 / high | ac6fc859dc0bb130a | fixer, 3 lows at landing + landing (no `--land`) | 1m29s / 1m26s | 0 | $0.2770 |
+| — | — | Opus 5.5 / high | orchestrator f3856c40 | orchestrator (floor) | 2h08m11s / 2h11m57s | 0 | $11.6326 |
+| | | | | **total** (rates read 2026-10-10), before the log fixer | 5h47m35s | 0 | **$49.5841** |
+
+The Tickets line's builder bar: every builder was read against the $10 bar at its first report ($1.27–$3.36), and none was past it. dl-139's second round went to a fresh builder because the first builder's one round was spent, not because of cost.
+
+**Tickets:**
+
+- dl-137 → #801: gate 1 PASS (Opus). Round 1 by the builder: the owner folded gate 1's F1, a subtitle language widening the page, into the ticket, overriding the gate's "file". Narrow gate 2 PASS. Landed `done`.
+- dl-138 → #799: gate 1 CONCERNS (Opus). Its med was that the branch's comments said a client abort frees the server's probe slot, which it does not: the route's `close` listener never fires. The four comments were fixed at landing with no re-gate. Landed `done`. Two findings filed as dl-140 and dl-141.
+- dl-139 → #802:
+  - Gate 1 CONCERNS (Opus), three meds: a wrapper bypassed the leaving-link rule, a CodeQL alert on the fixture, and the once-per-probe flag was untested.
+  - Round 1 by the builder; the CodeQL alert was excused under adr/005.
+  - Gate 2 CONCERNS: F1 fixed in part, since a wrapper holding a form's submit button was still pressed.
+  - Round 2 by a fresh builder, because the first builder's round was spent.
+  - Gate 3, narrow, on the owner's request: CONCERNS, F1 fixed in part again, now for a held `<label for>` whose control a form owns. The owner chose a fix at landing with no re-gate.
+  - Gate 1's attack 4 was filed as dl-142.
+- Filing #809 (dl-140, dl-141, dl-142): narrow gate 1 CONCERNS (Opus). Two meds in dl-141's text: option A's mechanism understated, and an ungated `npx vitest run` Done-when line. Both meds and the seven lows were fixed at landing. dl-141 stays `needs-decision` until #799 merges.
+- #810, adr/005's register command, no ticket: narrow gate 1 FAIL with a high. The `--include` list I prescribed missed `.tsx`, `.mjs` and `.js`. Round 1 switched to the owner's choice, `git grep` excluding `.md` and `.yml`. Narrow gate 2 PASS, with three lows fixed at landing.
+- Waited for a slot: dl-135 behind dl-137, and dl-134 step 11 behind dl-138. Neither was started, because their blockers had not merged by the close.
+
+**Defects in the skill:**
+
+1. `SKILL.md`, _The loop_, step 1 (Intake). It never checks that the project agents and skills are loaded. VS Code extension 2.1.325 launched both live sessions with `--setting-sources=user`, so the first dispatch failed.
+   Reproduction, run by the orchestrator at intake: `tr '\0' ' ' < /proc/<cli pid>/cmdline` → `… --setting-sources=user --permission-mode=auto …`, then `Agent(subagent_type: "seam-mapper")` → `Agent type 'seam-mapper' not found. Available agents: claude, claude-code-guide, Explore, general-purpose, Plan, statusline-setup`. A relaunch ran with `--setting-sources=user,project,local` and the agents loaded.
+2. `review-ticket/gate.md`, the filing paragraph ("`orchestrate-tickets`' `records.md`, _When there is no ticket_"). It names the file without its `reference/` directory. Two gates (filing #809, and #810's gate 1) looked for it at the skill root.
+   Reproduction, run by the orchestrator: `ls .claude/skills/orchestrate-tickets/records.md` → `No such file or directory`.
+3. `reference/records.md`, the _Fixed at landing_ proof recipe `git diff <gated sha> HEAD -- <path> | grep -c '^-.*<a fragment …'`. It returns 0 when the removed sentence wraps across two comment lines. The page does not say to pick a one-line fragment.
+   Relayed from dl-138's lander, not re-run: the fragment "which is how a client timeout reaches it" was split across two lines of `request-timeout-app.test.tsx`.
+4. `roles/reviewer.md` (the second tree, around line 72) and `roles/common.md` (around line 101). The recipe `git worktree add --detach /workspaces/tools/.claude/worktrees/gate-<id>-<n> <sha>` is refused for a worktree-isolated gate. A `git archive` extract into scratch worked.
+   Relayed from #810's gate 1, not re-run: the harness answered "gives worktree add a path in the shared checkout … Refusing to run it".
+5. `review-ticket/gate.md`. Two rules conflict: a returning finding keeps its severity, but shipped text false in the unsafe direction grades `high`. When the remaining part of a finding includes such text, both apply.
+   Relayed from dl-139's gate 3, not re-run: it kept `med` and put the regrade to the owner.
+6. `review-ticket/gate.md`, around line 33 ("one row per supplied check" and "one row per earlier finding"). It is ambiguous for gate 2 on a no-ticket branch whose dispatch supplies checks.
+   Relayed from #810's gate 2, not re-run.
+7. `reference/dispatching.md`, _Re-gating_ (probe scripts by full path). A handed wrapper can run files from its `$OUT` that the dispatch never names. Gate 3 had to copy `provoke-probe.mts` and `mutate.mjs` from `gate-1/`.
+   Reproduction, run by the orchestrator: `grep -n provoke-probe <scratch>/dl-139/gate-2/sweep.sh` → `14:  node --import tsx "$OUT/provoke-probe.mts" …`.
+8. `roles/reviewer.md`, gate 2. No rule says to re-read a sibling PR's head when a finding rests on it. #802 moved from 6efde6e1 to 30dddf53 during #810's gate 2, and that gate's N2 evidence came from the moved head.
+   Relayed from #810's gate 2, not re-run.
+9. `reference/records.md`, _When there is no ticket_ ("`- <date> — Gate 1's full report is on the pull request thread …`"). It does not say whether that Log entry also belongs on a `--land` landing.
+   Relayed from dl-138's lander, not re-run. That lander added none.
+
+**Worked, and worth keeping:**
+
+- Opus gates on standard tickets reached past their range and carried reproductions: the route's dead `close` listener, the stalled config read, and the blind iframe box click. All three became tickets with the gate's scripts as their reproduction (#809).
+- The owner-requested narrow gate 3 on dl-139 found a third variant of the same mechanism that two gates had already narrowed, and handed back a remedy measured on the probe.
+- Dry-running a gate's remedy before offering it (#810's `git grep`: 13 on main, 14 at dl-139) let the owner choose from a figure, not a direction.
