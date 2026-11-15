@@ -253,3 +253,133 @@ describe("the HTTP transport", () => {
     expect(fetchSpy.mock.calls.some(([input]) => String(input) === ROUTES.config)).toBe(false);
   });
 });
+
+// dl-141: a `GET /api/config` that never answers used to be the memo for every
+// later call, and none of them reached the fetch where dl-138's bounds start.
+// The figure is pinned here on purpose, as `request-timeout.test.ts` pins its
+// two: a change to it should be a change to this line.
+const CONFIG_READ_TIMEOUT_MS = 15_000;
+
+describe("a config read that never answers (dl-141)", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const NEVER = (): Promise<ClientConfigResponse> => new Promise(() => {});
+
+  test("next() sends no token at the bound, not before, and the read is aborted", async () => {
+    vi.useFakeTimers();
+    let signal: AbortSignal | undefined;
+    const readConfig = vi.fn((given?: AbortSignal) => {
+      signal = given;
+      return NEVER();
+    });
+    const tokens = createTurnstileCheck(readConfig, { loadTurnstile: vi.fn() });
+
+    let settled: { token: string | null } | undefined;
+    void tokens.next().then((token) => (settled = { token }));
+
+    await vi.advanceTimersByTimeAsync(CONFIG_READ_TIMEOUT_MS - 1);
+    expect(settled).toBeUndefined();
+    expect(signal?.aborted).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(settled).toEqual({ token: null });
+    expect(signal?.aborted).toBe(true);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  test("every call waiting on the shared read is freed together, and the next call reads again", async () => {
+    vi.useFakeTimers();
+    const turnstile = new FakeTurnstile();
+    const readConfig = vi
+      .fn<(signal?: AbortSignal) => Promise<ClientConfigResponse>>()
+      .mockImplementationOnce(NEVER)
+      .mockResolvedValue({ humanCheck: { siteKey: SITE_KEY } });
+    const tokens = createTurnstileCheck(readConfig, { loadTurnstile: async () => turnstile });
+
+    const waiting = Promise.all([tokens.next(), tokens.next(), tokens.next()]);
+    await vi.advanceTimersByTimeAsync(CONFIG_READ_TIMEOUT_MS);
+    expect(await waiting).toEqual([null, null, null]);
+    expect(readConfig).toHaveBeenCalledTimes(1);
+
+    // Not memoised: the timed-out read is cleared as a rejected one is.
+    expect(await tokens.next()).toBe("token-1");
+    expect(readConfig).toHaveBeenCalledTimes(2);
+  });
+
+  test("a read that answers inside the bound is used, and leaves no timer behind", async () => {
+    vi.useFakeTimers();
+    const turnstile = new FakeTurnstile();
+    const tokens = createTurnstileCheck(
+      () =>
+        new Promise<ClientConfigResponse>((resolve) =>
+          setTimeout(
+            () => resolve({ humanCheck: { siteKey: SITE_KEY } }),
+            CONFIG_READ_TIMEOUT_MS - 1,
+          ),
+        ),
+      { loadTurnstile: async () => turnstile },
+    );
+
+    const token = tokens.next();
+    await vi.advanceTimersByTimeAsync(CONFIG_READ_TIMEOUT_MS - 1);
+    expect(await token).toBe("token-1");
+    expect(vi.getTimerCount()).toBe(0);
+  });
+});
+
+describe("the HTTP transport over a config read that never answers (dl-141)", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  test("two probes and a createJob are freed at the bound, sent with no token, and a later call reads the config again", async () => {
+    vi.useFakeTimers();
+    let configReads = 0;
+    const fetchSpy = vi.fn(async (input: string | URL | Request) => {
+      const path = String(input);
+      if (path === ROUTES.config) {
+        configReads++;
+        // The first read stalls for good; the retry is answered.
+        if (configReads === 1) return await new Promise<Response>(() => {});
+        return Response.json({ humanCheck: null });
+      }
+      if (path === ROUTES.probe) return Response.json({ probe: probe(), cached: false });
+      return Response.json({ job: job("queued") }, { status: 201 });
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+    const client = createHttpClient({ humanCheck: createTurnstileCheck });
+
+    const pending = Symbol("pending");
+    const outcomes: unknown[] = [pending, pending, pending];
+    const calls = [
+      client.probe({ url: "https://example.com/a" }),
+      client.probe({ url: "https://example.com/b" }),
+      client.createJob({ url: "https://example.com/c" }),
+    ];
+    calls.forEach((call, index) => {
+      call.then(
+        (value) => (outcomes[index] = { resolved: value }),
+        (error: unknown) => (outcomes[index] = error),
+      );
+    });
+
+    // Just short of the bound: all three wait, and the only fetch is the read.
+    await vi.advanceTimersByTimeAsync(CONFIG_READ_TIMEOUT_MS - 1);
+    expect(outcomes).toEqual([pending, pending, pending]);
+    expect(fetchSpy.mock.calls.map(([input]) => String(input))).toEqual([ROUTES.config]);
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(outcomes.some((outcome) => outcome === pending)).toBe(false);
+    // Each went out with no token: the server decides.
+    for (const path of [ROUTES.probe, ROUTES.jobs]) {
+      expect(bodyOf(fetchSpy as unknown as ReturnType<typeof stubFetch>, path)).not.toHaveProperty(
+        "humanCheckToken",
+      );
+    }
+
+    await client.probe({ url: "https://example.com/d" });
+    expect(configReads).toBe(2);
+  });
+});
