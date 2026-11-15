@@ -8,7 +8,8 @@ import type { AddressInfo } from "node:net";
 import path from "node:path";
 import { AppError, jobResponseSchema, parseJobEvent, ROUTES } from "@downloader/contract";
 import type { JobResponse, ProbeResponse, ProbeResult } from "@downloader/contract";
-import { afterEach, describe, expect, test } from "vitest";
+import { clientKey } from "@webtools/core/rate-limit";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { formatSseFrame } from "../src/routes/events.ts";
 import { contentDisposition } from "../src/routes/files.ts";
 import { statusForCode, toErrorResponse } from "../src/http-errors.ts";
@@ -957,5 +958,227 @@ describe("core identity codes", () => {
     expect(statusForCode("FORBIDDEN")).toBe(403);
     expect(new AppError("UNAUTHENTICATED").retryable).toBe(false);
     expect(new AppError("FORBIDDEN").retryable).toBe(false);
+  });
+});
+
+/**
+ * dl-140. A client that goes away must free the probe slots it holds. These
+ * run the real app on a real port and abort a real `fetch`: the defect was in
+ * *when* Node emits `close` (`request.raw` has closed, with `destroyed` true,
+ * before a handler runs), which `inject` and a mock of the request cannot show.
+ */
+describe("a client that aborts POST /api/probe", () => {
+  /** Generous against the abort path, which frees in milliseconds; far under the deadline below. */
+  const FREED_WITHIN_MS = 1000;
+  /** The chain's own deadline. A slot freed at it, not before, means the abort did nothing. */
+  const CHAIN_DEADLINE_MS = 20_000;
+  const CLIENT = "127.0.0.1";
+
+  /** Holds until its own signal aborts, then rejects the way the real tiers do. */
+  function holdUntilAborted(): StubResolver {
+    const resolver: StubResolver = new StubResolver(
+      async () =>
+        await new Promise<ProbeResult>((_resolve, reject) => {
+          resolver.lastOptions?.signal.addEventListener(
+            "abort",
+            () => reject(new AppError("CANCELED")),
+            { once: true },
+          );
+        }),
+    );
+    return resolver;
+  }
+
+  async function listen(current: Harness): Promise<string> {
+    await current.app.server.listen({ port: 0, host: CLIENT });
+    const { port } = current.app.server.server.address() as AddressInfo;
+    return `http://${CLIENT}:${port}${ROUTES.probe}`;
+  }
+
+  function post(url: string, signal?: AbortSignal): Promise<Response> {
+    return fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ url: SOURCE_URL }),
+      ...(signal === undefined ? {} : { signal }),
+    });
+  }
+
+  function slots(current: Harness): { client: number; global: number } {
+    return {
+      client: current.app.context.probeClientGate.count(clientKey(CLIENT)),
+      global: current.app.context.probeGate.inFlight,
+    };
+  }
+
+  test("during the chain frees both slots at once, not at the chain's deadline", async () => {
+    const resolver = holdUntilAborted();
+    const current = await createHarness({
+      resolver,
+      config: { probeTimeoutMs: CHAIN_DEADLINE_MS, maxProbesPerClient: 2 },
+    });
+    harness = current;
+    const url = await listen(current);
+    const abort = new AbortController();
+    const sent = post(url, abort.signal).catch((error: unknown) => error);
+
+    await waitFor(
+      () => slots(current),
+      (held) => held.client === 1 && held.global === 1,
+      { label: "the probe to hold both slots" },
+    );
+    const abortedAt = performance.now();
+    abort.abort();
+    await sent;
+    await waitFor(
+      () => slots(current),
+      (held) => held.client === 0 && held.global === 0,
+      { timeoutMs: FREED_WITHIN_MS, label: "both slots to free after the abort" },
+    );
+
+    expect(performance.now() - abortedAt).toBeLessThan(FREED_WITHIN_MS);
+    expect(resolver.lastOptions?.signal.aborted).toBe(true);
+    expect((resolver.lastOptions?.signal.reason as AppError).code).toBe("CANCELED");
+  });
+
+  test("so a client that aborted both its probes is admitted when it asks again", async () => {
+    const current = await createHarness({
+      resolver: holdUntilAborted(),
+      config: { probeTimeoutMs: CHAIN_DEADLINE_MS, maxProbesPerClient: 2 },
+    });
+    harness = current;
+    const url = await listen(current);
+    const first = new AbortController();
+    const second = new AbortController();
+    const sent = [first, second].map((abort) => post(url, abort.signal).catch(() => null));
+    await waitFor(
+      () => slots(current).client,
+      (held) => held === 2,
+      { label: "both probes to hold a slot" },
+    );
+    first.abort();
+    second.abort();
+    await Promise.all(sent);
+    await waitFor(
+      () => slots(current).client,
+      (held) => held === 0,
+      { timeoutMs: FREED_WITHIN_MS, label: "the per-client slots to free" },
+    );
+
+    const next = new AbortController();
+    const again = post(url, next.signal).catch(() => null);
+    await waitFor(
+      () => slots(current).client,
+      (held) => held === 1,
+      { label: "a new probe to be admitted rather than refused 429" },
+    );
+    next.abort();
+    await again;
+  });
+
+  test("before the handler has a listener still frees them once it starts", async () => {
+    // The client leaves while the SSRF vet of the request URL is still waiting,
+    // which is before the handler has registered anything: no `close` is coming
+    // after that, so a listener alone would leave the probe running its whole
+    // chain for nobody. The vet is held open here, and let go after the close.
+    const current = await createHarness({
+      resolver: holdUntilAborted(),
+      config: { probeTimeoutMs: CHAIN_DEADLINE_MS, maxProbesPerClient: 2 },
+    });
+    harness = current;
+    const { guard } = current.app.context;
+    const realAssertAllowed = guard.assertAllowed.bind(guard);
+    let letVetGo: (() => void) | undefined;
+    const vetHeld = new Promise<void>((resolve) => {
+      letVetGo = resolve;
+    });
+    let vetEntered = false;
+    vi.spyOn(guard, "assertAllowed").mockImplementation(async (raw) => {
+      vetEntered = true;
+      await vetHeld;
+      return await realAssertAllowed(raw);
+    });
+
+    const url = await listen(current);
+    const abort = new AbortController();
+    const sent = post(url, abort.signal).catch(() => null);
+    await waitFor(
+      () => vetEntered,
+      (entered) => entered,
+      { label: "the request to reach the SSRF vet" },
+    );
+    abort.abort();
+    await sent;
+    // The server learns of the close on a later turn of its own loop, and the
+    // only way to wait for something not observable is to give it that; a
+    // longer wait only makes the "already closed" case more certainly the one tested.
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    letVetGo?.();
+
+    await waitFor(
+      () => slots(current),
+      (held) => held.client === 0 && held.global === 0,
+      { timeoutMs: FREED_WITHIN_MS, label: "the slots to free, or never to be taken" },
+    );
+  });
+
+  test("during the output vet frees the global slot at once and the client's when the vet returns", async () => {
+    // The vet takes no signal (dl-140 stopped at the chain), and the global
+    // slot was released when the chain returned, so only the client's is held.
+    const current = await createHarness({
+      resolver: new StubResolver(probeResult()),
+      config: { probeTimeoutMs: CHAIN_DEADLINE_MS, maxProbesPerClient: 2 },
+    });
+    harness = current;
+    const { guard } = current.app.context;
+    let letVetGo: (() => void) | undefined;
+    const vetHeld = new Promise<void>((resolve) => {
+      letVetGo = resolve;
+    });
+    let vetEntered = false;
+    vi.spyOn(guard, "assertAllAllowed").mockImplementation(async () => {
+      vetEntered = true;
+      await vetHeld;
+    });
+
+    const url = await listen(current);
+    const abort = new AbortController();
+    const sent = post(url, abort.signal).catch(() => null);
+    await waitFor(
+      () => vetEntered,
+      (entered) => entered,
+      { label: "the probe to reach the output vet" },
+    );
+    abort.abort();
+    await sent;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(slots(current)).toEqual({ client: 1, global: 0 });
+
+    letVetGo?.();
+    await waitFor(
+      () => slots(current),
+      (held) => held.client === 0 && held.global === 0,
+      { timeoutMs: FREED_WITHIN_MS, label: "the client's slot to free once the vet returned" },
+    );
+  });
+
+  test("a request that completes normally frees its slots and never aborts its signal", async () => {
+    const resolver = new StubResolver(probeResult());
+    const current = await createHarness({ resolver, config: { maxProbesPerClient: 2 } });
+    harness = current;
+    const url = await listen(current);
+
+    const response = await post(url);
+    expect(response.status).toBe(200);
+    expect(((await response.json()) as ProbeResponse).cached).toBe(false);
+    await waitFor(
+      () => slots(current),
+      (held) => held.client === 0 && held.global === 0,
+      { label: "both slots to free" },
+    );
+    // The response's own `close` follows its `finish`; a negative has to wait
+    // for the event it says did not matter, and 100 ms is many turns of the loop.
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(resolver.lastOptions?.signal.aborted).toBe(false);
   });
 });
