@@ -18,7 +18,10 @@
          li-data        a list item with data-player around a "Next video" link
          link-around    a "Server 2" button inside a link
          form-outside   a "Server 2" button owned by a form it is not inside
-         target-new     a "Server 2" link to "#" that opens a new window -->
+         target-new     a "Server 2" link to "#" that opens a new window
+         li-form        a list item whose text is "Server 2", holding a form's submit button
+         role-form      a role="button" wrapper of the same form
+         li-form-attr   a list item holding a "Server 2" button owned by a form outside it -->
     <div id="slot"></div>
     <div class="player-wrap">
       <iframe
@@ -53,6 +56,18 @@
           left +
           '"><input type="hidden" name="q" value="1" /></form><button id="t" form="f">Server 2</button>',
         "target-new": '<a id="t" href="#" target="_new">Server 2</a>',
+        "li-form":
+          '<ul style="margin:0;padding:0"><li id="t" style="display:inline-block"><form action="' +
+          left +
+          '"><button>Server 2</button></form></li></ul>',
+        "role-form":
+          '<div id="t" role="button" style="display:inline-block"><form action="' +
+          left +
+          '"><button>Server 2</button></form></div>',
+        "li-form-attr":
+          '<form id="f" action="' +
+          left +
+          '"><input type="hidden" name="q" value="1" /></form><ul style="margin:0;padding:0"><li id="t" style="display:inline-block"><button form="f">Server 2</button></li></ul>',
       };
       document.getElementById("slot").innerHTML = markup[ctl] || "";
       document.addEventListener(

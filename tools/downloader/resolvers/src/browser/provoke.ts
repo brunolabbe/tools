@@ -1740,18 +1740,22 @@ const SERVER_TAB_MAX_LABEL = 24;
  * with a "Server 2" link and no such iframe is left alone entirely.
  *
  * **A control is a tab when** it is a button, link, `role=button`, `role=tab` or
- * list item, visible, outside any form or label, and either carries a
- * `data-player`, `data-server` or `data-source` attribute or its label is
- * `SERVER_TAB_LABEL`. **A control that a click would carry off the page is not a
- * tab, whatever it says**, and a click lands on what is under it, so the test is
- * on the control, on every link it holds and on the link that holds it: a link
- * is a tab's way in only when its address is the page's own, a fragment of it, or
- * a `javascript:` URL (how a tab built from a link is written), and its target
- * is this window; a `role=link` without an `href` never is. A control in a form,
- * or owned by one through its `form` attribute, is left alone too, since a press
- * submits it. **What this cannot see** is a handler that does it by script
- * (`location.href`, `window.open`): the departure guard is what ends a probe
- * after the first, and nothing here stops the second.
+ * list item, visible, and either carries a `data-player`, `data-server` or
+ * `data-source` attribute or its label is `SERVER_TAB_LABEL`. **A control whose
+ * markup says a click would carry the page off is not a tab, whatever it says.** A
+ * click lands on what is under the control's centre, so each test runs on the
+ * control, on what it holds and on what holds it:
+ * - a link (`a[href]`, `role=link`) is a tab's way in only when its address is the
+ *   page's own, a fragment of it, or a `javascript:` URL (how a tab built from a
+ *   link is written) and its target is this window; a `role=link` without an
+ *   `href` never is;
+ * - a form submits, so the control is not inside a form or a label, not owned by
+ *   one through its `form` attribute, and holds no form and no button, input,
+ *   select or textarea that a form owns.
+ *
+ * **What this cannot see** is a handler that does it by script (`location.href`,
+ * `window.open`): the departure guard is what ends a probe after the first, and
+ * nothing here stops the second.
  *
  * The one marked is the one the page shows as active (a class, or an `aria-`
  * state), otherwise the first in document order.
@@ -1789,6 +1793,11 @@ const MARK_SERVER_TAB_SCRIPT = `(() => {
     if (style.visibility === 'hidden' || style.display === 'none') return false;
     // Inside a form or label, or owned by a form through its form attribute.
     if (el.closest('form, label') || el.form) return false;
+    // A click on a wrapper lands on what it holds, so the same test on every form
+    // it holds and on every control inside it that a form owns.
+    if (el.querySelector('form')) return false;
+    var inside = el.querySelectorAll('button, input, select, textarea');
+    for (var f = 0; f < inside.length; f++) if (inside[f].form) return false;
     // A click on a wrapper lands on the link it wraps, and one on a control inside
     // a link bubbles to the link: so the control, what it holds and what holds it.
     var around = el.closest(LINKS);

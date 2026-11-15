@@ -373,4 +373,19 @@ describe("the server-tab press and what it must not set off (dl-139 gate round 1
       expect(server.requests).not.toContain("/beacon/tab-2");
     },
   );
+
+  // Gate 2's remainder of the wrapper mechanism: the form rule ran on the
+  // candidate and not on what it holds, so a wrapper reading "Server 2" around a
+  // form's submit button was pressed, and the click on its centre submitted it.
+  test.each([
+    ["a list item whose text is Server 2, holding a form's submit button", "li-form"],
+    ["a role=button wrapper of a form holding a Server 2 button", "role-form"],
+    ["a list item holding a Server 2 button owned by a form outside it", "li-form-attr"],
+  ])("does not press %s", { timeout: TEST_TIMEOUT_MS }, async (_name, ctl) => {
+    server.requests.length = 0;
+    const error = await probeError(`/player-tabs-unsafe-control.html?ctl=${ctl}`, resolverWith());
+
+    expectCode(error, "NO_MEDIA_FOUND");
+    expect(server.requests.filter((pathname) => pathname.startsWith("/beacon/"))).toEqual([]);
+  });
 });
