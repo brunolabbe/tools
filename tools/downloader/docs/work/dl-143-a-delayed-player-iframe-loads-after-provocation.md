@@ -78,6 +78,10 @@ resolved in about 5 s, which is what isolates the delay as the cause.
   delay-JS plugins run before provocation. Cheapest, but still a race when the
   delayed bundle is slow.
 
+**Gate round 1 — answered 2026-11-15 by the owner:** F1 remedy (a), a short
+loading-retry cap unless a replacement was counted, and only cross-document
+navigations counted; F2 fixed in this round; F6 and F3 fixed alongside.
+
 ## Build
 
 1. **Fixture first, red on `main`.** In `resolvers/test/fixtures/pages/`, a page
