@@ -282,6 +282,39 @@ Traps:
 - False negatives (dispatch attack 1): all 11 shapes behaved as expected, and so did 7 of my own. Pressed: `#`, `#player2`, `javascript:void(0)`, no href, `li > a#`, `li > span`, `button`, `role=tab aria-selected`, `target=_top`, `target=_parent`, `target=_self`, `_TOP`, `href=""`, and the live page's `button.player-btn.active[data-player]`. Not pressed, as the brief's rule says: `?server=2`, and an `li` holding a `span role=link` with no href. A re-run of gate 1's 32 pages differs from gate 1's JSON on exactly 6: b3, b4, b5, b6 and c2 are no longer pressed, and "Player 1st" now is. b1 and b2 are unchanged and both are accepted.
 - NFR: security — F1's remainder above · performance ✓ — one `querySelectorAll` and one `closest` per candidate, inside the one `evaluate` · reliability — F5's accepted remainder · maintainability — the register low.
 
+### Gate 3
+
+**Gate: CONCERNS** — 2026-11-15 · `6efde6e1..30dddf53` (the round: `3978f1d0`, `d7dc35f9`, `30dddf53`) · Opus 5.5, depth narrow (owner's scope: the fix for gate 2's F1 remainder and its doc comment, plus the three Done when lines at the head)
+
+| Done when                                                                                                                                  | Proof                                                                                                                                                                                                                                                                                                                                                            |
+| ------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The tab fixture resolves to the `related` HLS stream through the real `BrowserResolver`, and its tab-click beacon shows the press happened | `resolvers/test/browser/browser-resolver-press-targets.test.ts` › "presses the active tab, and the embed it loads is clicked in its own frame and yields the stream" ✓. Gate 1's `controls.sh` re-run at this head: with the `pressServerTab` call removed it is red (`1 failed                                                                                  | 31 skipped (32)`) |
+| The negative fixture's beacon is never requested, and it ends `NO_MEDIA_FOUND`                                                             | same file › "a Server 2 link and button on a page with no blank player iframe are not pressed, and it ends NO_MEDIA_FOUND" ✓. With the blank-iframe precondition removed it is red (`expected [ …(2) ] to not include '/beacon/server-2-button'`)                                                                                                                |
+| The existing resolver suite passes unchanged                                                                                               | CI's `test (ubuntu-latest)` passed at `30dddf53`: 158 passed and 1 skipped of 159 files; 3364 passed and 2 skipped of 3366 tests. That is 3 more than at `6efde6e1`, the round's three new rows. The round deletes no test line; the one `-` line in its test diff is a fixture comment re-terminated. Locally the press-targets spec passed 32 of 32 in 80.85 s |
+
+- **F1 fixed in part** · **med** · no `Done when` line depends on it · `nfr:security`. Gate 2's three shapes are no longer pressed: h04, h05 and h06 stay on the landing page, and so do the dispatch's POST form (p01) and `role=tab` holding `<input type="image" form="f">` (p06). With only the round's held-form clause removed, the round's three new tests go red (`3 failed | 1 passed | 28 skipped (32)`), and p01 and p06 submit. **Still open: a held `<label for>` whose control a form owns.** The clause looks for controls _inside_ the candidate. A label inside it points at a control outside it, and a click on the label activates that control. All three were measured with `provokePlayback` beside a blank player iframe:
+  - `<li><label for="s">Server 2</label></li>` beside `<form action="/submitted-q01"><button id="s">`: `LI` marked, ended on `/submitted-q01?`;
+  - `<div role="tab" aria-selected="true"><label for="s">Player 01</label></div>`, same form: `DIV` marked, ended on `/submitted-q02?`;
+  - `<li><label for="s">Server 2</label></li>` beside `<input type="submit" id="s" form="f">`: ended on `/submitted-q03?`.
+
+  The doc comment's headline, "A control whose markup says a click would carry the page off is not a tab, whatever it says", is false for these shapes. It is false in the unsafe direction, as it was at gate 2. The Log's "which the code makes true" is false for the same shapes.
+
+  Remedy, measured: after the held-control loop, `var lbls = el.querySelectorAll('label'); for (…) if (lbls[g].control && lbls[g].control.form) return false;`. With it:
+  - q01, q02 and q03 stay on the landing page;
+  - a held `label for` a plain `type=button` (q05) and a `label` wrapping a radio (p05) are still pressed;
+  - gate 2's 20 tab shapes still read 19 of 20, with `h09` as gate 2's own expected difference.
+
+  This was measured with the probe only, not the spec. The doc comment's bullet would also need to name held labels.
+
+- **dropped** · a candidate holding `<button type="button" form="f">` (p03), `<select form="f">` (p04) or `<input type="hidden" form="f">` (q04) is not pressed, though none of them submits. That is a false negative, in the safe direction. The doc comment's bullet says exactly this ("holds no … button, input, select or textarea that a form owns"), and no live shape is known. It is a product choice, not a defect.
+- **dropped** · the live shape `button.player-btn.active[data-player]` inside an action-less `<form>` (p07) is not pressed. That is right, because the button submits the form to the page itself. The rule is round 1's `closest('form')`, outside this round.
+- **dropped** · `<li><input type="submit" form="f" value="Server 2"></li>` (p02) is not pressed, with or without the round's clause. An input's value is not `textContent`, so the `li` is never a candidate. It is safe, and it does not test the clause.
+- **findings** · the attacks returned 4: 1 carried as F1's verdict and 3 dropped. There was no hunt of my own (narrow).
+- False negatives: gate 2's `tabs-probe.mts` at this head reads 19 of 20 as gate 2 expected. `h09` marks the inner `#` link (`A`) and ends on `#`, which is gate 2's own reading. Gate 1's 32-page probe re-run does not differ from gate 2's reading on any page, timings and port aside.
+- Controls: `control-flag.sh` with the once-per-probe flag removed: "a tab that leaves the player iframe blank is pressed once…" is red (`1 failed | 12 passed | 19 skipped (32)`). Every mutation was restored from `30dddf53`, and `git status` was clean.
+- CI at `30dddf53`: every check passed, `test (windows-latest, informational)` included, except `CodeQL`. That one carries the same single excused alert: "1 new alert including 1 high", DOM text reinterpreted as HTML, on `player-tabs-blank-iframe.html` line 80, which is the `frame.src = atob(…)` line under its `// codeql[js/xss-through-dom]`. There is no other alert.
+- NFR: security — F1's remainder above · performance ✓ — one `querySelector` and one `querySelectorAll` added per candidate, inside the one `evaluate` · reliability n/a (outside the narrow scope) · maintainability ✓.
+
 ## Log
 
 - 2026-11-15 — Filed from a dev session. The live page, its embed host and the
