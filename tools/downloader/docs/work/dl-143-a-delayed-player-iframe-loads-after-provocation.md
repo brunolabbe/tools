@@ -3,7 +3,7 @@ id: dl-143
 tool: downloader
 title: A player iframe that a delay-JS plugin fills only after the first interaction loads after provocation has ended
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -85,6 +85,13 @@ navigations counted; F2 fixed in this round; F6 and F3 fixed alongside.
 **Gate round 2 — answered 2026-11-16 by the owner:** count a main-frame
 navigation as a replacement only once it commits.
 
+**Gate round 3 — answered 2026-11-16 by the owner:** accept F1's residual,
+option (b) over (a), "count a commit only when the document changed". A
+same-document change made while a never-committing navigation request is
+pending counts as a replacement and costs the whole wait, once per probe.
+Done when 3 and the two docstrings are reworded to say so, and the branch lands
+with no further gate.
+
 ## Build
 
 1. **Fixture first, red on `main`.** In `resolvers/test/fixtures/pages/`, a page
@@ -145,7 +152,11 @@ navigation as a replacement only once it commits.
 - The single-iframe delayed fixture resolves through the browser tier, and is red
   on `main`'s `provoke.ts`.
 - The delayed-tab fixture resolves.
-- A page with no blank player iframe pays no wait.
+- A page with no blank player iframe pays no wait once its document is complete,
+  and at most `BLANK_PLAYER_LOADING_RETRY_MS` while it is still loading. The
+  exceptions are a committed replacement since provocation began, and, as
+  accepted at gate round 3, a same-document change made while a never-committing
+  navigation request is pending.
 - `npm run check` exits 0; `npm test -- --project downloader` passes, or every
   failure is shown to also fail on `main`.
 
@@ -444,6 +455,18 @@ navigation as a replacement only once it commits.
     3.5/4.2, 3.8/4.2, 3.7/4.3. None had the reload after provocation began.
   - `npm run check` exit 0; `npm test -- --project downloader` 2704 passed, 2
     skipped. e2e and container gates not run.
+- 2026-11-16 — Landed after gate 3. Changes since `ff9b8545`, all made by the
+  orchestrator and all text:
+  - The owner accepted F1's residual (Decision, gate round 3).
+  - Done when 3 now names it.
+  - The `BLANK_PLAYER_FILL_WAIT_MS` and `navigations` docstrings, which gate 3
+    found false in the unsafe direction, now describe the exception.
+  - Gate 2's remaining stale-comment low is fixed: `pressServerTab`'s docstring
+    now names the stop before `<body>`.
+  - Still recorded and unfixed, by the owner's choice: F4, F5.
+  - Not probed: a navigation restored from the back/forward cache (gate 3).
+  - Live, orchestrator-run at `ff9b8545`: 4 of 4 resolved. In one run the
+    second load landed 0.4 s after provocation began.
 
 ## Review
 
@@ -622,3 +645,92 @@ navigation as a replacement only once it commits.
 - Names in the diff: the added lines contain no host or site name.
 - NFR: security — the hover no longer reaches a `body`-class ad slot · performance — F1 ·
   reliability — F4, F5 unchanged · maintainability — the two lows.
+
+### Gate 3
+
+**Gate: FAIL** — 2026-11-16 · `1d409c19..ff9b8545` · Opus 5.5, depth narrow
+
+| Done when                                                                                                            | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| -------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The single-iframe delayed fixture resolves through the browser tier, and is red on `main`'s `provoke.ts`             | `resolvers/test/browser/browser-resolver-press-targets.test.ts` › "a player iframe that a delay-JS plugin fills after the first interaction resolves, once its embed has hopped to the document with the player" ✓, 51 of 51 in the spec on 2 runs. The red on `main` was measured by gate 1 and not re-run, because the round does not touch this test                                                                                |
+| The delayed-tab fixture resolves                                                                                     | same file › "a server tab whose handler a delay-JS plugin registers late is pressed once the page is ready" ✓                                                                                                                                                                                                                                                                                                                          |
+| A page with no blank player iframe pays no wait                                                                      | **not met** (F1, fixed in part). Gate 2's four non-committing requests now pay 73–212 ms where they paid about 6.1 s. A real reload, a 302 and a cross-origin load are still counted, in 50 of 50 runs. But a complete page with no iframe still pays the whole wait when a `pushState`, `replaceState` or hash change lands while a main-frame navigation request that never commits is in flight: 7650 ms against 1584 ms without it |
+| `npm run check` exits 0; `npm test -- --project downloader` passes, or every failure is shown to also fail on `main` | verified: `npm run check` exit 0; `npm test -- --project downloader` exit 0, 2704 passed, 2 skipped (129 files passed, 1 skipped)                                                                                                                                                                                                                                                                                                      |
+
+- **high** · F1 · **fixed in part** · Done when 3 depends on it · **open
+  decision** · The pairing fixes gate 2's cases. Gate 2's `nav0` probe
+  re-ran unchanged, with the navigation sent at 0 ms. These took 73–212 ms
+  over three runs each, where they took about 6.1 s at `1d409c19`: a 204, a
+  download, a `window.stop()` cancel and a load superseded by a 204. Gate 2's
+  probe re-ran the same four at 30 ms: 71, 75, 171 and 168 ms. The positive
+  controls still pay the wait: a reload took 6107–6115 ms and a committed link
+  6092–6146 ms. No real commit was missed. A probe with an unrouted local
+  server, as production runs, replicated the pairing and traced its events. The
+  main-frame `framenavigated` arrived with the document's request still pending
+  in 50 of 50 runs: a same-URL `location.reload()`, a reload of a 2 MB
+  document, a same-origin 302 back to the page, a cross-origin load (a process
+  swap) and a cross-origin 302, 10 runs each. The document's `requestfinished`
+  never came first, and a 302's own `requestfinished` came before the next
+  request. Through `provokePlayback`, a reload, a 302 and a cross-origin load
+  took 6082–6173 ms in 2 runs each. A mutation that never counts a commit
+  turns 2 of the 16 dl-143 tests red: `?reload=early` and the round's "a reload
+  that commits after the wait's first look…" (`expected 514.03… to be greater
+  than 4000`). The round-3 `?reload` test stays green, because the
+  evaluate-error path sets `replaced` without the counter. **The remaining
+  gap is the builder's stated residual, measured.** `onNavigated` treats any
+  main-frame `framenavigated` as a commit while a request is pending, and a
+  same-document navigation is one. The probe page was complete with no iframe,
+  and its request took 1.5 s and ended in a 204. A same-document navigation
+  sent 50 ms after the request cost a `pushState` 7650 ms, a hash change
+  7641 ms and a `replaceState` 7648 ms. The same request alone cost 1584 ms.
+  A `location.href` to an immediate 204 followed at once by a `pushState` took
+  6139 ms. So the residual costs about 6.1 s, once per probe. The shipped text
+  is false in the unsafe direction. `BLANK_PLAYER_FILL_WAIT_MS`'s docstring
+  says "a `pushState` or hash change are not a replacement" with no condition,
+  and the `navigations` field's docstring says "Cross-document". No live page
+  has been seen to do this, and it needs both events inside the provocation
+  window. Options:
+  - (a) Count only a commit that replaced the document. This is a direction
+    only and untested. One way is to read a per-document value in the wait,
+    such as the main frame's `performance.timeOrigin`, and compare it with its
+    value when provocation began: a `pushState` or a hash change keeps it, and
+    a commit changes it. This needs a gate 4.
+  - (b) **Recommended.** The owner accepts the residual. Done when 3, the
+    `BLANK_PLAYER_FILL_WAIT_MS` docstring and the `navigations` docstring are
+    reworded to say that a same-document navigation during a main-frame
+    navigation request that never commits counts. This is text only and can
+    be fixed at the landing.
+- **low** · gate 2's stale-comment low · **fixed in part** ·
+  `BLANK_PLAYER_STABLE_MS` has its docstring again, and
+  `BLANK_PLAYER_IFRAMES_FN`'s header names the stop before `<body>`. A third
+  copy shares the mechanism. `pressServerTab`'s docstring still says "a
+  player-ish class, id or title on it or an ancestor", with no stop before
+  `<body>`. It is false in the safe direction, and nothing relies on it.
+- **low** · gate 2's case-sensitivity low · **fixed**, verified by reading.
+  The ancestor walk tests `tokens.indexOf('player')`, which is as
+  case-sensitive as `[class*="player"]`. The title test is
+  case-insensitive, as it is on `main`. No `videoPlayer` page was run.
+- **med** · F2 · **fixed** (gate 2's probe again). The `body`-class ad slot
+  took 140 ms and the plain one 161 ms. A bare player iframe matched by class,
+  id or title took 6188, 6283 and 6210 ms. A player token only on `<body>`
+  took 122 ms.
+- **low** · F3 · **fixed**, per gate 2. The round does not touch the frame
+  re-read, and the gate did not re-run the mutation.
+- **low** · F4, F5 · **not fixed**, recorded by the owner's choice.
+- **med** · F6 · **fixed**, per gate 2. Its test passed in 2 of 2 spec runs
+  and in the project run.
+- **dropped** · out of range · `provokePlayback` is held while a main-frame
+  navigation request is pending. The 1.5 s 204 alone took 1584 ms. This is
+  gate 2's dropped `navHang` mechanism, which is older than the branch. The
+  slow-204 shape was not measured on `main`.
+- **findings** · the round's attacks returned 3: F1's residual, carried as F1;
+  a third stale docstring, carried as gate 2's low; one dropped.
+- Names in the diff: no host or site name in the added lines.
+- Timing: every elapsed figure reads `performance.now()`. No result here is
+  attributed to dl-145's stepping clock. The round's two new wall-clock
+  bounds ran 3 times each, in 2 spec runs and the project run, not 10. The
+  probes' figures for the same shapes sit at 73–212 ms against the `< 3000`
+  bound and at about 6.1 s against the `> 4000` bound.
+- NFR: security — n/a, no new URL handling · performance — F1's residual,
+  about 6.1 s once per probe · reliability — the pairing counted 50 of 50 real
+  commits; F4 and F5 unchanged · maintainability — the stale docstring.

@@ -1782,7 +1782,8 @@ const BLANK_PLAYER_IFRAMES_FN = `function () {
  *
  * **The precondition is a blank player iframe**: visible by
  * `CHOOSE_VIDEO_INDEX_FN`'s rule, with a `src` that is absent or `about:blank`,
- * no `srcdoc`, and a player-ish class, id or title on it or an ancestor. A page
+ * no `srcdoc`, and a player-ish class, id or title on it or an ancestor below
+ * `<body>` (`BLANK_PLAYER_IFRAMES_FN`, since dl-143). A page
  * with a "Server 2" link and no such iframe is left alone entirely.
  *
  * **A control is a tab when** it is a button, link, `role=button`, `role=tab` or
@@ -1933,8 +1934,12 @@ const UNMARK_BLANK_PLAYER_SCRIPT = `(() => {
  * for the document to finish, and the whole wait only if a main-frame navigation
  * that **committed** (a reload, a redirect, a link) was seen since provocation
  * began, since the new document may still be building the iframe. A request that
- * never commits (a 204, a download, a cancelled load) and a `pushState` or hash
- * change are not a replacement.
+ * never commits (a 204, a download, a cancelled load) is not a replacement. A
+ * `pushState`, `replaceState` or hash change is not one either, **except** while
+ * such a request is still pending: then it is taken as the commit and the page
+ * pays the whole wait, once. dl-143's gate 3 measured that at 7.6 s against
+ * 1.6 s, and the owner accepted it (2026-11-16): it needs both events inside the
+ * provocation window, and no live page has been seen to do it.
  */
 export const BLANK_PLAYER_FILL_WAIT_MS = 6000;
 /**
@@ -1959,7 +1964,12 @@ interface BlankPlayerWait {
   /** The hovers made so far, over both calls (dl-143). */
   hovers: number;
   spentMs: number;
-  /** Cross-document main-frame navigations since provocation began (dl-143): a document replaced before the wait started counts. */
+  /**
+   * Main-frame commits since provocation began that followed a pending
+   * navigation request (dl-143): a document replaced before the wait started
+   * counts. A same-document change counts only while a request that never
+   * commits is pending; see `BLANK_PLAYER_FILL_WAIT_MS`.
+   */
   navigations: () => number;
 }
 
