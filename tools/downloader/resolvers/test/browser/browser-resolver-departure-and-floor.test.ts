@@ -693,6 +693,41 @@ describe("a page's pre-hop requests are judged by the top frame's document gener
   );
 });
 
+describe("a hit belongs to the document that asked for it last (dl-144, gate 3)", () => {
+  test(
+    "a reloaded document that asks for the manifest the first one asked for keeps it",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const hls = recordingHlsParser();
+      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...STREAM_WAITS });
+      const result = await probe("/guard-reload-same-manifest.html", resolver);
+      expect(result.variants[0]?.url).toBe(server.url("/media/hls/master.m3u8"));
+    },
+  );
+
+  test(
+    "a live frame that asks for the manifest the left page asked for keeps it",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const hls = recordingHlsParser();
+      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...STREAM_WAITS });
+      const result = await probe("/guard-late-embed-live-frame-refetch.html", resolver);
+      expect(result.variants[0]?.url).toBe(server.url("/media/hls/master.m3u8"));
+    },
+  );
+
+  test(
+    "a navigation that never commits, then a rewrite, leaves the page's stream where it is",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const hls = recordingHlsParser();
+      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...STREAM_WAITS });
+      const result = await probe("/guard-no-commit-then-replace.html", resolver);
+      expect(result.variants[0]?.url).toBe(server.url("/media/hls/master.m3u8"));
+    },
+  );
+});
+
 /** Elapsed milliseconds since the call, off a clock that follows no one's `date`. */
 function startStopwatch(): () => number {
   const startedAt = performance.now();

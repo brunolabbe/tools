@@ -880,19 +880,37 @@ function watchForDeparture(page: Page, initialLandingUrl: string): NavigationGua
   // The top frame's document generation (dl-144). It moves on a cross-document
   // commit, and a same-document navigation (`pushState`, `replaceState`, a hash
   // change) sends no document request, which is how the two are told apart. A
-  // hit is stamped by the collector when it sees the request, so a request that
-  // races a commit lands on one side or the other of the bump: Playwright emits
-  // `framenavigated` at the commit, before the new document's own subresource
-  // requests, so the new page's first request is stamped new; a request the old
-  // document still had in flight when the commit landed is also stamped new, and
-  // survives. Both errors keep a hit, never drop one, which is the safe side:
-  // the result reads a stream too many, not one too few.
+  // hit is stamped by the collector, synchronously, when it sees the request.
+  // Playwright delivers the request event of anything the old document sent
+  // before the commit ahead of the commit's `framenavigated` (gate 3: 28 of 28
+  // cases, 4 to 58 ms ahead, an in-flight request included), so the old page's
+  // hit is stamped old and dropped, and the new page's first request, which
+  // follows the commit, is stamped new. The page's own request for a URL
+  // already recorded restamps it (`HitCollector`).
+  //
+  // A navigation counts as a new document only once it commits: a main-frame
+  // document request that is answered 204 or 205 never does, so it stops
+  // counting when its response says so, and a `replaceState` after it is still
+  // the same document (gate 3). A download is not covered.
   let generationNow = 0;
-  let documentRequested = false;
+  const pendingDocuments = new Set<Request>();
   const onRequest = (request: Request): void => {
     if (request.isNavigationRequest() && request.frame() === page.mainFrame()) {
-      documentRequested = true;
+      pendingDocuments.add(request);
     }
+  };
+  const onRequestEnded = (request: Request): void => {
+    if (!pendingDocuments.has(request)) return;
+    void (async () => {
+      try {
+        const response = await request.response();
+        if (response !== null && (response.status() === 204 || response.status() === 205)) {
+          pendingDocuments.delete(request);
+        }
+      } catch {
+        // The page closed under it; nothing is waiting on this any more.
+      }
+    })();
   };
   let hasPressed = false;
   let departedTo: string | undefined;
@@ -902,8 +920,8 @@ function watchForDeparture(page: Page, initialLandingUrl: string): NavigationGua
     // Read and cleared on every top-frame commit, before the same-address return
     // below: a reload commits at the address it left, and its request must not
     // wait to be mistaken for the next navigation's (gate 2).
-    const newDocument = documentRequested;
-    documentRequested = false;
+    const newDocument = pendingDocuments.size > 0;
+    pendingDocuments.clear();
     if (sameDocument(url, landingUrl)) {
       if (newDocument && !hasPressed) generationNow += 1;
       return;
@@ -916,6 +934,7 @@ function watchForDeparture(page: Page, initialLandingUrl: string): NavigationGua
     departedTo = url;
   };
   page.on("request", onRequest);
+  page.on("requestfinished", onRequestEnded);
   page.on("framenavigated", onNavigated);
   return {
     landingUrl: () => landingUrl,
@@ -928,6 +947,7 @@ function watchForDeparture(page: Page, initialLandingUrl: string): NavigationGua
     stop: () => {
       page.off("framenavigated", onNavigated);
       page.off("request", onRequest);
+      page.off("requestfinished", onRequestEnded);
     },
   };
 }

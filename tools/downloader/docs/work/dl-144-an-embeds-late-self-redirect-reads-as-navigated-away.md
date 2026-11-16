@@ -65,6 +65,8 @@ Gate round 1 — answered 2026-11-15 by the owner: fix both meds and the low in 
 
 Gate round 2 — answered 2026-11-15 by the owner: fix F2 (a), (b) and (c) now, by document generation; file the clock-step finding as its own ticket.
 
+Gate round 3 — answered 2026-11-16 by the owner: fix (d) and (e) in this round; a navigation counts as a new document only once it commits.
+
 ## Build
 
 1. **Fixture first, red on `main`.** A page on the fixture origin whose script,
@@ -246,18 +248,43 @@ Gate round 2 — answered 2026-11-15 by the owner: fix F2 (a), (b) and (c) now, 
     red alone; no bump on a cross-document commit turns the three
     pre-hop tests red (hop, late mirror, left frame); judging the current
     generation left behind too turns seven red, the live-frame test among them.
-  - **A request that races a commit (decided).** The stamp is read when the
-    collector first sees the request. Playwright emits `framenavigated` at the
-    commit, before the new document's own subresource requests, so the new page's
-    first request is stamped new and kept. A request the old document had still in
-    flight at the commit is also stamped new and survives. Both errors keep a hit
-    and never drop one: the result can read one stream too many, never one too
-    few, which is the safe side for a probe that must not lose the wanted stream.
-  - **Not covered.** A top-frame navigation request that never commits (a 204, a
-    download) leaves the flag set until the next commit, so a `replaceState` after
-    it would read as a new document: the gate named it, by reading only; the
-    reading errs towards dropping a left-document hit, which a hop would have
-    dropped anyway.
+  - **A request that races a commit (decided; corrected in round 3).** The stamp
+    is read synchronously when the collector sees the request. Playwright delivers
+    the request event of anything the old document sent before the commit ahead of
+    the commit's `framenavigated` (gate 3: 28 of 28 cases, 4 to 58 ms ahead, an
+    in-flight request included), so the left page's request is stamped old and
+    dropped, and the new page's first request is stamped new. This entry first
+    said an in-flight request "is also stamped new, and survives" and that both
+    errors "keep a hit, never drop one": both were false, in the safe direction
+    for the race and the unsafe one for (d) and (e) below.
+  - **Not covered (round 2's claim withdrawn).** It said a navigation request that
+    never commits leaves the flag set and "errs towards dropping a left-document
+    hit". No document was left: it dropped the live document's stream. Round 3
+    fixes it.
+
+- 2026-11-16 — round 3 (gate 3, CONCERNS; owner: fix (d) and (e)).
+  - **(d), a regression against `main`.** `HitCollector.#record` keeps one hit per
+    URL, so a URL both documents ask for kept the first document's stamp and was
+    dropped (reload, same manifest: `NO_MEDIA_FOUND`; `main` resolves it). A
+    request (not a response) for a URL already recorded now restamps the hit with
+    the current generation. Race check, by reading and gate 3's measurement: the
+    restamp reads the generation synchronously in the request handler, like a new
+    hit's stamp, so an old document's in-flight request, seen before the commit,
+    reads the old generation and does not move a hit forward. Tests, red at
+    356e32e8 (`NO_MEDIA_FOUND`, 10.7 s and 13.1 s): "a reloaded document that asks
+    for the manifest the first one asked for keeps it" and "a live frame that asks
+    for the manifest the left page asked for keeps it". Mutation (no restamp):
+    exactly those two go red.
+  - **(e).** The flag is now the set of main-frame document requests since the
+    last commit; a commit reads it and clears it, and a request whose response is a
+    204 or 205 leaves it (such a navigation never commits). Test, red at 356e32e8
+    (`NO_MEDIA_FOUND`, 10.7 s): "a navigation that never commits, then a rewrite,
+    leaves the page's stream where it is". Mutation (a 204 keeps counting): that
+    test alone goes red. A download, which also never commits, is not covered.
+  - **P1.** `watchForDeparture`'s and `stampWith`'s comments now say when the stamp
+    is read: synchronously on the request event, again on a repeated request for
+    a recorded URL, never on a response, and for a hit first recorded from a body
+    read at the end of that read, which fails at a commit and records nothing.
 
 ## Review
 

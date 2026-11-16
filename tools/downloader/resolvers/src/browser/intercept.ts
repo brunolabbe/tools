@@ -140,13 +140,16 @@ export class HitCollector {
   }
 
   /**
-   * Stamps every hit recorded from now on with `generation()` (0 before this is
-   * called: the document the probe landed on, whatever it did in the settle
-   * window), read when the hit
-   * is first recorded, which is its request (or its response, if that came
-   * first) and not when a body read finishes. A request that races a commit is
-   * therefore stamped with whichever generation the guard had counted when the
-   * collector saw it: see `watchForDeparture` for why that errs towards keeping.
+   * Stamps hits with `generation()` (0 before this is called: the document the
+   * probe landed on, whatever it did in the settle window). The stamp is read
+   * synchronously when the collector sees a request, and again whenever a later
+   * request asks for a URL already recorded, so a URL both documents ask for
+   * belongs to the one that asked last. A response never restamps, and a hit
+   * that is first recorded from a body read (`#sniffBody`) takes the generation
+   * showing when that read ends, which for a read that outlives its document is
+   * never: the read fails at the commit and records nothing. A request the old
+   * document had in flight at a commit is seen before the commit and stamped old
+   * (measured by gate 3: 28 of 28 cases): see `watchForDeparture`.
    */
   stampWith(generation: () => number): void {
     this.#generation = generation;
@@ -244,6 +247,11 @@ export class HitCollector {
     const key = normaliseUrl(url);
     const existing = this.#hits.get(key);
     if (existing) {
+      // A request for a URL already recorded is the current document asking
+      // again (dl-144, gate 3): the hit is one per URL, so it moves with it.
+      if (patch.confirmed !== true && this.#generation !== undefined) {
+        existing.generation = this.#generation();
+      }
       // A response refines what the request could only guess at.
       if (patch.confirmed) {
         // A file already confirmed whole stays whole (dl-78): a later response
