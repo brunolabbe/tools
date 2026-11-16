@@ -82,6 +82,9 @@ resolved in about 5 s, which is what isolates the delay as the cause.
 loading-retry cap unless a replacement was counted, and only cross-document
 navigations counted; F2 fixed in this round; F6 and F3 fixed alongside.
 
+**Gate round 2 — answered 2026-11-16 by the owner:** count a main-frame
+navigation as a replacement only once it commits.
+
 ## Build
 
 1. **Fixture first, red on `main`.** In `resolvers/test/fixtures/pages/`, a page
