@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A page with no player iframe that rewrites its own hash</title>
+  </head>
+  <body style="margin: 0">
+    <!-- dl-143, gate 1: no iframe, a `.player` div, and a script that rewrites the
+         hash every 50 ms once its dialog is closed, as a router or a tab strip
+         does. Those are same-document navigations, which are not a replaced
+         document. The first rewrite is the Close button's, which the probe presses
+         before it looks for an iframe, so the navigation is already counted by a
+         listener on `framenavigated` when the wait first looks. -->
+    <div class="player" style="width: 640px; height: 360px"></div>
+    <div
+      role="dialog"
+      aria-modal="true"
+      style="position: fixed; top: 20px; left: 300px; width: 900px; height: 600px; background: #fff"
+    >
+      <button aria-label="Close" id="close">x</button>
+    </div>
+    <div style="height: 3000px"></div>
+    <script>
+      (function () {
+        var n = 0;
+        document.getElementById("close").addEventListener("click", function () {
+          history.replaceState(null, "", "#closed");
+          setInterval(function () {
+            history.replaceState(null, "", "#seen-" + n++);
+          }, 50);
+        });
+      })();
+    </script>
+  </body>
+</html>

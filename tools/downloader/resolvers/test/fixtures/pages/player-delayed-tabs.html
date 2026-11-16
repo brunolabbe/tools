@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A video page with server tabs whose handlers a delayed script registers</title>
+  </head>
+  <body style="margin: 0">
+    <!-- dl-143: dl-139's page under a delay-JS plugin. Two server tabs and a
+         blank player iframe; nothing runs until the window sees a first
+         interaction, and 1 s after that the script registers the tabs' click
+         handlers. A click on a tab before then does nothing, and the iframe is
+         filled only by a handler. -->
+    <div class="player-tabs">
+      <button class="srv-btn active" data-server="0">Server 1</button>
+      <button class="srv-btn" data-server="1">Server 2</button>
+    </div>
+    <div class="player-wrap">
+      <iframe
+        id="player-0"
+        class="player-frame"
+        src="about:blank"
+        width="640"
+        height="360"
+        style="border: 0"
+        loading="lazy"
+        title="Video player 0"
+      ></iframe>
+    </div>
+
+    <script>
+      (function () {
+        var frame = document.getElementById("player-0");
+        var embed = "{{SECONDARY}}/player-delayed-embed-hop.html";
+        frame.setAttribute("data-enc", btoa(embed + "?player=0"));
+
+        var EVENTS = [
+          "mouseover",
+          "click",
+          "keydown",
+          "wheel",
+          "touchmove",
+          "touchstart",
+          "pointerup",
+          "pointerdown",
+        ];
+        var released = false;
+        function release() {
+          if (released) return;
+          released = true;
+          for (var k = 0; k < EVENTS.length; k++) window.removeEventListener(EVENTS[k], release);
+          setTimeout(tabScript, 1000);
+        }
+        for (var j = 0; j < EVENTS.length; j++) {
+          window.addEventListener(EVENTS[j], release, { passive: true });
+        }
+
+        function tabScript() {
+          var buttons = document.querySelectorAll(".srv-btn");
+          for (var i = 0; i < buttons.length; i++) {
+            buttons[i].addEventListener("click", function (event) {
+              fetch("/beacon/delayed-tab-" + event.currentTarget.getAttribute("data-server")).catch(
+                function () {},
+              );
+              // js/xss-through-dom, excused under docs/adr/005 by category, in
+              // tools/downloader/resolvers/test/fixtures/pages/player-delayed-tabs.html,
+              // 2026-11-15, by the owner (dl-143, answer A): this is a test fixture,
+              // served only by the test's own server, and it copies a DOM attribute
+              // into an iframe's src on purpose, because that is the page dl-143
+              // reproduces: the live page keeps each player's address in a data
+              // attribute and sets it only on a tab press, and its tab handlers are
+              // registered by a delay-JS plugin's script. It never ships, and no
+              // visitor reaches it. Field five has no production design behind it
+              // to regress: what goes red if the fixture stops doing it is "a
+              // server tab whose handler a delay-JS plugin registers late is
+              // pressed once the page is ready" in
+              // browser-resolver-press-targets.test.ts, since the iframe then stays
+              // blank and the probe ends NO_MEDIA_FOUND.
+              // The assignment is on one line because the suppression covers exactly
+              // the line after the comment.
+              // codeql[js/xss-through-dom]
+              frame.src = atob(frame.getAttribute("data-enc"));
+            });
+          }
+        }
+      })();
+    </script>
+  </body>
+</html>

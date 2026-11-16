@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>An ad slot on a page whose body class says player</title>
+  </head>
+  <body class="single single-player-page" style="margin: 0">
+    <!-- dl-143, gate 1: a visible about:blank iframe that a script wrote into,
+         under a <body> whose class holds "player" because it is a WordPress
+         template's class. It is an ad slot, not a blank player iframe. -->
+    <iframe id="ad" width="300" height="250" style="border: 0"></iframe>
+    <div style="height: 3000px"></div>
+    <script>
+      (function () {
+        var doc = document.getElementById("ad").contentDocument;
+        doc.open();
+        doc.write("<p>ad</p>");
+        doc.close();
+      })();
+    </script>
+  </body>
+</html>

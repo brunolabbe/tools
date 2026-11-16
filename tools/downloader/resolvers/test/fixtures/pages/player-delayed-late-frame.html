@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A delayed script that fills one iframe and adds another</title>
+  </head>
+  <body style="margin: 0">
+    <!-- dl-143, gate 1: the shape that tests the frame list being read again for
+         each visit. A blank player iframe is filled by a delayed script (released
+         by a pointer over the window, as in player-delayed-single.html?hover), and
+         the same script adds a second iframe, with the clickable embed, that exists
+         from then until 3.5 s later. The probe's first pass reaches it only if the
+         frame list is read after the wait; the second pass, 3 s later, finds it gone. -->
+    <div style="height: 200px"></div>
+    <div class="player-wrap">
+      <iframe
+        id="player-0"
+        class="player-frame"
+        src="about:blank"
+        width="640"
+        height="360"
+        style="border: 0"
+        title="Video player"
+      ></iframe>
+    </div>
+
+    <script>
+      (function () {
+        var frame = document.getElementById("player-0");
+        var EVENTS = ["mouseover", "pointerup", "pointerdown"];
+        var released = false;
+        function release() {
+          if (released) return;
+          released = true;
+          for (var k = 0; k < EVENTS.length; k++) window.removeEventListener(EVENTS[k], release);
+          setTimeout(fill, 300);
+        }
+        window.addEventListener("load", function () {
+          setTimeout(function () {
+            for (var j = 0; j < EVENTS.length; j++) {
+              window.addEventListener(EVENTS[j], release, { passive: true });
+            }
+          }, 300);
+        });
+
+        function fill() {
+          // js/xss-through-dom does not apply: both addresses are fixed strings, not
+          // read from the DOM.
+          frame.src = "/player-inert-frame.html";
+          var late = document.createElement("iframe");
+          late.className = "player-frame";
+          late.width = 640;
+          late.height = 360;
+          late.style.border = "0";
+          late.src = "{{SECONDARY}}/player-tabs-embed.html";
+          frame.parentNode.appendChild(late);
+          setTimeout(function () {
+            late.remove();
+          }, 3500);
+        }
+      })();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A page with no player iframe whose load a slow ad holds back</title>
+  </head>
+  <body style="margin: 0">
+    <!-- dl-143, gate 1: no iframe at all, a `.player` div, and an image the test
+         never answers, so the document stays `interactive` and `load` never fires.
+         A probe of this page must not wait for an iframe that is not there. -->
+    <div class="player" style="width: 640px; height: 360px"></div>
+    <img src="/hang-asset.png" alt="" />
+    <div style="height: 3000px"></div>
+  </body>
+</html>
