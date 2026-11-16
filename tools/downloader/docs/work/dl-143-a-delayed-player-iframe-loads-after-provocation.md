@@ -493,3 +493,91 @@ navigations counted; F2 fixed in this round; F6 and F3 fixed alongside.
   iframe box leaves this page's in-frame click intact.
 - NFR: security — F2 aims a hover at an ad iframe; no host names · performance —
   F1, F2 · reliability — F4, F5, F6 · maintainability — F3.
+
+### Gate 2
+
+**Gate: FAIL** — 2026-11-16 · `4fe63aeb..1d409c19` (the round's own change read as `b3fe8a4c..1d409c19`; dl-142's files from the `origin/main` merge left out) · Opus 5.5, depth narrow
+
+| Done when                                                                                                            | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| -------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The single-iframe delayed fixture resolves through the browser tier, and is red on `main`'s `provoke.ts`             | `resolvers/test/browser/browser-resolver-press-targets.test.ts` › "a player iframe that a delay-JS plugin fills after the first interaction resolves, once its embed has hopped to the document with the player" ✓, 46 of 46 in the spec on 2 runs; red on the base measured by gate 1 and not re-run (the round does not touch this test)                                                                                                                                                            |
+| The delayed-tab fixture resolves                                                                                     | same file › "a server tab whose handler a delay-JS plugin registers late is pressed once the page is ready" ✓                                                                                                                                                                                                                                                                                                                                                                                         |
+| A page with no blank player iframe pays no wait                                                                      | **not met** (F1, fixed in part). The round's tests prove three cases: a page still loading pays the 1 s retry, not the whole wait; a hash rewrite is not counted; a `body` class is not a player. But a complete page with no iframe whose main frame makes a navigation request that never commits pays the whole wait, about 6.1 s against about 0.1 s: a 204, a download, a request cancelled by `window.stop()` or replaced by another. The owner's answer counts only cross-document navigations |
+| `npm run check` exits 0; `npm test -- --project downloader` passes, or every failure is shown to also fail on `main` | verified: `npm run check` exit 0; `npm test -- --project downloader` exit 0, 2699 passed, 2 skipped (129 files, 1 skipped)                                                                                                                                                                                                                                                                                                                                                                            |
+
+- **high** · F1 · **fixed in part** · Done when 3 depends on it · **open
+  decision** · The loading cap holds. A page with no iframe whose `load` a hung
+  image holds took 1147 ms and 1161 ms, against 76 ms and 81 ms with `main`'s
+  `provoke.ts`. The remaining gap is in the counter. `provokePlayback`'s
+  `onRequest` counts every main-frame `request` with
+  `isNavigationRequest()`, and a navigation request is not a cross-document
+  navigation. The gate's probe used a complete page with no iframe and started
+  the navigation with `setTimeout(..., 0)` just before `provokePlayback`. At
+  this head the wait was paid in full 12 times out of 12 for requests that never
+  commit (`mainCommits=0` in every one):
+  - 204: 6194, 6163 and 6122 ms
+  - download: 6172, 6144 and 6171 ms
+  - `window.stop()`: 6185, 6262 and 6243 ms
+  - superseded by a 204: 6249, 6282 and 6265 ms
+
+  With gate 1's head `provoke.ts`, which counted `framenavigated`, the same
+  requests took 69–181 ms. `main` took 106–171 ms. A reload and a committed
+  navigation pay about 6.1 s in both, which is the cost the owner accepted.
+  Shipped text that is false in the unsafe direction: the counter's comment
+  says "Cross-document navigations of the main frame only", and
+  `BLANK_PLAYER_FILL_WAIT_MS`'s docstring says "the whole wait only if a
+  cross-document navigation (a reload) was seen". The window is from
+  `provokePlayback`'s start to the wait's first look: the modal, consent and age
+  steps and the scroll. No live page has been seen to make such a request
+  there. Options:
+  - (a) **Recommended, direction only and untested.** Count a main-frame
+    navigation only once it commits. One way is to pair the navigation
+    `request` with the next main-frame `framenavigated`, which a 204, a
+    download and a cancelled request never reach and a `pushState` reaches with
+    no request.
+  - (b) The owner accepts the cost. Done when 3, the comment and the docstring
+    are reworded to "a main-frame navigation request".
+
+- **med** · F2 · **fixed** · `body.single-player-page` with a script-written
+  ad slot: 126 ms, against 130 ms on `main`. Ancestors are no longer read
+  through `<body>`, and a blank player iframe placed directly in `<body>` with
+  no wrapper is still matched by its own class (`player-frame`), id
+  (`player-0`) or title: 6163, 6133 and 6158 ms when it never fills, against
+  125–129 ms on `main`. A player token only on `<body>` is not matched (123 ms),
+  which is what the fix intends. dl-139's tests are unedited (the branch's diff
+  of the press-targets spec has no deletions) and pass, 46 of 46 on 2 runs.
+- **low** · F3 · **fixed** · the `snapshot` mutation, one frame list per
+  pass, turns "an iframe that the delayed script adds while the probe waits is
+  visited in the same pass, not only in the next" red: `expected [ …(3) ] to
+  include '/media/related/master.m3u8'`.
+- **low** · F4 · **not fixed**, recorded by the owner's choice.
+- **low** · F5 · **not fixed**, recorded by the owner's choice.
+- **med** · F6 · **fixed** · the timing test, "a page with no blank player
+  iframe pays no wait, and one whose iframe never fills pays the bound", and
+  the wait's elapsed times read `performance.now()`. `Date.now()` is left only
+  in the `deadline:` arguments, which are out of scope (dl-145). 20 of 20 runs
+  of the test passed.
+- **low** · `nfr:maintainability` · two comments in `provoke.ts` the round
+  made stale. Each is false in the safe direction, and nothing relies on
+  either:
+  - The `BLANK_PLAYER_STABLE_MS` docstring ("A filled frame is loaded when…")
+    now sits above `BLANK_PLAYER_LOADING_RETRY_MS`'s, so the stable-window
+    constant has no docstring.
+  - `BLANK_PLAYER_IFRAMES_FN`'s header still says a player-ish class or id "on
+    it or an ancestor", with no stop before `<body>`.
+- **low** · the walk's `/player/i` test of class and id is case-insensitive,
+  but `[class*="player"]` was case-sensitive. A `class="videoPlayer"` ancestor
+  now matches where it did not. That widens dl-139's press as well. Unmeasured,
+  and no live call site is known.
+- **dropped** · out of range · with a main-frame navigation that never answers
+  and is never cancelled, `provokePlayback` was still running at 40 s against a
+  30 s deadline, both at this head and with `main`'s `provoke.ts`. The behaviour
+  is older than this branch.
+- **dropped** · `player-hash-churn.html` names `framenavigated` as the counter
+  that would have counted its rewrite. That is why the fixture exists, so the
+  comment is not stale.
+- **findings** · the round's attacks returned 5: F1's residue, which is carried
+  as F1, two lows carried and two dropped. Gate 1's six were re-graded.
+- Names in the diff: the added lines contain no host or site name.
+- NFR: security — the hover no longer reaches a `body`-class ad slot · performance — F1 ·
+  reliability — F4, F5 unchanged · maintainability — the two lows.
