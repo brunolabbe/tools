@@ -3,7 +3,7 @@ id: dl-144
 tool: downloader
 title: An embed whose own script redirects the top frame to a mirror after the landing window reads as navigated-away
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -305,6 +305,18 @@ Gate round 3 — answered 2026-11-16 by the owner: fix (d) and (e) in this round
     not tested separately: it ends in the same `requestfailed` as the stop.
   - **Mutations**: without the `requestfailed` listener the stop and download
     tests go red; without the `redirectedFrom` removal the redirect test goes red.
+  - Gate 4 measured remedy R before it was applied, so round 4 was not gated
+    again. The orchestrator checked the head (`202ce69c`) instead, 2026-11-16.
+    - The departure file passed 33 of 33.
+    - With the `requestfailed` listener removed, the stop test went red in 3 of
+      3 runs and the download test went red.
+    - With the `redirectedFrom` removal reverted, the redirect test went red.
+    - The diff adds no live host or video address.
+    - The live embed resolved in 2 of 2 runs at `356e32e8` and at `8d240803`.
+      This round touches only pending-request bookkeeping, so it was not
+      re-run live.
+    - F2 is closed by this round. F4 (low) stays recorded and unfixed, as the
+      owner scoped it.
 
 ## Review
 
