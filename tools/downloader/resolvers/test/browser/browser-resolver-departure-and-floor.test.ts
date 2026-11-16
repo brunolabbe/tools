@@ -580,6 +580,189 @@ describe("the two fixed sleeps every probe pays keep their production values (dl
   });
 });
 
+describe("a page's own redirect before the tier's first press is not a departure (dl-144)", () => {
+  // Production landing settle, on purpose: the hop lands ~1000 ms after `load`,
+  // past `LANDING_URL_SETTLE_MS` (500 ms), which is the window dl-55's
+  // decision 2 draws and this ticket leaves where it was.
+  test(
+    "an embed that moves itself to a mirror after the settle window resolves the mirror's stream",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const hls = recordingHlsParser();
+      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...STREAM_WAITS });
+      const result = await probe("/guard-late-embed.html", resolver);
+      expect(result.variants[0]?.url).toBe(server.secondaryUrl("/media/hls/master.m3u8"));
+    },
+  );
+
+  test(
+    "a press on the mirror that navigates is still a departure, measured from the mirror",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const warnings: { message: string; fields: Record<string, unknown> | undefined }[] = [];
+      const logger: BrowserResolverLogger = {
+        warn: (message, fields) => {
+          warnings.push({ message, fields });
+        },
+      };
+      const resolver = new BrowserResolver({ pool, quietMs: 1200, logger });
+      const error = await probeError("/guard-late-embed-press.html", resolver);
+
+      expectCode(error, "NO_MEDIA_FOUND");
+      expect(error.details?.["reason"]).toBe("navigated-away");
+      expect(error.details?.["url"]).toBe(server.secondaryUrl("/guard-late-embed-press.html"));
+      expect(error.details?.["departedTo"]).toBe(server.url("/mse.html"));
+      expect(String(warnings[0]?.fields?.["landingUrl"])).toBe(
+        server.secondaryUrl("/guard-late-embed-press.html"),
+      );
+    },
+  );
+});
+
+describe("what a page asked for before it moved itself is judged by document (dl-144, gate 1)", () => {
+  test(
+    "a hit the result will ignore does not end the empty floor on the mirror",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      // Production floor on purpose: the mirror asks ~5 s after its load, which
+      // only dl-80's extended wait covers. The first document's own manifest is
+      // dropped from the result, so it must not count as "captured" for the floor.
+      const hls = recordingHlsParser();
+      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+      const result = await probe("/guard-late-embed-late-mirror.html", resolver);
+      expect(result.variants[0]?.url).toBe(server.secondaryUrl("/media/hls/master.m3u8"));
+    },
+  );
+
+  test(
+    "a same-document rewrite before the first press keeps the page's own stream",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const hls = recordingHlsParser();
+      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...STREAM_WAITS });
+      const result = await probe("/guard-replace-state-after-settle.html", resolver);
+      expect(result.variants[0]?.url).toBe(server.url("/media/hls/master.m3u8"));
+    },
+  );
+
+  test(
+    "a hop out and back to the same address keeps the final document's stream",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const hls = recordingHlsParser();
+      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...STREAM_WAITS });
+      const result = await probe("/guard-late-embed-bounce.html", resolver);
+      expect(result.variants[0]?.url).toBe(server.url("/media/hls/master.m3u8"));
+    },
+  );
+});
+
+describe("a page's pre-hop requests are judged by the top frame's document generation (dl-144, gate 2)", () => {
+  test(
+    "a reload at the same address, then a rewrite in the reloaded document, keeps its stream",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const hls = recordingHlsParser();
+      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...STREAM_WAITS });
+      const result = await probe("/guard-reload-then-replace.html", resolver);
+      expect(result.variants[0]?.url).toBe(server.url("/media/hls/master.m3u8"));
+    },
+  );
+
+  test(
+    "a player frame of the page that was left is left with it",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      // Production floor, as for the late mirror above: the mirror asks ~5 s in.
+      const hls = recordingHlsParser();
+      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+      const result = await probe("/guard-late-embed-left-frame.html", resolver);
+      expect(result.variants[0]?.url).toBe(server.secondaryUrl("/media/hls/master.m3u8"));
+    },
+  );
+
+  test(
+    "a live frame at the address the top frame left is not left behind",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const hls = recordingHlsParser();
+      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...STREAM_WAITS });
+      const result = await probe("/guard-late-embed-live-frame.html", resolver);
+      expect(result.variants[0]?.url).toBe(server.url("/media/hls/master.m3u8"));
+    },
+  );
+});
+
+describe("a hit belongs to the document that asked for it last (dl-144, gate 3)", () => {
+  test(
+    "a reloaded document that asks for the manifest the first one asked for keeps it",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const hls = recordingHlsParser();
+      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...STREAM_WAITS });
+      const result = await probe("/guard-reload-same-manifest.html", resolver);
+      expect(result.variants[0]?.url).toBe(server.url("/media/hls/master.m3u8"));
+    },
+  );
+
+  test(
+    "a live frame that asks for the manifest the left page asked for keeps it",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const hls = recordingHlsParser();
+      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...STREAM_WAITS });
+      const result = await probe("/guard-late-embed-live-frame-refetch.html", resolver);
+      expect(result.variants[0]?.url).toBe(server.url("/media/hls/master.m3u8"));
+    },
+  );
+
+  test(
+    "a navigation that never commits, then a rewrite, leaves the page's stream where it is",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const hls = recordingHlsParser();
+      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...STREAM_WAITS });
+      const result = await probe("/guard-no-commit-then-replace.html", resolver);
+      expect(result.variants[0]?.url).toBe(server.url("/media/hls/master.m3u8"));
+    },
+  );
+});
+
+describe("a navigation counts as a new document only once it commits (dl-144, gate 4)", () => {
+  test(
+    "a navigation the page stops, then a rewrite, leaves the page's stream where it is",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const hls = recordingHlsParser();
+      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...STREAM_WAITS });
+      const result = await probe("/guard-no-commit-stopped.html", resolver);
+      expect(result.variants[0]?.url).toBe(server.url("/media/hls/master.m3u8"));
+    },
+  );
+
+  test(
+    "a navigation redirected to a 204, then a rewrite, leaves the page's stream where it is",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const hls = recordingHlsParser();
+      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...STREAM_WAITS });
+      const result = await probe("/guard-no-commit-redirect-204.html", resolver);
+      expect(result.variants[0]?.url).toBe(server.url("/media/hls/master.m3u8"));
+    },
+  );
+
+  test(
+    "a download, then a rewrite, leaves the page's stream where it is",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const hls = recordingHlsParser();
+      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...STREAM_WAITS });
+      const result = await probe("/guard-no-commit-download.html", resolver);
+      expect(result.variants[0]?.url).toBe(server.url("/media/hls/master.m3u8"));
+    },
+  );
+});
+
 /** Elapsed milliseconds since the call, off a clock that follows no one's `date`. */
 function startStopwatch(): () => number {
   const startedAt = performance.now();

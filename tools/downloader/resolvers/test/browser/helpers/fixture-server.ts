@@ -157,6 +157,32 @@ function makeHandler(
         return;
       }
 
+      // dl-144: the top-frame navigations that never commit, other than a 204.
+      // A response held for `ms` (a page the script then stops loading), a 302
+      // to a URL answered 204, and a download.
+      if (pathname === "/hold") {
+        const ms = Number(requestUrl.searchParams.get("ms") ?? "0");
+        setTimeout(() => {
+          if (response.destroyed) return;
+          response.writeHead(200, { "content-type": "text/html", "cache-control": "no-store" });
+          response.end("<!doctype html><title>held</title><p>held</p>");
+        }, ms);
+        return;
+      }
+      if (pathname === "/redirect-to-beacon") {
+        response.writeHead(302, { location: "/beacon/redirected" }).end();
+        return;
+      }
+      if (pathname === "/attachment") {
+        response.writeHead(200, {
+          "content-type": "application/octet-stream",
+          "content-disposition": 'attachment; filename="file.bin"',
+          "content-length": "4",
+        });
+        response.end("data");
+        return;
+      }
+
       // dl-79: ordinary `.ts` segments, answered from memory because a `.ts`
       // file under the fixtures is a TypeScript file to the linter.
       if (/^\/media\/untyped\/seg-\d+\.ts$/.test(pathname)) {

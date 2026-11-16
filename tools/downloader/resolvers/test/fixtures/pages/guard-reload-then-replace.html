@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Guard: a reload, then a rewrite</title>
+  </head>
+  <body>
+    <h1>Guard: a reload, then a rewrite</h1>
+    <!-- A same-address reload before the first press, then a replaceState in the reloaded document (dl-144, gate 2). The reload is a document request that commits at the same address; it must not leave the next, same-document navigation looking like a new document. -->
+    <script>
+      (function () {
+        if (document.cookie.indexOf("reloaded=1") < 0) {
+          document.cookie = "reloaded=1; path=/";
+          window.addEventListener("load", function () {
+          setTimeout(function () {
+            location.reload();
+          }, 1000);
+        });
+          return;
+        }
+        fetch("/media/hls/master.m3u8")
+          .then(function (r) {
+            return r.text();
+          })
+          .then(function () {
+            return fetch("/media/hls/v720.m3u8");
+          })
+          .then(function (r) {
+            return r.text();
+          })
+          .catch(function () {});
+        window.addEventListener("load", function () {
+          setTimeout(function () {
+            history.replaceState(null, "", location.pathname + "?v=2");
+          }, 300);
+        });
+      })();
+    </script>
+  </body>
+</html>

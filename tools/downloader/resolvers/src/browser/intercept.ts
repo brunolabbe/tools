@@ -88,6 +88,10 @@ export class HitCollector {
   /** Inflated length of every compressed typed read that has returned (dl-91). */
   #encodedInflated = 0;
   #seq = 0;
+  /** Hits the caller has ruled out of the result (dl-144); see `exclude`. */
+  #excluded: ((hit: NetworkHit) => boolean) | undefined;
+  /** Reads the top frame's document generation for each new hit (dl-144); see `stampWith`. */
+  #generation: (() => number) | undefined;
   #lastActivityAt = Date.now();
   #attached = false;
 
@@ -119,7 +123,36 @@ export class HitCollector {
    * arrives and whose hit is recorded once its body has been read (dl-79).
    */
   get hits(): NetworkHit[] {
-    return [...this.#hits.values()];
+    const all = [...this.#hits.values()];
+    const excluded = this.#excluded;
+    return excluded === undefined ? all : all.filter((hit) => !excluded(hit));
+  }
+
+  /**
+   * Rules hits out of everything this collector reports (dl-144): `hits`, and so
+   * ranking, and `hasPlayableHit`, and so the press gates and the empty floor.
+   * One set read everywhere, so a hit the result will ignore cannot also end the
+   * wait for one it will use. The hit stays recorded (the predicate is read each
+   * time), so a hit that arrives late is judged by the same rule.
+   */
+  exclude(predicate: (hit: NetworkHit) => boolean): void {
+    this.#excluded = predicate;
+  }
+
+  /**
+   * Stamps hits with `generation()` (0 before this is called: the document the
+   * probe landed on, whatever it did in the settle window). The stamp is read
+   * synchronously when the collector sees a request, and again whenever a later
+   * request asks for a URL already recorded, so a URL both documents ask for
+   * belongs to the one that asked last. A response never restamps, and a hit
+   * that is first recorded from a body read (`#sniffBody`) takes the generation
+   * showing when that read ends, which for a read that outlives its document is
+   * never: the read fails at the commit and records nothing. A request the old
+   * document had in flight at a commit is seen before the commit and stamped old
+   * (measured by gate 3: 28 of 28 cases): see `watchForDeparture`.
+   */
+  stampWith(generation: () => number): void {
+    this.#generation = generation;
   }
 
   /**
@@ -127,7 +160,7 @@ export class HitCollector {
    * Used by dl-80 to extend the quiet floor when a page has nothing yet.
    */
   hasPlayableHit(): boolean {
-    for (const hit of this.#hits.values()) {
+    for (const hit of this.hits) {
       if (hit.kind !== "segment") return true;
     }
     return false;
@@ -214,6 +247,11 @@ export class HitCollector {
     const key = normaliseUrl(url);
     const existing = this.#hits.get(key);
     if (existing) {
+      // A request for a URL already recorded is the current document asking
+      // again (dl-144, gate 3): the hit is one per URL, so it moves with it.
+      if (patch.confirmed !== true && this.#generation !== undefined) {
+        existing.generation = this.#generation();
+      }
       // A response refines what the request could only guess at.
       if (patch.confirmed) {
         // A file already confirmed whole stays whole (dl-78): a later response
@@ -235,6 +273,7 @@ export class HitCollector {
       kind,
       headers: { ...headers },
       seq: patch.seq ?? this.#seq++,
+      generation: this.#generation?.() ?? 0,
       confirmed: patch.confirmed ?? false,
       ...(patch.contentType === undefined ? {} : { contentType: patch.contentType }),
       ...(patch.contentLength === undefined ? {} : { contentLength: patch.contentLength }),

@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Guard: a navigation the page stops</title>
+  </head>
+  <body>
+    <h1>Guard: a navigation the page stops</h1>
+    <!-- The page asks for its manifest, starts a top-frame navigation that never commits, then rewrites its own URL (dl-144, gate 4). No document was left, so none of its hits are. Here the page stops the load itself. -->
+    <script>
+      (function () {
+        fetch("/media/hls/master.m3u8")
+          .then(function (r) {
+            return r.text();
+          })
+          .then(function () {
+            return fetch("/media/hls/v720.m3u8");
+          })
+          .then(function (r) {
+            return r.text();
+          })
+          .catch(function () {});
+        window.addEventListener("load", function () {
+          setTimeout(function () {
+            location.href = "/hold?ms=3000";
+          }, 1000);
+          setTimeout(function () {
+            window.stop();
+          }, 1100);
+          setTimeout(function () {
+            history.replaceState(null, "", location.pathname + "?v=2");
+          }, 1400);
+        });
+      })();
+    </script>
+  </body>
+</html>

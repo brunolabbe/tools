@@ -20,6 +20,30 @@ import { budget, remaining, sleep, throwIfAborted } from "./abort.ts";
 import { AGE_MARKERS } from "./classify.ts";
 import type { HitCollector } from "./intercept.ts";
 
+/**
+ * The one place a press is announced from (dl-144). Every step that clicks on
+ * the page calls `notePress` just before the click, because the navigation a
+ * press causes can commit before the click call returns, and the guard in
+ * `browser.ts` has to know a press came first. Attempt, not success: a click
+ * that is covered or times out is still announced, which only ever puts the
+ * landing-URL guard back to dl-55's strict reading.
+ *
+ * A listener per page, so no click helper has to carry it down: `provokePlayback`
+ * registers it, and a page with none (a test calling `dismissConsent` alone)
+ * announces to nobody. Scrolls, the wheel, `play()` and the `Escape` key are not
+ * presses.
+ */
+const pressListeners = new WeakMap<Page, () => void>();
+
+function notePress(page: Page | Frame): void {
+  try {
+    const owner = "mainFrame" in page ? page : page.page();
+    pressListeners.get(owner)?.();
+  } catch {
+    // A detached frame has no page to tell; the click will fail the same way.
+  }
+}
+
 /** Vendor-specific accept buttons, most-common first. */
 const CONSENT_SELECTORS: readonly string[] = [
   "#onetrust-accept-btn-handler",
@@ -1156,6 +1180,7 @@ async function clickVisible(
         // counted (dl-100). Read before the press, which can remove the element.
         const target = locator.nth(index);
         const counted = options.countPress === undefined ? true : await options.countPress(target);
+        notePress(frame);
         await target.click({ timeout: options.timeoutMs });
         if (counted) clicked += 1;
       } catch {
@@ -1173,6 +1198,7 @@ async function clickByText(frame: Frame, pattern: RegExp, timeoutMs: number): Pr
     try {
       const locator = frame.getByRole(role, { name: pattern }).first();
       if (!(await locator.isVisible({ timeout: 150 }))) continue;
+      notePress(frame);
       await locator.click({ timeout: timeoutMs });
       return true;
     } catch {
@@ -1341,6 +1367,7 @@ async function clickByTextIn(scope: Locator, pattern: RegExp, timeoutMs: number)
     try {
       const locator = scope.getByRole(role, { name: pattern }).first();
       if (!(await locator.isVisible({ timeout: 150 }))) continue;
+      notePress(scope.page());
       await locator.click({ timeout: timeoutMs });
       return true;
     } catch {
@@ -1457,6 +1484,7 @@ export async function dismissModal(
     }
     if (found === "marked") {
       try {
+        notePress(frame);
         await frame.locator(`[${CLOSE_MARK}]`).first().click({ timeout: options.timeoutMs });
         return 1;
       } catch {
@@ -1478,6 +1506,7 @@ export async function dismissModal(
       if (!(await dialog.isVisible())) return 0;
       const control = dialog.getByRole("button", { name: CLOSE_TEXT }).first();
       if (await control.isVisible()) {
+        notePress(frame);
         await control.click({ timeout: options.timeoutMs });
         return 1;
       }
@@ -1517,6 +1546,7 @@ async function confirmAgeGate(frame: Frame, timeoutMs: number): Promise<boolean>
   }
   if (found !== "marked") return false;
   try {
+    notePress(frame);
     await frame.locator(`[${AGE_MARK}]`).first().click({ timeout: timeoutMs });
     try {
       await frame.evaluate(AGE_PRESSED_SCRIPT);
@@ -1570,6 +1600,7 @@ async function clickChosenVideo(frame: Frame, scriptable: boolean): Promise<bool
     try {
       marked = await frame.evaluate<boolean>(CHOOSE_VIDEO_SCRIPT);
       if (!marked) return false;
+      notePress(frame);
       await frame
         .locator(`[${VIDEO_MARK}]`)
         .first()
@@ -1594,6 +1625,7 @@ async function clickChosenVideo(frame: Frame, scriptable: boolean): Promise<bool
     if (index < 0) return false;
     const video = frame.locator("video").nth(index);
     if (await video.isVisible({ timeout: 150 })) {
+      notePress(frame);
       await video.click({ timeout: 1500, force: true, position: { x: 5, y: 5 } });
       return true;
     }
@@ -1716,6 +1748,7 @@ async function clickPlayerBox(frame: Frame): Promise<boolean> {
   try {
     marked = await frame.evaluate<boolean>(MARK_PLAYER_BOX_SCRIPT);
     if (!marked) return false;
+    notePress(frame);
     await frame.locator(`[${BOX_MARK}]`).first().click({ timeout: 1500, force: true });
     return true;
   } catch {
@@ -1869,6 +1902,7 @@ async function pressServerTab(frame: Frame, timeoutMs: number): Promise<boolean>
   try {
     marked = await frame.evaluate<boolean>(MARK_SERVER_TAB_SCRIPT);
     if (!marked) return false;
+    notePress(frame);
     await frame.locator(`[${TAB_MARK}]`).first().click({ timeout: timeoutMs });
   } catch {
     // Covered, detached, or gone before the click landed.
@@ -2063,8 +2097,23 @@ export async function provokePlayback(
      * default is for.
      */
     passPauseMs?: number | undefined;
+    /**
+     * dl-144: called once, just before the tier's first press on the page (see
+     * `notePress`). It stays registered for the page's life, so a later
+     * `revisitOverlays` press is announced too, which is a no-op once it has run.
+     */
+    onFirstPress?: (() => void) | undefined;
   },
 ): Promise<void> {
+  if (options.onFirstPress !== undefined) {
+    const announce = options.onFirstPress;
+    let announced = false;
+    pressListeners.set(page, () => {
+      if (announced) return;
+      announced = true;
+      announce();
+    });
+  }
   const pageOrigin = originOf(page.url());
   const hasPlayable = options.hasPlayable ?? (() => false);
   const serverTab = { attempted: false };

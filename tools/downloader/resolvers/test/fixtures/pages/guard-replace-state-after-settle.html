@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Guard: a router rewrite after the settle window</title>
+  </head>
+  <body>
+    <h1>Guard: a router rewrite after the settle window</h1>
+    <!-- The page asks for its manifest on parse, then rewrites its own URL in the same document ~1000 ms after load (dl-144, gate 1): no new document, so the stream it already fetched is still its own. -->
+    <script>
+      (function () {
+        fetch("/media/hls/master.m3u8")
+          .then(function (r) {
+            return r.text();
+          })
+          .then(function () {
+            return fetch("/media/hls/v720.m3u8");
+          })
+          .then(function (r) {
+            return r.text();
+          })
+          .catch(function () {});
+        window.addEventListener("load", function () {
+          setTimeout(function () {
+            history.replaceState(null, "", location.pathname + "?v=2");
+          }, 1000);
+        });
+      })();
+    </script>
+  </body>
+</html>
