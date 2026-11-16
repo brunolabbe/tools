@@ -407,6 +407,44 @@ navigation as a replacement only once it commits.
   - `npm run check` exit 0; `npm test -- --project downloader` 2699 passed, 2
     skipped. e2e and container gates not run.
 
+- 2026-11-16 — Gate round 2 (FAIL at 1d409c19, F1's remainder; the owner's answer
+  is under the Decision: count a navigation only once it commits).
+  - **The counter counted requests, not commits.** `onRequest` counted every
+    main-frame navigation request, so a 204, a download, a `window.stop()`
+    cancel or a load superseded by a 204 (12 of 12 in the gate) lifted the cap
+    and a page with no iframe paid the whole 6 s. Round 3's Log sentence and the
+    code comment saying "cross-document only" were false for those; both are now
+    true. The counter pairs a pending main-frame navigation request with the next
+    main-frame `framenavigated`: a commit counts only while a request is pending,
+    a request that finishes or fails stops being pending, and a `pushState` or hash
+    change commits with no request and does not count. (Residual: a `pushState`
+    while a never-committing request is still in flight would count; not
+    measured, no live call site.)
+  - **The counter is read as the wait goes**, not once at its start: the
+    mark-false branch re-reads it each retry, so a commit that lands during the
+    1 s loading retry lifts the cap.
+  - Tests at the end of the press-targets spec: a `test.each` of the four
+    never-committing navigations on `player-no-iframe.html`, sent just before the
+    probe so the request lands ahead of the wait's first look, and a reload that
+    commits 400 ms into the loading retry, whose new document puts a blank player
+    iframe in 300 ms after it loads. **Red at 1d409c19:** the four at 6.2-6.3 s
+    against `< 3000` (the reload test passed there, as it should). **Mutations:**
+    counting at the request again reds the four (6.2-6.3 s); reading the counter
+    once at the start reds the reload test (658 ms). The `?reload`, `?reload=early`
+    and `?slow` fixtures stay green (16 of 16 on `-t dl-143`, three runs).
+    The reload test's first version did not tell the two apart (the mid-navigation
+    evaluate error already set `replaced`); the 300 ms iframe in the new document
+    is what gives it teeth.
+  - Lows: `BLANK_PLAYER_STABLE_MS` has its docstring back;
+    `BLANK_PLAYER_IFRAMES_FN`'s header says the walk stops before `<body>`; the
+    ancestor test is case-sensitive again (`indexOf('player')`), as
+    `[class*="player"]` was, so dl-139's press is not widened.
+  - Live, the final build, 6 of 6 (OK 23.1, 21.9, 22.4, 17.9, 20.5, 20.6 s).
+    Second main load / provoke-playback start: 3.4/3.9, 3.4/3.9, 3.9/4.4,
+    3.5/4.2, 3.8/4.2, 3.7/4.3. None had the reload after provocation began.
+  - `npm run check` exit 0; `npm test -- --project downloader` 2704 passed, 2
+    skipped. e2e and container gates not run.
+
 ## Review
 
 **Gate: FAIL** — 2026-11-15 · `5f15e56f..4fe63aeb` · Opus 5.5, depth medium

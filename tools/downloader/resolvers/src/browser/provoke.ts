@@ -1753,8 +1753,10 @@ const SERVER_TAB_MAX_LABEL = 24;
 
 /**
  * Every player-ish iframe whose `src` is absent or `about:blank` (dl-139), in
- * document order and shadow roots included: no `srcdoc`, and a player-ish class,
- * id or title on it or an ancestor. The one definition of "a blank player
+ * document order and shadow roots included: no `srcdoc`, and a player-ish class
+ * or id on the iframe or an ancestor **below `<body>`** (the walk stops before it:
+ * a template's `body.single-player-page` is not a player), or a player-ish title
+ * on the iframe itself. The one definition of "a blank player
  * iframe": the server-tab press and the wait for such an iframe to fill (dl-143)
  * both read it, so they cannot disagree about which page has one.
  */
@@ -1768,7 +1770,7 @@ const BLANK_PLAYER_IFRAMES_FN = `function () {
     // about:blank ad slot on it a blank player iframe (dl-143, gate 1).
     for (var node = frame; node && node !== document.body && node !== document.documentElement; node = node.parentElement) {
       var tokens = (node.getAttribute('class') || '') + ' ' + (node.getAttribute('id') || '');
-      if (/player/i.test(tokens)) return true;
+      if (tokens.indexOf('player') !== -1) return true;
     }
     return /player|video/i.test(frame.getAttribute('title') || '');
   });
@@ -1928,9 +1930,11 @@ const UNMARK_BLANK_PLAYER_SCRIPT = `(() => {
  * page whose iframe fills ends it early, and one whose iframe never fills pays it
  * whole. **A page with no blank player iframe pays none of it once its document
  * is complete**; one still loading pays at most `BLANK_PLAYER_LOADING_RETRY_MS`
- * for the document to finish, and the whole wait only if a cross-document
- * navigation (a reload) was seen since provocation began, since the new document
- * may still be building the iframe.
+ * for the document to finish, and the whole wait only if a main-frame navigation
+ * that **committed** (a reload, a redirect, a link) was seen since provocation
+ * began, since the new document may still be building the iframe. A request that
+ * never commits (a 204, a download, a cancelled load) and a `pushState` or hash
+ * change are not a replacement.
  */
 export const BLANK_PLAYER_FILL_WAIT_MS = 6000;
 /**
@@ -1940,9 +1944,9 @@ export const BLANK_PLAYER_FILL_WAIT_MS = 6000;
  * tab fills fills within this on its own, or not before the press.
  */
 export const BLANK_PLAYER_RELEASE_WAIT_MS = 1000;
-/** A filled frame is loaded when its final document has been `complete` and unchanged this long. */
 /** How long a still-loading document with no blank player iframe is retried when no replacement was counted (dl-143). */
 const BLANK_PLAYER_LOADING_RETRY_MS = 1000;
+/** A filled frame is loaded when its final document has been `complete` and unchanged this long. */
 const BLANK_PLAYER_STABLE_MS = 800;
 const BLANK_PLAYER_POLL_MS = 100;
 
@@ -2043,6 +2047,9 @@ async function waitForBlankPlayerFill(
             // A document still loading is retried for a short cap only, unless a
             // replacement was counted: a page with no player at all whose `load` a
             // slow ad holds back must not pay the whole wait (dl-143, gate 1).
+            // The counter is read here, not once at the start: a commit that lands
+            // after the wait began lifts the cap too.
+            if (state.navigations() > 0) replaced = true;
             const loading =
               performance.now() - startedAt < BLANK_PLAYER_LOADING_RETRY_MS - state.spentMs &&
               (await frame.evaluate<string>("document.readyState")) !== "complete";
@@ -2331,14 +2338,31 @@ export async function provokePlayback(
   const pageOrigin = originOf(page.url());
   const hasPlayable = options.hasPlayable ?? (() => false);
   const serverTab = { attempted: false };
-  // Cross-document navigations of the main frame only: a navigation request is
-  // what a reload, a redirect or a link makes, and a `pushState` or a hash change
-  // makes none (dl-143, gate 1).
+  // A main-frame navigation that **committed**, counted once per commit (dl-143,
+  // gate 1 and 2). A navigation request alone is not one: a 204, a download or a
+  // load that is cancelled or superseded makes a request and never replaces the
+  // document. A `pushState` or a hash change commits with no request. So a commit
+  // counts only when a main-frame navigation request is pending, and a request
+  // that finished or failed without a commit stops being pending.
   let navigations = 0;
+  const pending = new Set<Request>();
   const onRequest = (request: Request): void => {
-    if (request.isNavigationRequest() && request.frame() === page.mainFrame()) navigations++;
+    if (request.isNavigationRequest() && request.frame() === page.mainFrame()) {
+      pending.add(request);
+    }
+  };
+  const onRequestEnded = (request: Request): void => {
+    pending.delete(request);
+  };
+  const onNavigated = (frame: Frame): void => {
+    if (frame !== page.mainFrame() || pending.size === 0) return;
+    navigations++;
+    pending.clear();
   };
   page.on("request", onRequest);
+  page.on("requestfinished", onRequestEnded);
+  page.on("requestfailed", onRequestEnded);
+  page.on("framenavigated", onNavigated);
   const blankPlayer: BlankPlayerWait = {
     done: false,
     marked: false,
@@ -2391,6 +2415,9 @@ export async function provokePlayback(
     }
   } finally {
     page.off("request", onRequest);
+    page.off("requestfinished", onRequestEnded);
+    page.off("requestfailed", onRequestEnded);
+    page.off("framenavigated", onNavigated);
   }
 }
 

@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A complete page with a player div and no iframe</title>
+  </head>
+  <body style="margin: 0">
+    <!-- dl-143, gate 2: nothing here makes a request or loads late. A test sends the
+         main frame somewhere that never commits (a 204, a download, a stopped or
+         superseded load) just before the probe, and the probe must not wait for an
+         iframe that this page does not have. -->
+    <div class="player" style="width: 640px; height: 360px"></div>
+    <div style="height: 3000px"></div>
+  </body>
+</html>

@@ -2,6 +2,7 @@
  * What the press reaches: the age gate's decoys and false candidates, and a click-only player box beside a press that counts (split from browser-resolver.test.ts, dl-117).
  */
 
+import type { BrowserContext } from "playwright";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import type { BrowserPool } from "../../src/browser/pool.ts";
 import { BLANK_PLAYER_FILL_WAIT_MS, provokePlayback } from "../../src/browser/provoke.ts";
@@ -657,6 +658,126 @@ describe("what a probe pays on a page with no blank player iframe (dl-143 gate r
       await provokeMs("/player-delayed-late-frame.html", { waitMs: 500, passPauseMs: 3000 });
 
       expect(server.requests).toContain("/media/related/master.m3u8");
+    },
+  );
+});
+
+describe("a main-frame navigation counts as a replacement only once it commits (dl-143 gate round 2)", () => {
+  /**
+   * `provokePlayback` on a page that has just been told to navigate: `script` runs
+   * in the page right before the call, so the request lands in the modal, consent
+   * and scroll steps, ahead of the wait's first look.
+   */
+  async function provokeAfter(options: {
+    pathname: string;
+    script: string;
+    routes?: (context: BrowserContext) => Promise<void>;
+  }): Promise<number> {
+    return await pool.withBrowser({ signal: new AbortController().signal }, async (browser) => {
+      const context = await browser.newContext({ acceptDownloads: true });
+      try {
+        await options.routes?.(context);
+        const page = await context.newPage();
+        await page.goto(server.url(options.pathname), { waitUntil: "domcontentloaded" });
+        await page.evaluate(options.script);
+        const startedAt = performance.now();
+        await provokePlayback(page, {
+          deadline: Date.now() + 30_000,
+          signal: new AbortController().signal,
+          confirmAge: false,
+          passPauseMs: 0,
+        });
+        return performance.now() - startedAt;
+      } finally {
+        await context.close();
+      }
+    });
+  }
+
+  const never = async (context: BrowserContext, glob: string): Promise<void> => {
+    await context.route(glob, () => new Promise<void>(() => undefined));
+  };
+
+  test.each([
+    [
+      "a 204",
+      "setTimeout(() => { location.href = '/gate-nav-204'; }, 0);",
+      async (context: BrowserContext) => {
+        await context.route("**/gate-nav-204", (route) => route.fulfill({ status: 204, body: "" }));
+      },
+    ],
+    [
+      "a download",
+      "setTimeout(() => { location.href = '/gate-nav-file.bin'; }, 0);",
+      async (context: BrowserContext) => {
+        await context.route("**/gate-nav-file.bin", (route) =>
+          route.fulfill({
+            status: 200,
+            headers: {
+              "content-type": "application/octet-stream",
+              "content-disposition": 'attachment; filename="x.bin"',
+            },
+            body: "xxxxxxxx",
+          }),
+        );
+      },
+    ],
+    [
+      "a load that window.stop() cancels",
+      "setTimeout(() => { location.href = '/gate-nav-hang'; setTimeout(() => window.stop(), 100); }, 0);",
+      async (context: BrowserContext) => {
+        await never(context, "**/gate-nav-hang");
+      },
+    ],
+    [
+      "a load superseded by a 204",
+      "setTimeout(() => { location.href = '/gate-nav-hang'; setTimeout(() => { location.href = '/gate-nav-204'; }, 100); }, 0);",
+      async (context: BrowserContext) => {
+        await never(context, "**/gate-nav-hang");
+        await context.route("**/gate-nav-204", (route) => route.fulfill({ status: 204, body: "" }));
+      },
+    ],
+  ])(
+    "%s, which never commits, is not a replacement: a page with no iframe pays no wait",
+    { timeout: TEST_TIMEOUT_MS },
+    async (_name, script, routes) => {
+      const ms = await provokeAfter({ pathname: "/player-no-iframe.html", script, routes });
+
+      expect(ms).toBeLessThan(BLANK_PLAYER_FILL_WAIT_MS / 2);
+    },
+  );
+
+  test(
+    "a reload that commits after the wait's first look, while it retries a loading document, lifts the cap",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      // The first document has no iframe and a subresource that never answers, so
+      // the wait retries it for up to 1 s; 400 ms in, the page reloads, and the new
+      // document puts a blank player iframe in 300 ms after it loads, and nothing fills it.
+      const page = (second: boolean): string =>
+        `<!doctype html><html><head><meta charset="utf-8"></head><body>${
+          second
+            ? `<div id="slot"></div><script>setTimeout(function () { document.getElementById("slot").innerHTML = '<iframe class="player-frame" src="about:blank" width="640" height="360" style="border:0"></iframe>'; }, 300);</script>`
+            : '<div class="player" style="width:640px;height:360px"></div><img src="/gate-hang.png">'
+        }<div style="height:3000px"></div></body></html>`;
+      const ms = await provokeAfter({
+        pathname: "/gate-reload-page.html",
+        script: "setTimeout(() => { document.cookie = 'second=1'; location.reload(); }, 400);",
+        routes: async (context) => {
+          await never(context, "**/gate-hang.png");
+          await context.route("**/gate-reload-page.html", (route) =>
+            route.fulfill({
+              status: 200,
+              contentType: "text/html",
+              body: page((route.request().headers()["cookie"] ?? "").includes("second=1")),
+            }),
+          );
+        },
+      });
+
+      // The cap alone would end it at about 1 s; a replacement keeps it for the
+      // iframe, which never fills, so it pays the bound.
+      expect(ms).toBeGreaterThan(BLANK_PLAYER_FILL_WAIT_MS - 2000);
     },
   );
 });
