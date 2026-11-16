@@ -728,6 +728,41 @@ describe("a hit belongs to the document that asked for it last (dl-144, gate 3)"
   );
 });
 
+describe("a navigation counts as a new document only once it commits (dl-144, gate 4)", () => {
+  test(
+    "a navigation the page stops, then a rewrite, leaves the page's stream where it is",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const hls = recordingHlsParser();
+      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...STREAM_WAITS });
+      const result = await probe("/guard-no-commit-stopped.html", resolver);
+      expect(result.variants[0]?.url).toBe(server.url("/media/hls/master.m3u8"));
+    },
+  );
+
+  test(
+    "a navigation redirected to a 204, then a rewrite, leaves the page's stream where it is",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const hls = recordingHlsParser();
+      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...STREAM_WAITS });
+      const result = await probe("/guard-no-commit-redirect-204.html", resolver);
+      expect(result.variants[0]?.url).toBe(server.url("/media/hls/master.m3u8"));
+    },
+  );
+
+  test(
+    "a download, then a rewrite, leaves the page's stream where it is",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const hls = recordingHlsParser();
+      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...STREAM_WAITS });
+      const result = await probe("/guard-no-commit-download.html", resolver);
+      expect(result.variants[0]?.url).toBe(server.url("/media/hls/master.m3u8"));
+    },
+  );
+});
+
 /** Elapsed milliseconds since the call, off a clock that follows no one's `date`. */
 function startStopwatch(): () => number {
   const startedAt = performance.now();

@@ -286,6 +286,26 @@ Gate round 3 — answered 2026-11-16 by the owner: fix (d) and (e) in this round
     a recorded URL, never on a response, and for a hit first recorded from a body
     read at the end of that read, which fails at a commit and records nothing.
 
+- 2026-11-16 — round 4 (gate 4, CONCERNS; narrow). Round 3's (e) covered a 204 or
+  205 only; a navigation that never commits by another road still left its request
+  pending, and a `replaceState` after it dropped the page's own stream.
+  - **Fix (the gate's remedy R).** A pending main-frame document request now also
+    leaves the set on `requestfailed` (a download, `window.stop()` and a
+    navigation superseded by another all end in ERR_ABORTED) and when the request
+    that replaces it is `redirectedFrom` it (a 302 whose next leg is a 204: the
+    302 leg ends `requestfinished` with status 302 and would stay pending).
+    Deliberately not "leave on any `requestfinished`": the gate measured a
+    committing document's `requestfinished` arriving after its `framenavigated`,
+    and a finish that came first would drop a real new document. The guard
+    comment's first sentence is rewritten to say which roads are covered.
+  - **Tests**, at the end of the departure file, red at 8d240803 (`NO_MEDIA_FOUND`,
+    13.2 s, 10.6 s, 9.8 s): a navigation the page stops, a navigation redirected
+    to a 204, a download. They needed three fixture-server routes (`/hold`,
+    `/redirect-to-beacon`, `/attachment`). A navigation superseded by a 204 is
+    not tested separately: it ends in the same `requestfailed` as the stop.
+  - **Mutations**: without the `requestfailed` listener the stop and download
+    tests go red; without the `redirectedFrom` removal the redirect test goes red.
+
 ## Review
 
 **Gate: CONCERNS** — 2026-11-15 · `5f15e56f..0359e152` · Opus 5.5, depth standard

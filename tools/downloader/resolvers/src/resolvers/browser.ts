@@ -888,16 +888,26 @@ function watchForDeparture(page: Page, initialLandingUrl: string): NavigationGua
   // follows the commit, is stamped new. The page's own request for a URL
   // already recorded restamps it (`HitCollector`).
   //
-  // A navigation counts as a new document only once it commits: a main-frame
-  // document request that is answered 204 or 205 never does, so it stops
-  // counting when its response says so, and a `replaceState` after it is still
-  // the same document (gate 3). A download is not covered.
+  // A navigation counts as a new document only once it commits, so a main-frame
+  // document request stops counting as soon as it is known not to: it failed
+  // (aborted by a download, `window.stop()` or a second navigation), it was
+  // redirected (its leg is replaced by the next one), or it was answered 204 or
+  // 205. A `replaceState` after any of them is still the same document (gates 3
+  // and 4). There is deliberately no "stop counting when it finishes": a
+  // committing document's `requestfinished` can arrive after its
+  // `framenavigated`, and the commit has already read the set by then, but a
+  // finish that came first would drop a real new document.
   let generationNow = 0;
   const pendingDocuments = new Set<Request>();
   const onRequest = (request: Request): void => {
     if (request.isNavigationRequest() && request.frame() === page.mainFrame()) {
+      const from = request.redirectedFrom();
+      if (from !== null) pendingDocuments.delete(from);
       pendingDocuments.add(request);
     }
+  };
+  const onRequestFailed = (request: Request): void => {
+    pendingDocuments.delete(request);
   };
   const onRequestEnded = (request: Request): void => {
     if (!pendingDocuments.has(request)) return;
@@ -935,6 +945,7 @@ function watchForDeparture(page: Page, initialLandingUrl: string): NavigationGua
   };
   page.on("request", onRequest);
   page.on("requestfinished", onRequestEnded);
+  page.on("requestfailed", onRequestFailed);
   page.on("framenavigated", onNavigated);
   return {
     landingUrl: () => landingUrl,
@@ -948,6 +959,7 @@ function watchForDeparture(page: Page, initialLandingUrl: string): NavigationGua
       page.off("framenavigated", onNavigated);
       page.off("request", onRequest);
       page.off("requestfinished", onRequestEnded);
+      page.off("requestfailed", onRequestFailed);
     },
   };
 }
